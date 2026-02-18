@@ -5,14 +5,54 @@ actor FileScanner {
         "/System/Volumes",
         "/private/var/vm"
     ]
+    private var isCancelled = false
+    private var isPaused = false
 
-    func scan(rootURL: URL) async -> FileNode {
-        await scanNode(at: rootURL)
+    func setPaused(_ paused: Bool) {
+        isPaused = paused
     }
 
-    private func scanNode(at url: URL) async -> FileNode {
+    func cancel() {
+        isCancelled = true
+    }
+
+    func scan(
+        rootURL: URL,
+        maxDepth: Int = 6,
+        onProgress: (@Sendable (ScanProgress) -> Void)? = nil
+    ) async -> FileNode {
+        isCancelled = false
+        isPaused = false
+        var visitedItems = 0
+        let started = rootURL.startAccessingSecurityScopedResource()
+        defer {
+            if started { rootURL.stopAccessingSecurityScopedResource() }
+        }
+        return await scanNode(
+            at: rootURL,
+            depthRemaining: maxDepth,
+            visitedItems: &visitedItems,
+            onProgress: onProgress
+        )
+    }
+
+    private func scanNode(
+        at url: URL,
+        depthRemaining: Int,
+        visitedItems: inout Int,
+        onProgress: (@Sendable (ScanProgress) -> Void)?
+    ) async -> FileNode {
+        if isCancelled {
+            return FileNode(url: url, name: url.lastPathComponent, isDirectory: false, sizeInBytes: 0, children: [])
+        }
+        while isPaused {
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+
         let fm = FileManager.default
         let name = (url.path as NSString).lastPathComponent.isEmpty ? url.path : (url.path as NSString).lastPathComponent
+        visitedItems += 1
+        onProgress?(ScanProgress(currentPath: url.path, visitedItems: visitedItems))
 
         var isDirectory: ObjCBool = false
         let exists = fm.fileExists(atPath: url.path, isDirectory: &isDirectory)
@@ -26,6 +66,10 @@ actor FileScanner {
         }
 
         if excludedPrefixes.contains(where: { url.path.hasPrefix($0) }) {
+            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: 0, children: [])
+        }
+
+        if depthRemaining <= 0 {
             return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: 0, children: [])
         }
 
@@ -44,8 +88,14 @@ actor FileScanner {
         children.reserveCapacity(urls.count)
 
         for childURL in urls {
-            let child = await scanNode(at: childURL)
+            let child = await scanNode(
+                at: childURL,
+                depthRemaining: depthRemaining - 1,
+                visitedItems: &visitedItems,
+                onProgress: onProgress
+            )
             children.append(child)
+            if isCancelled { break }
         }
 
         let total = children.reduce(Int64(0)) { $0 + $1.sizeInBytes }
