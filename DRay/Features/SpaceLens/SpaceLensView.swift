@@ -68,6 +68,15 @@ struct SpaceLensView: View {
                             .onHover { inside in
                                 model.hoveredPath = inside ? node.url.path : nil
                             }
+                            .contextMenu {
+                                Button("Open") { model.openItem(node) }
+                                Button("Reveal in Finder") { model.revealInFinder(node) }
+                                Divider()
+                                Button("Move to Trash", role: .destructive) {
+                                    pendingTrashNode = node
+                                    showTrashConfirm = true
+                                }
+                            }
                         }
                     }
                 }
