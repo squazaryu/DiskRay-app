@@ -8,6 +8,7 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 swift build -c release
+./scripts/install_app.sh
 git add -A
 git commit -m "Release ${VERSION}" || true
 git tag -a "$VERSION" -m "DRay ${VERSION}"

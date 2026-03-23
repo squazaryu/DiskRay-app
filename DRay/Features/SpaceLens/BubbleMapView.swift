@@ -3,11 +3,8 @@ import SwiftUI
 struct BubbleMapView: View {
     let root: FileNode
     @Binding var hoveredPath: String?
-    let onOpen: (FileNode) -> Void
-    let onReveal: (FileNode) -> Void
-    let onRequestTrash: (FileNode) -> Void
+    @Binding var selectedPaths: Set<String>
     @State private var navigation: [FileNode] = []
-    @State private var selectedNodeID: FileNode.ID?
     @State private var zoomPulse = false
 
     var body: some View {
@@ -23,7 +20,7 @@ struct BubbleMapView: View {
                 )
                 .ignoresSafeArea()
                 .onTapGesture(count: 2) { goUp() }
-                .onTapGesture { selectedNodeID = nil }
+                .onTapGesture { selectedPaths.removeAll() }
 
                 Circle()
                     .fill(Color.white.opacity(0.90))
@@ -50,7 +47,7 @@ struct BubbleMapView: View {
                     .animation(.spring(response: 0.42, dampingFraction: 0.82), value: zoomPulse)
 
                 ForEach(layout, id: \.node.id) { item in
-                    let isSelected = selectedNodeID == item.node.id
+                    let isSelected = selectedPaths.contains(item.node.url.path)
                     let isHovered = hoveredPath == item.node.url.path
                     Circle()
                         .fill((isSelected || isHovered) ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84))
@@ -76,7 +73,7 @@ struct BubbleMapView: View {
                             .position(x: item.center.x, y: item.center.y)
                         }
                         .onTapGesture {
-                            selectedNodeID = item.node.id
+                            toggleSelection(for: item.node.url.path)
                         }
                         .onTapGesture(count: 2) {
                             diveInto(item.node)
@@ -115,23 +112,10 @@ struct BubbleMapView: View {
                 }
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                if let selected = selectedNode(in: current) {
-                    HStack(spacing: 8) {
-                        Button("Open") { onOpen(selected) }
-                        Button("Reveal") { onReveal(selected) }
-                        Button("Move to Trash", role: .destructive) { onRequestTrash(selected) }
-                    }
-                    .buttonStyle(.bordered)
-                    .padding()
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                }
             }
             .onChange(of: root.id) {
                 navigation = []
-                selectedNodeID = nil
+                selectedPaths.removeAll()
                 hoveredPath = nil
                 animateZoom()
             }
@@ -145,28 +129,31 @@ struct BubbleMapView: View {
         min(30, max(11, radius * 0.2))
     }
 
-    private func selectedNode(in current: FileNode) -> FileNode? {
-        guard let selectedNodeID else { return nil }
-        return current.largestChildren.first(where: { $0.id == selectedNodeID })
+    private func toggleSelection(for path: String) {
+        if selectedPaths.contains(path) {
+            selectedPaths.remove(path)
+        } else {
+            selectedPaths.insert(path)
+        }
     }
 
     private func diveInto(_ node: FileNode) {
         guard node.isDirectory, !node.children.isEmpty else { return }
         navigation.append(node)
-        selectedNodeID = nil
+        selectedPaths.removeAll()
         hoveredPath = nil
     }
 
     private func goUp() {
         guard !navigation.isEmpty else { return }
         navigation.removeLast()
-        selectedNodeID = nil
+        selectedPaths.removeAll()
         hoveredPath = nil
     }
 
     private func resetToRoot() {
         navigation.removeAll()
-        selectedNodeID = nil
+        selectedPaths.removeAll()
         hoveredPath = nil
     }
 
