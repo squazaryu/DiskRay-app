@@ -7,6 +7,11 @@ struct RootView: View {
 
     var body: some View {
         TabView {
+            SmartCareView(model: model)
+                .tabItem {
+                    Label("Smart Care", systemImage: "sparkles")
+                }
+
             SpaceLensView(
                 model: model,
                 onChooseFolder: { isFolderPickerPresented = true }

@@ -33,6 +33,12 @@ struct RecentlyDeletedItem: Codable, Identifiable {
     }
 }
 
+struct SmartCategoryState: Identifiable {
+    let id: String
+    let result: CleanupCategoryResult
+    var isSelected: Bool
+}
+
 @MainActor
 final class RootViewModel: ObservableObject {
     @Published private(set) var root: FileNode?
@@ -49,15 +55,20 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var searchPresets: [SearchPreset] = []
     @Published private(set) var recentlyDeleted: [RecentlyDeletedItem] = []
     @Published var hoveredPath: String?
+    @Published private(set) var smartScanCategories: [SmartCategoryState] = []
+    @Published private(set) var isSmartScanRunning = false
+    @Published private(set) var smartExclusions: [String] = []
 
     let permissions = AppPermissionService()
 
     private let scanner = FileScanner()
+    private let smartScanService = SmartScanService()
     private let queryEngine = QueryEngine()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
     private let searchPresetsKey = "dray.search.presets"
     private let recentlyDeletedKey = "dray.recently.deleted"
+    private let smartExclusionsKey = "dray.smart.exclusions"
     private var scanTask: Task<Void, Never>?
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 
@@ -65,6 +76,7 @@ final class RootViewModel: ObservableObject {
         restoreLastTargetIfPossible()
         loadSearchPresets()
         loadRecentlyDeleted()
+        loadSmartExclusions()
         permissions.refreshFolderAccess(for: selectedTarget.url)
     }
 
@@ -112,6 +124,68 @@ final class RootViewModel: ObservableObject {
             root = cached
         }
         scan(at: selectedTarget.url)
+    }
+
+    func runSmartScan() {
+        guard !isSmartScanRunning else { return }
+        isSmartScanRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await smartScanService.runSmartScan(excludedPrefixes: smartExclusions)
+            await MainActor.run {
+                self.smartScanCategories = result.categories.map {
+                    SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
+                }
+                self.isSmartScanRunning = false
+            }
+        }
+    }
+
+    func toggleSmartCategorySelection(_ id: String) {
+        guard let index = smartScanCategories.firstIndex(where: { $0.id == id }) else { return }
+        smartScanCategories[index].isSelected.toggle()
+    }
+
+    func cleanSelectedSmartCategories() {
+        let items = smartScanCategories
+            .filter(\.isSelected)
+            .flatMap { $0.result.items }
+
+        guard !items.isEmpty else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            let cleanupResult = await smartScanService.clean(items: items)
+            await MainActor.run {
+                AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
+                self.runSmartScan()
+            }
+        }
+    }
+
+    func cleanSmartItems(_ items: [CleanupItem]) {
+        guard !items.isEmpty else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let cleanupResult = await smartScanService.clean(items: items)
+            await MainActor.run {
+                AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
+                self.runSmartScan()
+            }
+        }
+    }
+
+    func addSmartExclusion(_ path: String) {
+        let normalized = (path as NSString).expandingTildeInPath
+        guard !normalized.isEmpty, !smartExclusions.contains(normalized) else { return }
+        smartExclusions.append(normalized)
+        smartExclusions.sort()
+        persistSmartExclusions()
+    }
+
+    func removeSmartExclusion(_ path: String) {
+        smartExclusions.removeAll { $0 == path }
+        persistSmartExclusions()
     }
 
     private func scan(at url: URL) {
@@ -340,6 +414,14 @@ final class RootViewModel: ObservableObject {
     private func persistRecentlyDeleted() {
         guard let data = try? JSONEncoder().encode(recentlyDeleted) else { return }
         UserDefaults.standard.set(data, forKey: recentlyDeletedKey)
+    }
+
+    private func loadSmartExclusions() {
+        smartExclusions = UserDefaults.standard.stringArray(forKey: smartExclusionsKey) ?? []
+    }
+
+    private func persistSmartExclusions() {
+        UserDefaults.standard.set(smartExclusions, forKey: smartExclusionsKey)
     }
 
     private func uniqueRestoreURL(for desiredURL: URL) -> URL {
