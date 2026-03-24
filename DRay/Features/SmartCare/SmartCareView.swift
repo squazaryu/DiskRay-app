@@ -44,6 +44,12 @@ struct SmartCareView: View {
             .buttonStyle(.borderedProminent)
             .disabled(model.isSmartScanRunning)
 
+            Button("Select Recommended") {
+                model.selectRecommendedSmartCategories()
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.smartScanCategories.isEmpty)
+
             Button("Clean Selected") {
                 cleanSelection()
             }
@@ -57,6 +63,12 @@ struct SmartCareView: View {
             Text("Exclusions")
                 .font(.headline)
             HStack {
+                Text("Min size MB")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("1", value: $model.smartMinCleanSizeMB, format: .number)
+                    .frame(width: 80)
+                    .textFieldStyle(.roundedBorder)
                 TextField("/path/to/exclude", text: $newExclusion)
                     .textFieldStyle(.roundedBorder)
                 Button("Add") {
@@ -132,6 +144,11 @@ struct SmartCareView: View {
                     .padding(.vertical, 4)
                     .background(Color.green.opacity(0.15), in: Capsule())
             }
+            Text(riskTitle(category.result.riskLevel))
+                .font(.caption2.bold())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(riskColor(category.result.riskLevel).opacity(0.15), in: Capsule())
 
             Button(expandedCategories.contains(category.id) ? "Hide" : "Preview") {
                 toggleExpanded(category.id)
@@ -193,5 +210,21 @@ struct SmartCareView: View {
             return
         }
         model.cleanSelectedSmartCategories()
+    }
+
+    private func riskTitle(_ level: CleanupRiskLevel) -> String {
+        switch level {
+        case .low: return "Low Risk"
+        case .medium: return "Medium Risk"
+        case .high: return "High Risk"
+        }
+    }
+
+    private func riskColor(_ level: CleanupRiskLevel) -> Color {
+        switch level {
+        case .low: return .green
+        case .medium: return .orange
+        case .high: return .red
+        }
     }
 }

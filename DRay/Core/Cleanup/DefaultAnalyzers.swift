@@ -9,7 +9,7 @@ struct UserLogsAnalyzer: CleanupAnalyzer {
     func analyze(excludedPrefixes: [String]) async -> CleanupCategoryResult {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 14, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .low, items: items)
     }
 }
 
@@ -22,7 +22,7 @@ struct UserCachesAnalyzer: CleanupAnalyzer {
     func analyze(excludedPrefixes: [String]) async -> CleanupCategoryResult {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 7, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .low, items: items)
     }
 }
 
@@ -35,7 +35,7 @@ struct OldDownloadsAnalyzer: CleanupAnalyzer {
     func analyze(excludedPrefixes: [String]) async -> CleanupCategoryResult {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 30, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .medium, items: items)
     }
 }
 
@@ -49,7 +49,7 @@ struct XcodeDerivedDataAnalyzer: CleanupAnalyzer {
         let root = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Developer/Xcode/DerivedData")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 2, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .low, items: items)
     }
 }
 
@@ -63,7 +63,7 @@ struct IOSBackupsAnalyzer: CleanupAnalyzer {
         let root = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/MobileSync/Backup")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 14, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .high, items: items)
     }
 }
 
@@ -77,7 +77,7 @@ struct MailDownloadsAnalyzer: CleanupAnalyzer {
         let root = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Containers/com.apple.mail/Data/Library/Mail Downloads")
         let items = CleanupFileEnumerator.collectFiles(in: root, olderThanDays: 30, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .medium, items: items)
     }
 }
 

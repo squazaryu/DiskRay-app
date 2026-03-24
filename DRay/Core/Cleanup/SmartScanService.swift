@@ -2,6 +2,7 @@ import Foundation
 
 actor SmartScanService {
     private let analyzers: [CleanupAnalyzer]
+    private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 
     init(analyzers: [CleanupAnalyzer] = [
         UserLogsAnalyzer(),
@@ -26,11 +27,17 @@ actor SmartScanService {
         return SmartScanResult(categories: categories.sorted { $0.totalBytes > $1.totalBytes })
     }
 
-    func clean(items: [CleanupItem]) async -> CleanupExecutionResult {
+    func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult {
         var moved = 0
         var failed = 0
 
         for item in items {
+            if item.sizeInBytes < minSizeBytes { continue }
+            let path = item.url.path
+            if protectedPathPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
+                failed += 1
+                continue
+            }
             do {
                 var trashedURL: NSURL?
                 try FileManager.default.trashItem(at: item.url, resultingItemURL: &trashedURL)

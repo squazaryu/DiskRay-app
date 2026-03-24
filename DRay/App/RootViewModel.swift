@@ -58,6 +58,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var smartScanCategories: [SmartCategoryState] = []
     @Published private(set) var isSmartScanRunning = false
     @Published private(set) var smartExclusions: [String] = []
+    @Published var smartMinCleanSizeMB: Double = 1
 
     let permissions = AppPermissionService()
 
@@ -136,6 +137,7 @@ final class RootViewModel: ObservableObject {
                 self.smartScanCategories = result.categories.map {
                     SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
                 }
+                self.selectRecommendedSmartCategories()
                 self.isSmartScanRunning = false
             }
         }
@@ -155,7 +157,7 @@ final class RootViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            let cleanupResult = await smartScanService.clean(items: items)
+            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
             await MainActor.run {
                 AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.runSmartScan()
@@ -167,11 +169,19 @@ final class RootViewModel: ObservableObject {
         guard !items.isEmpty else { return }
         Task { [weak self] in
             guard let self else { return }
-            let cleanupResult = await smartScanService.clean(items: items)
+            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
             await MainActor.run {
                 AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.runSmartScan()
             }
+        }
+    }
+
+    func selectRecommendedSmartCategories() {
+        for index in smartScanCategories.indices {
+            let risk = smartScanCategories[index].result.riskLevel
+            let safe = smartScanCategories[index].result.isSafeByDefault
+            smartScanCategories[index].isSelected = safe && risk == .low
         }
     }
 

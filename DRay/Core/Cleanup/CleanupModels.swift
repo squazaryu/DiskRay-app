@@ -1,5 +1,11 @@
 import Foundation
 
+enum CleanupRiskLevel: String, Codable, Sendable {
+    case low
+    case medium
+    case high
+}
+
 struct CleanupItem: Identifiable, Hashable, Sendable {
     let id = UUID()
     let url: URL
@@ -14,6 +20,7 @@ struct CleanupCategoryResult: Identifiable, Hashable, Sendable {
     let title: String
     let description: String
     let isSafeByDefault: Bool
+    let riskLevel: CleanupRiskLevel
     let items: [CleanupItem]
 
     var totalBytes: Int64 {
