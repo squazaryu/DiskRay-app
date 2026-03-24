@@ -50,6 +50,17 @@ struct SmartCareView: View {
             .buttonStyle(.bordered)
             .disabled(model.smartScanCategories.isEmpty)
 
+            Picker("Profile", selection: Binding(
+                get: { model.smartProfile },
+                set: { model.applySmartProfile($0) }
+            )) {
+                ForEach(SmartCleanProfile.allCases) { profile in
+                    Text(profile.title).tag(profile)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 150)
+
             Button("Clean Selected") {
                 cleanSelection()
             }
@@ -133,6 +144,9 @@ struct SmartCareView: View {
                     .foregroundStyle(.secondary)
                 Text("\(category.result.items.count) items · \(ByteCountFormatter.string(fromByteCount: category.result.totalBytes, countStyle: .file))")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Why recommended: \(category.result.recommendationReason)")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()

@@ -39,6 +39,21 @@ struct SmartCategoryState: Identifiable {
     var isSelected: Bool
 }
 
+enum SmartCleanProfile: String, CaseIterable, Identifiable {
+    case conservative
+    case balanced
+    case aggressive
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .conservative: return "Conservative"
+        case .balanced: return "Balanced"
+        case .aggressive: return "Aggressive"
+        }
+    }
+}
+
 @MainActor
 final class RootViewModel: ObservableObject {
     @Published private(set) var root: FileNode?
@@ -59,6 +74,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var isSmartScanRunning = false
     @Published private(set) var smartExclusions: [String] = []
     @Published var smartMinCleanSizeMB: Double = 1
+    @Published var smartProfile: SmartCleanProfile = .balanced
 
     let permissions = AppPermissionService()
 
@@ -181,8 +197,25 @@ final class RootViewModel: ObservableObject {
         for index in smartScanCategories.indices {
             let risk = smartScanCategories[index].result.riskLevel
             let safe = smartScanCategories[index].result.isSafeByDefault
-            smartScanCategories[index].isSelected = safe && risk == .low
+            switch smartProfile {
+            case .conservative:
+                smartScanCategories[index].isSelected = safe && risk == .low
+            case .balanced:
+                smartScanCategories[index].isSelected = safe && (risk == .low || risk == .medium)
+            case .aggressive:
+                smartScanCategories[index].isSelected = risk != .high
+            }
         }
+    }
+
+    func applySmartProfile(_ profile: SmartCleanProfile) {
+        smartProfile = profile
+        switch profile {
+        case .conservative: smartMinCleanSizeMB = 8
+        case .balanced: smartMinCleanSizeMB = 1
+        case .aggressive: smartMinCleanSizeMB = 0.1
+        }
+        selectRecommendedSmartCategories()
     }
 
     func addSmartExclusion(_ path: String) {

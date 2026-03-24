@@ -10,7 +10,9 @@ actor SmartScanService {
         OldDownloadsAnalyzer(),
         XcodeDerivedDataAnalyzer(),
         IOSBackupsAnalyzer(),
-        MailDownloadsAnalyzer()
+        MailDownloadsAnalyzer(),
+        LanguageFilesAnalyzer(),
+        OrphanPreferencesAnalyzer()
     ]) {
         self.analyzers = analyzers
     }

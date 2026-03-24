@@ -21,6 +21,7 @@ struct CleanupCategoryResult: Identifiable, Hashable, Sendable {
     let description: String
     let isSafeByDefault: Bool
     let riskLevel: CleanupRiskLevel
+    let recommendationReason: String
     let items: [CleanupItem]
 
     var totalBytes: Int64 {
