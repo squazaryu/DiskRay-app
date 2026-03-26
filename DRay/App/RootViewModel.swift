@@ -75,11 +75,15 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var smartExclusions: [String] = []
     @Published var smartMinCleanSizeMB: Double = 1
     @Published var smartProfile: SmartCleanProfile = .balanced
+    @Published private(set) var installedApps: [InstalledApp] = []
+    @Published private(set) var uninstallerRemnants: [AppRemnant] = []
+    @Published private(set) var isUninstallerLoading = false
 
     let permissions = AppPermissionService()
 
     private let scanner = FileScanner()
     private let smartScanService = SmartScanService()
+    private let uninstallerService = AppUninstallerService()
     private let queryEngine = QueryEngine()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
@@ -224,6 +228,43 @@ final class RootViewModel: ObservableObject {
         smartExclusions.append(normalized)
         smartExclusions.sort()
         persistSmartExclusions()
+    }
+
+    func loadInstalledApps() {
+        isUninstallerLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            let apps = await uninstallerService.installedApps()
+            await MainActor.run {
+                self.installedApps = apps
+                self.isUninstallerLoading = false
+            }
+        }
+    }
+
+    func loadRemnants(for app: InstalledApp) {
+        isUninstallerLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            let remnants = await uninstallerService.findRemnants(for: app)
+            await MainActor.run {
+                self.uninstallerRemnants = remnants
+                self.isUninstallerLoading = false
+            }
+        }
+    }
+
+    func uninstall(app: InstalledApp) {
+        let remnants = uninstallerRemnants
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await uninstallerService.uninstall(app: app, remnants: remnants)
+            await MainActor.run {
+                AppLogger.actions.info("Uninstall moved: \(result.moved), failed: \(result.failed)")
+                self.uninstallerRemnants = []
+                self.loadInstalledApps()
+            }
+        }
     }
 
     func removeSmartExclusion(_ path: String) {

@@ -12,6 +12,11 @@ struct RootView: View {
                     Label("Smart Care", systemImage: "sparkles")
                 }
 
+            UninstallerView(model: model)
+                .tabItem {
+                    Label("Uninstaller", systemImage: "trash")
+                }
+
             SpaceLensView(
                 model: model,
                 onChooseFolder: { isFolderPickerPresented = true }
