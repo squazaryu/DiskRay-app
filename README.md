@@ -31,8 +31,8 @@ swift run
 - [ ] Incremental index updates (delta scan, not full tree pass)
 - [ ] Search Pro filters (regex/date/depth/owner/type)
 - [ ] Smart Care: confidence scoring and explainability per item
-- [ ] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
-- [ ] Uninstaller: validation report (`removed / skipped / failed`)
+- [x] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
+- [x] Uninstaller: validation report (`removed / skipped / failed`)
 - [ ] Performance module (startup optimization + maintenance tasks)
 - [ ] Privacy/Security module (trace review + safe cleanup)
 - [ ] Signed + notarized production build pipeline

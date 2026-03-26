@@ -78,6 +78,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var installedApps: [InstalledApp] = []
     @Published private(set) var uninstallerRemnants: [AppRemnant] = []
     @Published private(set) var isUninstallerLoading = false
+    @Published private(set) var uninstallReport: UninstallValidationReport?
 
     let permissions = AppPermissionService()
 
@@ -249,6 +250,7 @@ final class RootViewModel: ObservableObject {
             let remnants = await uninstallerService.findRemnants(for: app)
             await MainActor.run {
                 self.uninstallerRemnants = remnants
+                self.uninstallReport = nil
                 self.isUninstallerLoading = false
             }
         }
@@ -260,7 +262,8 @@ final class RootViewModel: ObservableObject {
             guard let self else { return }
             let result = await uninstallerService.uninstall(app: app, remnants: remnants)
             await MainActor.run {
-                AppLogger.actions.info("Uninstall moved: \(result.moved), failed: \(result.failed)")
+                AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
+                self.uninstallReport = result
                 self.uninstallerRemnants = []
                 self.loadInstalledApps()
             }

@@ -14,3 +14,41 @@ struct AppRemnant: Identifiable, Hashable, Sendable {
 
     var name: String { url.lastPathComponent }
 }
+
+enum UninstallItemType: String, Sendable {
+    case appBundle
+    case remnant
+}
+
+enum UninstallActionStatus: String, Sendable {
+    case removed
+    case skippedProtected
+    case missing
+    case failed
+}
+
+struct UninstallActionResult: Identifiable, Sendable {
+    let id = UUID()
+    let url: URL
+    let type: UninstallItemType
+    let status: UninstallActionStatus
+    let details: String?
+}
+
+struct UninstallValidationReport: Sendable {
+    let appName: String
+    let createdAt: Date
+    let results: [UninstallActionResult]
+
+    var removedCount: Int {
+        results.filter { $0.status == .removed }.count
+    }
+
+    var skippedCount: Int {
+        results.filter { $0.status == .skippedProtected || $0.status == .missing }.count
+    }
+
+    var failedCount: Int {
+        results.filter { $0.status == .failed }.count
+    }
+}

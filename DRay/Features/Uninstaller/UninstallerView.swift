@@ -65,6 +65,37 @@ struct UninstallerView: View {
                                 .font(.caption)
                         }
                     }
+
+                    if let report = model.uninstallReport {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Validation report")
+                                .font(.headline)
+                            Text("Removed \(report.removedCount) · Skipped \(report.skippedCount) · Failed \(report.failedCount)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            List(report.results) { row in
+                                HStack(alignment: .top) {
+                                    Text(statusTitle(row.status))
+                                        .font(.caption.bold())
+                                        .foregroundStyle(statusColor(row.status))
+                                        .frame(width: 74, alignment: .leading)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(row.url.path)
+                                            .font(.caption)
+                                            .lineLimit(1)
+                                        if let details = row.details {
+                                            Text(details)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(minHeight: 160)
+                        }
+                    }
                 } else {
                     ContentUnavailableView("Uninstaller", systemImage: "trash", description: Text("Select app to inspect remnants."))
                 }
@@ -81,6 +112,23 @@ struct UninstallerView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
+        }
+    }
+
+    private func statusTitle(_ status: UninstallActionStatus) -> String {
+        switch status {
+        case .removed: return "Removed"
+        case .skippedProtected: return "Skipped"
+        case .missing: return "Missing"
+        case .failed: return "Failed"
+        }
+    }
+
+    private func statusColor(_ status: UninstallActionStatus) -> Color {
+        switch status {
+        case .removed: return .green
+        case .skippedProtected, .missing: return .orange
+        case .failed: return .red
         }
     }
 }
