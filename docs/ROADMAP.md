@@ -27,6 +27,11 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - App bundle artifact discovery.
 - Complete uninstall flow with preview.
 - Conflict-safe uninstall plans and rollback metadata.
+- Post-uninstall residue sweep (mandatory):
+  - leftover files in `~/Library` and `/Library` (preferences, caches, logs, containers, group containers),
+  - login items / startup objects cleanup,
+  - launch agents / helper tools cleanup,
+  - validation pass after uninstall with report of what was removed vs skipped.
 
 ## Milestone M5: Performance Module
 - Login items management.
