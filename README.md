@@ -4,22 +4,35 @@ DRay is a macOS disk explorer that combines:
 - Space visualization similar to Space Lens
 - Fast file search similar to FindAnyFile
 
-## Current scaffold
-- SwiftUI app shell with `Space Lens` and `Search` tabs
+## Current status
+- SwiftUI app shell with `Smart Care`, `Uninstaller`, `Space Lens`, and `Search` tabs
 - Recursive disk scanner (`FileScanner`) with pause/cancel/progress
 - SQLite snapshot index for fast restore between scans
 - Advanced in-memory query engine (`QueryEngine`) with filters and presets
 - Bubble-map drill-down navigation for folder hierarchy
 - File actions: reveal in Finder, open, move to trash
+- Recently deleted history with restore support
 - Permissions flow with `Restore` for TCC resets
+- Smart Care engine with cleanup analyzers and profile-based recommendations
+- Initial Uninstaller with app and remnant discovery
 
 ## Run
 ```bash
 swift run
 ```
 
-## Next milestones
-1. Replace full-rescan strategy with true incremental index updates.
-2. Add date/regex/depth filters and background deep-search mode.
-3. Add richer item panel with preview, safety checks, and undo stack.
-4. Build signed `.app` bundle via Xcode release pipeline.
+## Public TODO
+- [x] Smart Care foundation (multi-analyzer scan + safe clean to Trash)
+- [x] Smart Care risk labels and recommendation reasons
+- [x] Smart Care profiles (`Conservative` / `Balanced` / `Aggressive`)
+- [x] Space Lens drill-down and in-view bulk actions
+- [x] Search presets and multi-delete flow
+- [x] Install script to `/Applications/DRay.app`
+- [ ] Incremental index updates (delta scan, not full tree pass)
+- [ ] Search Pro filters (regex/date/depth/owner/type)
+- [ ] Smart Care: confidence scoring and explainability per item
+- [ ] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
+- [ ] Uninstaller: validation report (`removed / skipped / failed`)
+- [ ] Performance module (startup optimization + maintenance tasks)
+- [ ] Privacy/Security module (trace review + safe cleanup)
+- [ ] Signed + notarized production build pipeline
