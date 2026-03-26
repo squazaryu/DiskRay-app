@@ -52,3 +52,18 @@ struct UninstallValidationReport: Sendable {
         results.filter { $0.status == .failed }.count
     }
 }
+
+enum UninstallRiskLevel: String, Sendable {
+    case low
+    case medium
+    case high
+}
+
+struct UninstallPreviewItem: Identifiable, Sendable {
+    let id = UUID()
+    let url: URL
+    let type: UninstallItemType
+    let sizeInBytes: Int64
+    let risk: UninstallRiskLevel
+    let reason: String
+}

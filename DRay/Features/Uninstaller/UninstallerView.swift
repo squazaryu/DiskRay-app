@@ -3,7 +3,7 @@ import SwiftUI
 struct UninstallerView: View {
     @ObservedObject var model: RootViewModel
     @State private var selectedApp: InstalledApp?
-    @State private var showUninstallConfirm = false
+    @State private var showUninstallPreview = false
 
     var body: some View {
         NavigationSplitView {
@@ -43,7 +43,7 @@ struct UninstallerView: View {
                         }
                         Spacer()
                         Button("Uninstall", role: .destructive) {
-                            showUninstallConfirm = true
+                            showUninstallPreview = true
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -101,16 +101,17 @@ struct UninstallerView: View {
                 }
             }
             .padding()
-            .confirmationDialog(
-                "Uninstall app and move detected remnants to Trash?",
-                isPresented: $showUninstallConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Uninstall", role: .destructive) {
-                    guard let selectedApp else { return }
-                    model.uninstall(app: selectedApp)
+            .sheet(isPresented: $showUninstallPreview) {
+                if let selectedApp {
+                    UninstallPreviewSheet(
+                        app: selectedApp,
+                        previewItems: model.uninstallPreview(for: selectedApp),
+                        onConfirm: {
+                            model.uninstall(app: selectedApp)
+                            showUninstallPreview = false
+                        }
+                    )
                 }
-                Button("Cancel", role: .cancel) {}
             }
         }
     }
@@ -129,6 +130,76 @@ struct UninstallerView: View {
         case .removed: return .green
         case .skippedProtected, .missing: return .orange
         case .failed: return .red
+        }
+    }
+}
+
+private struct UninstallPreviewSheet: View {
+    let app: InstalledApp
+    let previewItems: [UninstallPreviewItem]
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Uninstall Preview")
+                .font(.title3.bold())
+            Text(app.name)
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Will remove \(previewItems.count) item(s)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            List(previewItems) { item in
+                HStack(alignment: .top, spacing: 10) {
+                    Text(riskTitle(item.risk))
+                        .font(.caption2.bold())
+                        .foregroundStyle(riskColor(item.risk))
+                        .frame(width: 58, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.url.lastPathComponent)
+                            .font(.subheadline)
+                        Text(item.url.path)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(item.reason)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if item.sizeInBytes > 0 {
+                        Text(ByteCountFormatter.string(fromByteCount: item.sizeInBytes, countStyle: .file))
+                            .font(.caption)
+                    }
+                }
+            }
+
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Move to Trash", role: .destructive) { onConfirm() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(minWidth: 760, minHeight: 460)
+    }
+
+    private func riskTitle(_ risk: UninstallRiskLevel) -> String {
+        switch risk {
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .high: return "High"
+        }
+    }
+
+    private func riskColor(_ risk: UninstallRiskLevel) -> Color {
+        switch risk {
+        case .low: return .green
+        case .medium: return .orange
+        case .high: return .red
         }
     }
 }

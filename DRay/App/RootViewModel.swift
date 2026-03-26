@@ -270,6 +270,20 @@ final class RootViewModel: ObservableObject {
         }
     }
 
+    func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
+        let appItem = UninstallPreviewItem(
+            url: app.appURL,
+            type: .appBundle,
+            sizeInBytes: 0,
+            risk: .high,
+            reason: "Main app bundle will be moved to Trash"
+        )
+        let remnantItems = uninstallerRemnants.map { remnant in
+            previewItem(for: remnant)
+        }
+        return [appItem] + remnantItems.sorted { $0.sizeInBytes > $1.sizeInBytes }
+    }
+
     func removeSmartExclusion(_ path: String) {
         smartExclusions.removeAll { $0 == path }
         persistSmartExclusions()
@@ -533,5 +547,34 @@ final class RootViewModel: ObservableObject {
     private func isProtectedPath(_ path: String) -> Bool {
         if path == "/" { return true }
         return protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    private func previewItem(for remnant: AppRemnant) -> UninstallPreviewItem {
+        let path = remnant.url.path
+        if path.contains("/Library/LaunchDaemons") || path.contains("/Library/PrivilegedHelperTools") {
+            return UninstallPreviewItem(
+                url: remnant.url,
+                type: .remnant,
+                sizeInBytes: remnant.sizeInBytes,
+                risk: .high,
+                reason: "System-level helper or daemon"
+            )
+        }
+        if path.contains("/Library/LaunchAgents") || path.contains("/Library/StartupItems") {
+            return UninstallPreviewItem(
+                url: remnant.url,
+                type: .remnant,
+                sizeInBytes: remnant.sizeInBytes,
+                risk: .medium,
+                reason: "Auto-start component"
+            )
+        }
+        return UninstallPreviewItem(
+            url: remnant.url,
+            type: .remnant,
+            sizeInBytes: remnant.sizeInBytes,
+            risk: .low,
+            reason: "Regular app support/caches/logs"
+        )
     }
 }
