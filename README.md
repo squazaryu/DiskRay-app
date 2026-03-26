@@ -36,3 +36,9 @@ swift run
 - [ ] Performance module (startup optimization + maintenance tasks)
 - [ ] Privacy/Security module (trace review + safe cleanup)
 - [ ] Signed + notarized production build pipeline
+
+## Done (Recent)
+- [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`
+- [x] Added Smart Care risk labels, recommendations, and safeguards — commit `61ff069`
+- [x] Added profiles, recommendation reasons, and initial Uninstaller module — commit `8946dfb`
+- [x] Added mandatory residue sweep requirement to roadmap — commit `b39f9be`
