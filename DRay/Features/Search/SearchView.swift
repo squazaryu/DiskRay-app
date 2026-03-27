@@ -52,6 +52,32 @@ struct SearchView: View {
             }
             .font(.caption)
 
+            HStack {
+                Toggle("Regex", isOn: $model.searchUseRegex)
+                Text("Depth")
+                TextField("0", value: $model.searchDepthMin, format: .number)
+                    .frame(width: 50)
+                    .textFieldStyle(.roundedBorder)
+                Text("..")
+                TextField("12", value: $model.searchDepthMax, format: .number)
+                    .frame(width: 50)
+                    .textFieldStyle(.roundedBorder)
+                Text("Modified ≤ days")
+                TextField("0", value: $model.searchModifiedWithinDays, format: .number)
+                    .frame(width: 60)
+                    .textFieldStyle(.roundedBorder)
+                Picker("Type", selection: $model.searchNodeType) {
+                    Text("Any").tag(QueryEngine.SearchNodeType.any)
+                    Text("Files").tag(QueryEngine.SearchNodeType.file)
+                    Text("Folders").tag(QueryEngine.SearchNodeType.directory)
+                    Text("Apps").tag(QueryEngine.SearchNodeType.package)
+                }
+                .pickerStyle(.menu)
+                .frame(width: 120)
+                Spacer()
+            }
+            .font(.caption)
+
             if model.searchQuery.isEmpty {
                 ContentUnavailableView("Search Index", systemImage: "magnifyingglass", description: Text("Type query after scan completes."))
             } else {

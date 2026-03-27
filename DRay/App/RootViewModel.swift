@@ -14,6 +14,64 @@ struct SearchPreset: Codable, Identifiable {
     let pathContains: String
     let onlyDirectories: Bool
     let onlyFiles: Bool
+    let useRegex: Bool
+    let depthMin: Int
+    let depthMax: Int
+    let modifiedWithinDays: Int?
+    let nodeTypeRaw: String
+
+    var nodeType: QueryEngine.SearchNodeType {
+        QueryEngine.SearchNodeType(rawValue: nodeTypeRaw) ?? .any
+    }
+
+    init(
+        id: UUID,
+        name: String,
+        query: String,
+        minSizeMB: Double,
+        pathContains: String,
+        onlyDirectories: Bool,
+        onlyFiles: Bool,
+        useRegex: Bool,
+        depthMin: Int,
+        depthMax: Int,
+        modifiedWithinDays: Int?,
+        nodeType: QueryEngine.SearchNodeType
+    ) {
+        self.id = id
+        self.name = name
+        self.query = query
+        self.minSizeMB = minSizeMB
+        self.pathContains = pathContains
+        self.onlyDirectories = onlyDirectories
+        self.onlyFiles = onlyFiles
+        self.useRegex = useRegex
+        self.depthMin = depthMin
+        self.depthMax = depthMax
+        self.modifiedWithinDays = modifiedWithinDays
+        self.nodeTypeRaw = nodeType.rawValue
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, query, minSizeMB, pathContains, onlyDirectories, onlyFiles
+        case useRegex, depthMin, depthMax, modifiedWithinDays, nodeTypeRaw
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        query = try c.decode(String.self, forKey: .query)
+        minSizeMB = try c.decode(Double.self, forKey: .minSizeMB)
+        pathContains = try c.decode(String.self, forKey: .pathContains)
+        onlyDirectories = try c.decode(Bool.self, forKey: .onlyDirectories)
+        onlyFiles = try c.decode(Bool.self, forKey: .onlyFiles)
+        useRegex = try c.decodeIfPresent(Bool.self, forKey: .useRegex) ?? false
+        depthMin = try c.decodeIfPresent(Int.self, forKey: .depthMin) ?? 0
+        depthMax = try c.decodeIfPresent(Int.self, forKey: .depthMax) ?? 128
+        modifiedWithinDays = try c.decodeIfPresent(Int.self, forKey: .modifiedWithinDays)
+        nodeTypeRaw = try c.decodeIfPresent(String.self, forKey: .nodeTypeRaw) ?? QueryEngine.SearchNodeType.any.rawValue
+    }
 }
 
 struct TrashOperationResult {
@@ -67,6 +125,11 @@ final class RootViewModel: ObservableObject {
     @Published var pathContains = ""
     @Published var onlyDirectories = false
     @Published var onlyFiles = false
+    @Published var searchUseRegex = false
+    @Published var searchDepthMin = 0
+    @Published var searchDepthMax = 12
+    @Published var searchModifiedWithinDays = 0
+    @Published var searchNodeType: QueryEngine.SearchNodeType = .any
     @Published private(set) var searchPresets: [SearchPreset] = []
     @Published private(set) var recentlyDeleted: [RecentlyDeletedItem] = []
     @Published var hoveredPath: String?
@@ -113,7 +176,12 @@ final class RootViewModel: ObservableObject {
             minSizeBytes: Int64(minSizeMB * 1_048_576),
             pathContains: pathContains,
             onlyDirectories: onlyDirectories,
-            onlyFiles: onlyFiles
+            onlyFiles: onlyFiles,
+            useRegex: searchUseRegex,
+            depthMin: searchDepthMin,
+            depthMax: max(searchDepthMin, searchDepthMax),
+            modifiedWithinDays: searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil,
+            nodeType: searchNodeType
         )
     }
 
@@ -256,11 +324,12 @@ final class RootViewModel: ObservableObject {
         }
     }
 
-    func uninstall(app: InstalledApp) {
-        let remnants = uninstallerRemnants
+    func uninstall(app: InstalledApp, selectedItems: [UninstallPreviewItem]? = nil) {
+        let preview = uninstallPreview(for: app)
+        let items = selectedItems ?? preview
         Task { [weak self] in
             guard let self else { return }
-            let result = await uninstallerService.uninstall(app: app, remnants: remnants)
+            let result = await uninstallerService.uninstall(app: app, previewItems: items)
             await MainActor.run {
                 AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
                 self.uninstallReport = result
@@ -420,7 +489,12 @@ final class RootViewModel: ObservableObject {
             minSizeMB: minSizeMB,
             pathContains: pathContains,
             onlyDirectories: onlyDirectories,
-            onlyFiles: onlyFiles
+            onlyFiles: onlyFiles,
+            useRegex: searchUseRegex,
+            depthMin: searchDepthMin,
+            depthMax: searchDepthMax,
+            modifiedWithinDays: searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil,
+            nodeType: searchNodeType
         )
         searchPresets.insert(preset, at: 0)
         persistSearchPresets()
@@ -432,6 +506,11 @@ final class RootViewModel: ObservableObject {
         pathContains = preset.pathContains
         onlyDirectories = preset.onlyDirectories
         onlyFiles = preset.onlyFiles
+        searchUseRegex = preset.useRegex
+        searchDepthMin = preset.depthMin
+        searchDepthMax = preset.depthMax
+        searchModifiedWithinDays = preset.modifiedWithinDays ?? 0
+        searchNodeType = preset.nodeType
     }
 
     func deletePreset(_ preset: SearchPreset) {

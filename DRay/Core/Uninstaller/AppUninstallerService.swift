@@ -72,9 +72,9 @@ actor AppUninstallerService {
         return remnants.sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
-    func uninstall(app: InstalledApp, remnants: [AppRemnant]) -> UninstallValidationReport {
+    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
-        let targets: [(URL, UninstallItemType)] = [(app.appURL, .appBundle)] + remnants.map { ($0.url, .remnant) }
+        let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
 
         for (target, type) in targets {
             let path = target.path

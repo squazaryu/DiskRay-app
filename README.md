@@ -29,7 +29,8 @@ swift run
 - [x] Search presets and multi-delete flow
 - [x] Install script to `/Applications/DRay.app`
 - [ ] Incremental index updates (delta scan, not full tree pass)
-- [ ] Search Pro filters (regex/date/depth/owner/type)
+- [x] Search Pro filters (regex/date/depth/type)
+- [ ] Search Pro owner filter
 - [ ] Smart Care: confidence scoring and explainability per item
 - [x] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
 - [x] Uninstaller: validation report (`removed / skipped / failed`)
