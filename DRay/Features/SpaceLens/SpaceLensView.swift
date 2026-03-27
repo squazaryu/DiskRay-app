@@ -15,6 +15,10 @@ struct SpaceLensView: View {
         } detail: {
             detail
         }
+        .onAppear {
+            selectedPaths.removeAll()
+            model.hoveredPath = nil
+        }
         .onChange(of: model.root?.id) {
             selectedPaths.removeAll()
         }

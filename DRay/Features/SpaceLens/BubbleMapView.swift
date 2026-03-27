@@ -81,10 +81,7 @@ struct BubbleMapView: View {
                             .position(x: item.center.x, y: item.center.y)
                         }
                         .onTapGesture {
-                            toggleSelection(for: item.node.url.path)
-                        }
-                        .onTapGesture(count: 2) {
-                            diveInto(item.node)
+                            handlePrimaryTap(on: item.node)
                         }
                         .onHover { inside in
                             hoveredPath = inside ? item.node.url.path : nil
@@ -154,6 +151,14 @@ struct BubbleMapView: View {
             }
             selectedPaths.insert(path)
         }
+    }
+
+    private func handlePrimaryTap(on node: FileNode) {
+        if node.isDirectory, !node.children.isEmpty {
+            diveInto(node)
+            return
+        }
+        toggleSelection(for: node.url.path)
     }
 
     private func diveInto(_ node: FileNode) {
