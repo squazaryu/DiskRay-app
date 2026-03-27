@@ -155,6 +155,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var uninstallReport: UninstallValidationReport?
     @Published private(set) var performanceReport: PerformanceReport?
     @Published private(set) var isPerformanceScanRunning = false
+    @Published private(set) var startupCleanupReport: StartupCleanupReport?
     @Published private(set) var privacyCategories: [PrivacyCategoryState] = []
     @Published private(set) var isPrivacyScanRunning = false
     @Published private(set) var privacyCleanReport: PrivacyCleanReport?
@@ -385,7 +386,20 @@ final class RootViewModel: ObservableObject {
             let report = await performanceService.buildReport()
             await MainActor.run {
                 self.performanceReport = report
+                self.startupCleanupReport = nil
                 self.isPerformanceScanRunning = false
+            }
+        }
+    }
+
+    func cleanupStartupEntries(_ entries: [StartupEntry]) {
+        guard !entries.isEmpty else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await performanceService.cleanupStartupEntries(entries)
+            await MainActor.run {
+                self.startupCleanupReport = report
+                self.runPerformanceScan()
             }
         }
     }

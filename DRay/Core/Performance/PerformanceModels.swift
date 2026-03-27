@@ -25,3 +25,9 @@ struct PerformanceReport: Sendable {
         startupEntries.reduce(0) { $0 + $1.sizeInBytes }
     }
 }
+
+struct StartupCleanupReport: Sendable {
+    let moved: Int
+    let failed: Int
+    let skippedProtected: Int
+}

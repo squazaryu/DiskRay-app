@@ -3,6 +3,8 @@ import AppKit
 
 struct PerformanceView: View {
     @ObservedObject var model: RootViewModel
+    @State private var selectedPaths = Set<String>()
+    @State private var showCleanupConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,6 +19,12 @@ struct PerformanceView: View {
                 Button("Run Diagnostics") { model.runPerformanceScan() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isPerformanceScanRunning)
+
+                Button("Disable Selected") {
+                    showCleanupConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(selectedEntries.isEmpty)
             }
 
             if model.isPerformanceScanRunning {
@@ -51,6 +59,17 @@ struct PerformanceView: View {
                     Section("Startup Entries") {
                         ForEach(report.startupEntries) { entry in
                             HStack {
+                                Toggle(
+                                    "",
+                                    isOn: Binding(
+                                        get: { selectedPaths.contains(entry.url.path) },
+                                        set: { isOn in
+                                            if isOn { selectedPaths.insert(entry.url.path) }
+                                            else { selectedPaths.remove(entry.url.path) }
+                                        }
+                                    )
+                                )
+                                .labelsHidden()
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(entry.name)
                                     Text("\(entry.source) · \(entry.url.path)")
@@ -67,6 +86,11 @@ struct PerformanceView: View {
                         }
                     }
                 }
+                if let cleanup = model.startupCleanupReport {
+                    Text("Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else if !model.isPerformanceScanRunning {
                 ContentUnavailableView(
                     "No Diagnostics Yet",
@@ -76,6 +100,19 @@ struct PerformanceView: View {
             }
         }
         .padding()
+        .confirmationDialog(
+            "Disable selected startup entries?",
+            isPresented: $showCleanupConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                model.cleanupStartupEntries(selectedEntries)
+                selectedPaths.removeAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Selected startup entries will be moved to Trash.")
+        }
     }
 
     private func statCard(_ title: String, _ value: String, caption: String) -> some View {
@@ -88,5 +125,10 @@ struct PerformanceView: View {
         }
         .padding(10)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var selectedEntries: [StartupEntry] {
+        guard let report = model.performanceReport else { return [] }
+        return report.startupEntries.filter { selectedPaths.contains($0.url.path) }
     }
 }

@@ -1,6 +1,8 @@
 import Foundation
 
 actor PerformanceService {
+    private let protectedPathPrefixes = ["/System", "/bin", "/sbin", "/usr"]
+
     func buildReport() -> PerformanceReport {
         let startupEntries = discoverStartupEntries()
         let capacities = diskCapacity()
@@ -113,5 +115,32 @@ actor PerformanceService {
         }
 
         return recommendations
+    }
+
+    func cleanupStartupEntries(_ entries: [StartupEntry]) -> StartupCleanupReport {
+        var moved = 0
+        var failed = 0
+        var skippedProtected = 0
+
+        for entry in entries {
+            let path = entry.url.path
+            if isProtectedPath(path) {
+                skippedProtected += 1
+                continue
+            }
+            do {
+                var trashedURL: NSURL?
+                try FileManager.default.trashItem(at: entry.url, resultingItemURL: &trashedURL)
+                moved += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        return StartupCleanupReport(moved: moved, failed: failed, skippedProtected: skippedProtected)
+    }
+
+    private func isProtectedPath(_ path: String) -> Bool {
+        path == "/" || protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 }
