@@ -232,8 +232,10 @@ final class RootViewModel: ObservableObject {
     func scanSelected() {
         if let cached = indexStore?.loadSnapshot(rootPath: selectedTarget.url.path) {
             root = cached
+            scanIncremental(at: selectedTarget.url, base: cached)
+            return
         }
-        scan(at: selectedTarget.url)
+        scan(at: selectedTarget.url, maxDepth: 7)
     }
 
     func runSmartScan() {
@@ -441,7 +443,7 @@ final class RootViewModel: ObservableObject {
         }
     }
 
-    private func scan(at url: URL) {
+    private func scan(at url: URL, maxDepth: Int) {
         scanTask?.cancel()
         isLoading = true
         isPaused = false
@@ -450,7 +452,7 @@ final class RootViewModel: ObservableObject {
         scanTask = Task { [weak self] in
             guard let self else { return }
             let selectedAtStart = selectedTarget
-            let scanned = await scanner.scan(rootURL: url, maxDepth: 7) { [weak self] progress in
+            let scanned = await scanner.scan(rootURL: url, maxDepth: maxDepth) { [weak self] progress in
                 Task { @MainActor in
                     self?.progress = progress
                 }
@@ -464,6 +466,68 @@ final class RootViewModel: ObservableObject {
                 AppLogger.scanner.info("Scan completed for \(url.path, privacy: .public), visited: \(self.progress.visitedItems)")
             }
         }
+    }
+
+    private func scanIncremental(at url: URL, base: FileNode) {
+        scanTask?.cancel()
+        isLoading = true
+        isPaused = false
+        progress = ScanProgress(currentPath: url.path, visitedItems: 0)
+        AppLogger.scanner.info("Incremental scan started at \(url.path, privacy: .public)")
+        scanTask = Task { [weak self] in
+            guard let self else { return }
+            let selectedAtStart = selectedTarget
+            let delta = await scanner.scan(rootURL: url, maxDepth: 2) { [weak self] progress in
+                Task { @MainActor in
+                    self?.progress = progress
+                }
+            }
+            guard !Task.isCancelled else { return }
+            let merged = mergeIncremental(base: base, delta: delta)
+            await MainActor.run {
+                self.root = merged
+                self.lastScannedTarget = selectedAtStart
+                self.isLoading = false
+                self.indexStore?.saveSnapshot(root: merged)
+                AppLogger.scanner.info("Incremental scan completed for \(url.path, privacy: .public), visited: \(self.progress.visitedItems)")
+            }
+        }
+    }
+
+    private func mergeIncremental(base: FileNode, delta: FileNode) -> FileNode {
+        var byPath = Dictionary(uniqueKeysWithValues: base.children.map { ($0.url.path, $0) })
+        for updated in delta.children {
+            if let existing = byPath[updated.url.path] {
+                let mergedChildren = mergeChildrenByPath(base: existing.children, delta: updated.children)
+                let mergedNode = FileNode(
+                    url: existing.url,
+                    name: existing.name,
+                    isDirectory: existing.isDirectory,
+                    sizeInBytes: updated.sizeInBytes > 0 ? updated.sizeInBytes : existing.sizeInBytes,
+                    children: mergedChildren
+                )
+                byPath[updated.url.path] = mergedNode
+            } else {
+                byPath[updated.url.path] = updated
+            }
+        }
+        let children = Array(byPath.values).sorted { $0.sizeInBytes > $1.sizeInBytes }
+        let total = children.reduce(Int64(0)) { $0 + $1.sizeInBytes }
+        return FileNode(
+            url: base.url,
+            name: base.name,
+            isDirectory: true,
+            sizeInBytes: total,
+            children: children
+        )
+    }
+
+    private func mergeChildrenByPath(base: [FileNode], delta: [FileNode]) -> [FileNode] {
+        var byPath = Dictionary(uniqueKeysWithValues: base.map { ($0.url.path, $0) })
+        for node in delta {
+            byPath[node.url.path] = node
+        }
+        return Array(byPath.values).sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
     func rescan() {

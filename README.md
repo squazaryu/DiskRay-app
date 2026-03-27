@@ -31,7 +31,7 @@ swift run
 - [x] Space Lens drill-down and in-view bulk actions
 - [x] Search presets and multi-delete flow
 - [x] Install script to `/Applications/DRay.app`
-- [ ] Incremental index updates (delta scan, not full tree pass)
+- [x] Incremental index updates (delta scan, not full tree pass)
 - [x] Search Pro filters (regex/date/depth/type)
 - [x] Search Pro owner filter
 - [x] Smart Care: confidence scoring and explainability per item
