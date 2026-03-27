@@ -1,0 +1,36 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (example: v0.0.4-alpha)"
+        required: true
+        type: string
+      build_number:
+        description: "Optional build number"
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build app bundle
+        run: |
+          chmod +x scripts/install_app.sh scripts/release.sh scripts/notarize.sh
+          ./scripts/install_app.sh "${{ inputs.version }}" "${{ inputs.build_number || '1' }}"
+
+      - name: Archive app
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent /Applications/DRay.app "dist/DRay-${{ inputs.version }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DRay-${{ inputs.version }}
+          path: dist/DRay-${{ inputs.version }}.zip

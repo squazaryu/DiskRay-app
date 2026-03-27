@@ -4,6 +4,8 @@ set -euo pipefail
 APP_NAME="DRay.app"
 APP_PATH="/Applications/${APP_NAME}"
 BUNDLE_ID="com.squazaryu.DRay"
+VERSION="${1:-0.0.3-alpha}"
+BUILD_NUMBER="${2:-1}"
 
 swift build -c release >/dev/null
 BIN_DIR="$(swift build -c release --show-bin-path)"
@@ -29,8 +31,8 @@ cat > "${BUNDLE_ROOT}/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>DRay</string>
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
   <key>CFBundleExecutable</key><string>DRay</string>
-  <key>CFBundleVersion</key><string>1</string>
-  <key>CFBundleShortVersionString</key><string>0.0.3-alpha</string>
+  <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
