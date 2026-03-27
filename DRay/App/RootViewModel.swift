@@ -159,8 +159,10 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var privacyCategories: [PrivacyCategoryState] = []
     @Published private(set) var isPrivacyScanRunning = false
     @Published private(set) var privacyCleanReport: PrivacyCleanReport?
+    @Published private(set) var lastExportedOperationLogURL: URL?
 
     let permissions = AppPermissionService()
+    let operationLogs = OperationLogStore()
 
     private let scanner = FileScanner()
     private let smartScanService = SmartScanService()
@@ -230,6 +232,7 @@ final class RootViewModel: ObservableObject {
     }
 
     func scanSelected() {
+        operationLogs.add(category: "scan", message: "User triggered scan for \(selectedTarget.url.path)")
         if let cached = indexStore?.loadSnapshot(rootPath: selectedTarget.url.path) {
             root = cached
             scanIncremental(at: selectedTarget.url, base: cached)
@@ -271,6 +274,7 @@ final class RootViewModel: ObservableObject {
             let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
             await MainActor.run {
                 AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
+                self.operationLogs.add(category: "smartcare", message: "Smart clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
                 self.runSmartScan()
             }
         }
@@ -283,6 +287,7 @@ final class RootViewModel: ObservableObject {
             let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
             await MainActor.run {
                 AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
+                self.operationLogs.add(category: "smartcare", message: "Smart item clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
                 self.runSmartScan()
             }
         }
@@ -354,6 +359,7 @@ final class RootViewModel: ObservableObject {
             let result = await uninstallerService.uninstall(app: app, previewItems: items)
             await MainActor.run {
                 AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
+                self.operationLogs.add(category: "uninstaller", message: "Uninstall \(app.name): removed \(result.removedCount), skipped \(result.skippedCount), failed \(result.failedCount)")
                 self.uninstallReport = result
                 self.uninstallerRemnants = []
                 self.loadInstalledApps()
@@ -401,6 +407,7 @@ final class RootViewModel: ObservableObject {
             let report = await performanceService.cleanupStartupEntries(entries)
             await MainActor.run {
                 self.startupCleanupReport = report
+                self.operationLogs.add(category: "performance", message: "Startup cleanup moved \(report.moved), failed \(report.failed), skipped \(report.skippedProtected)")
                 self.runPerformanceScan()
             }
         }
@@ -438,9 +445,22 @@ final class RootViewModel: ObservableObject {
             let report = await privacyService.clean(artifacts: artifacts)
             await MainActor.run {
                 self.privacyCleanReport = report
+                self.operationLogs.add(category: "privacy", message: "Privacy clean moved \(report.moved), failed \(report.failed), skipped \(report.skippedProtected)")
                 self.runPrivacyScan()
             }
         }
+    }
+
+    @discardableResult
+    func exportOperationLogReport() -> URL? {
+        let url = operationLogs.exportJSON()
+        lastExportedOperationLogURL = url
+        if let url {
+            operationLogs.add(category: "telemetry", message: "Exported operation log report to \(url.path)")
+        } else {
+            operationLogs.add(category: "telemetry", message: "Failed to export operation log report")
+        }
+        return url
     }
 
     private func scan(at url: URL, maxDepth: Int) {

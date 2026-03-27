@@ -25,6 +25,13 @@ struct PerformanceView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(selectedEntries.isEmpty)
+
+                Button("Export Ops Log") {
+                    if let url = model.exportOperationLogReport() {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                }
+                .buttonStyle(.bordered)
             }
 
             if model.isPerformanceScanRunning {

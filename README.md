@@ -18,6 +18,7 @@ DRay is a macOS disk explorer that combines:
 - Performance diagnostics tab (startup entries + maintenance recommendations)
 - Privacy diagnostics tab (trace review + explicit opt-in cleanup + transparency report)
 - Release pipeline scripts (build/package/sign/notarize) + GitHub Actions release workflow
+- Operation diagnostics log store with JSON export for support/debug workflows
 
 ## Run
 ```bash
