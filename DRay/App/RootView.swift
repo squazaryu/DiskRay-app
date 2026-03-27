@@ -39,6 +39,11 @@ struct RootView: View {
                 .tabItem {
                     Label("Privacy", systemImage: "lock.shield")
                 }
+
+            RecoveryView(model: model)
+                .tabItem {
+                    Label("Recovery", systemImage: "arrow.uturn.backward.circle")
+                }
         }
         .fileImporter(
             isPresented: $isFolderPickerPresented,
