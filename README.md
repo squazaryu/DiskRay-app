@@ -43,6 +43,7 @@ swift run
 - [x] Performance module baseline (startup diagnostics + maintenance recommendations)
 - [x] Privacy/Security module baseline (trace review + safe cleanup + transparency report)
 - [x] Signed + notarized production build pipeline baseline
+- [ ] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

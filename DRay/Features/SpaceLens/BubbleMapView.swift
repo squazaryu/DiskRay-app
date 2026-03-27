@@ -50,9 +50,16 @@ struct BubbleMapView: View {
                 ForEach(layout, id: \.node.id) { item in
                     let isSelected = selectedPaths.contains(item.node.url.path)
                     let isHovered = hoveredPath == item.node.url.path
+                    let fillColor = isSelected ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84)
+                    let strokeColor: Color = {
+                        if isSelected { return Color.blue.opacity(0.6) }
+                        if isHovered { return Color.black.opacity(0.28) }
+                        return Color.black.opacity(0.12)
+                    }()
+                    let strokeWidth: CGFloat = isSelected ? 2 : 1
                     Circle()
-                        .fill((isSelected || isHovered) ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84))
-                        .overlay(Circle().stroke((isSelected || isHovered) ? Color.blue.opacity(0.6) : Color.black.opacity(0.12), lineWidth: (isSelected || isHovered) ? 2 : 1))
+                        .fill(fillColor)
+                        .overlay(Circle().stroke(strokeColor, lineWidth: strokeWidth))
                         .frame(width: item.radius * 2, height: item.radius * 2)
                         .position(x: item.center.x, y: item.center.y)
                         .overlay(alignment: .center) {
@@ -141,6 +148,10 @@ struct BubbleMapView: View {
         if selectedPaths.contains(path) {
             selectedPaths.remove(path)
         } else {
+            // Prevent accidental multi-select from rapid click streams.
+            if selectedPaths.count > 6 {
+                selectedPaths.removeAll()
+            }
             selectedPaths.insert(path)
         }
     }
