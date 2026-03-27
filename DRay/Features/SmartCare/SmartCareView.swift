@@ -148,6 +148,12 @@ struct SmartCareView: View {
                 Text("Why recommended: \(category.result.recommendationReason)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                Text("Confidence: \(Int(category.result.confidenceScore * 100))%")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("Why detected: \(category.result.explainability)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
 
@@ -184,6 +190,10 @@ struct SmartCareView: View {
                     Text(item.name)
                     Text(item.url.path)
                         .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text("Confidence: \(Int(item.confidenceScore * 100))% · \(item.explainability)")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
