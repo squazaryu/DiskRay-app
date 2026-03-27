@@ -34,6 +34,7 @@ cat > "${BUNDLE_ROOT}/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>DRay</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
@@ -42,6 +43,9 @@ PLIST
 
 cp "$EXECUTABLE" "${BUNDLE_ROOT}/Contents/MacOS/DRay"
 chmod +x "${BUNDLE_ROOT}/Contents/MacOS/DRay"
+if [[ -f "assets/DRay.icns" ]]; then
+  cp "assets/DRay.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
+fi
 
 codesign --force --deep --sign - "${BUNDLE_ROOT}" >/dev/null 2>&1 || true
 
