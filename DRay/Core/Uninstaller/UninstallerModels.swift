@@ -32,6 +32,7 @@ struct UninstallActionResult: Identifiable, Sendable {
     let url: URL
     let type: UninstallItemType
     let status: UninstallActionStatus
+    let trashedPath: String?
     let details: String?
 }
 
@@ -66,4 +67,22 @@ struct UninstallPreviewItem: Identifiable, Sendable {
     let sizeInBytes: Int64
     let risk: UninstallRiskLevel
     let reason: String
+}
+
+struct UninstallRollbackItem: Identifiable, Sendable {
+    let id = UUID()
+    let originalPath: String
+    let trashedPath: String
+    let type: UninstallItemType
+
+    var name: String {
+        URL(fileURLWithPath: originalPath).lastPathComponent
+    }
+}
+
+struct UninstallSession: Identifiable, Sendable {
+    let id = UUID()
+    let appName: String
+    let createdAt: Date
+    let rollbackItems: [UninstallRollbackItem]
 }

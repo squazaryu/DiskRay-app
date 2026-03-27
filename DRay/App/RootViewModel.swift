@@ -163,6 +163,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var uninstallerRemnants: [AppRemnant] = []
     @Published private(set) var isUninstallerLoading = false
     @Published private(set) var uninstallReport: UninstallValidationReport?
+    @Published private(set) var uninstallSessions: [UninstallSession] = []
     @Published private(set) var performanceReport: PerformanceReport?
     @Published private(set) var isPerformanceScanRunning = false
     @Published private(set) var startupCleanupReport: StartupCleanupReport?
@@ -379,10 +380,38 @@ final class RootViewModel: ObservableObject {
                 AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
                 self.operationLogs.add(category: "uninstaller", message: "Uninstall \(app.name): removed \(result.removedCount), skipped \(result.skippedCount), failed \(result.failedCount)")
                 self.uninstallReport = result
+                self.recordUninstallSession(from: result)
                 self.uninstallerRemnants = []
                 self.loadInstalledApps()
             }
         }
+    }
+
+    func restoreFromUninstallSession(_ session: UninstallSession, item: UninstallRollbackItem? = nil) -> Int {
+        let targets = item.map { [$0] } ?? session.rollbackItems
+        var restored = 0
+
+        for rollback in targets {
+            let sourceURL = URL(fileURLWithPath: rollback.trashedPath)
+            let originalURL = URL(fileURLWithPath: rollback.originalPath)
+            let destinationURL = uniqueRestoreURL(for: originalURL)
+
+            do {
+                try FileManager.default.createDirectory(
+                    at: destinationURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+                restored += 1
+            } catch {
+                AppLogger.actions.error("Failed uninstall rollback restore: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        if restored > 0 {
+            operationLogs.add(category: "uninstaller", message: "Rollback restored \(restored) item(s) for \(session.appName)")
+        }
+        return restored
     }
 
     func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
@@ -826,6 +855,23 @@ final class RootViewModel: ObservableObject {
             recentlyDeleted = Array(recentlyDeleted.prefix(200))
         }
         persistRecentlyDeleted()
+    }
+
+    private func recordUninstallSession(from report: UninstallValidationReport) {
+        let rollbackItems = report.results.compactMap { result -> UninstallRollbackItem? in
+            guard result.status == .removed, let trashedPath = result.trashedPath else { return nil }
+            return UninstallRollbackItem(
+                originalPath: result.url.path,
+                trashedPath: trashedPath,
+                type: result.type
+            )
+        }
+        guard !rollbackItems.isEmpty else { return }
+        let session = UninstallSession(appName: report.appName, createdAt: report.createdAt, rollbackItems: rollbackItems)
+        uninstallSessions.insert(session, at: 0)
+        if uninstallSessions.count > 50 {
+            uninstallSessions = Array(uninstallSessions.prefix(50))
+        }
     }
 
     private func loadRecentlyDeleted() {

@@ -86,6 +86,43 @@ struct UninstallerView: View {
                             uninstallReportSections(report)
                         }
                     }
+                    if !model.uninstallSessions.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Rollback sessions")
+                                .font(.headline)
+                            List(model.uninstallSessions.prefix(10)) { session in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(session.appName)
+                                            .font(.subheadline.bold())
+                                        Spacer()
+                                        Text(session.createdAt, style: .relative)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Button("Restore All") {
+                                            _ = model.restoreFromUninstallSession(session)
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                    ForEach(session.rollbackItems.prefix(8)) { item in
+                                        HStack {
+                                            Text(item.name)
+                                                .font(.caption)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            Button("Restore") {
+                                                _ = model.restoreFromUninstallSession(session, item: item)
+                                            }
+                                            .buttonStyle(.borderless)
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .frame(minHeight: 170)
+                        }
+                    }
                 } else {
                     ContentUnavailableView("Uninstaller", systemImage: "trash", description: Text("Select app to inspect remnants."))
                 }

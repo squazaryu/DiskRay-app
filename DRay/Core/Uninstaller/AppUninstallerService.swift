@@ -80,21 +80,27 @@ actor AppUninstallerService {
             let path = target.path
 
             if isProtectedPath(path) {
-                results.append(UninstallActionResult(url: target, type: type, status: .skippedProtected, details: "Protected system path"))
+                results.append(UninstallActionResult(url: target, type: type, status: .skippedProtected, trashedPath: nil, details: "Protected system path"))
                 continue
             }
 
             guard FileManager.default.fileExists(atPath: path) else {
-                results.append(UninstallActionResult(url: target, type: type, status: .missing, details: "Not found"))
+                results.append(UninstallActionResult(url: target, type: type, status: .missing, trashedPath: nil, details: "Not found"))
                 continue
             }
 
             do {
                 var trashedURL: NSURL?
                 try FileManager.default.trashItem(at: target, resultingItemURL: &trashedURL)
-                results.append(UninstallActionResult(url: target, type: type, status: .removed, details: nil))
+                results.append(UninstallActionResult(
+                    url: target,
+                    type: type,
+                    status: .removed,
+                    trashedPath: (trashedURL as URL?)?.path,
+                    details: nil
+                ))
             } catch {
-                results.append(UninstallActionResult(url: target, type: type, status: .failed, details: error.localizedDescription))
+                results.append(UninstallActionResult(url: target, type: type, status: .failed, trashedPath: nil, details: error.localizedDescription))
             }
         }
 
