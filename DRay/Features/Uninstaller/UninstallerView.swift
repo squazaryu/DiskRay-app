@@ -3,18 +3,26 @@ import AppKit
 
 struct UninstallerView: View {
     @ObservedObject var model: RootViewModel
-    @State private var selectedApp: InstalledApp?
+    @State private var selectedAppPath: String?
     @State private var showUninstallPreview = false
+
+    private var selectedApp: InstalledApp? {
+        guard let selectedAppPath else { return nil }
+        return model.installedApps.first { $0.appURL.path == selectedAppPath }
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(model.installedApps, selection: $selectedApp) { app in
+            List(model.installedApps, selection: $selectedAppPath) { app in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.name)
                     Text(app.bundleID)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .tag(app.appURL.path)
+                .contentShape(Rectangle())
+                .onTapGesture { selectedAppPath = app.appURL.path }
             }
             .overlay {
                 if model.isUninstallerLoading {
@@ -26,7 +34,7 @@ struct UninstallerView: View {
                     model.loadInstalledApps()
                 }
             }
-            .onChange(of: selectedApp?.id) {
+            .onChange(of: selectedAppPath) {
                 guard let selectedApp else { return }
                 model.loadRemnants(for: selectedApp)
             }

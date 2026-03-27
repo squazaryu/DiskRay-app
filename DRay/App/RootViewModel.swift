@@ -245,6 +245,11 @@ final class RootViewModel: ObservableObject {
 
     func scanSelected() {
         operationLogs.add(category: "scan", message: "User triggered scan for \(selectedTarget.url.path)")
+        // Keep root scans full to avoid shallow-size artifacts on top-level system directories.
+        if selectedTarget.url.path == "/" {
+            scan(at: selectedTarget.url, maxDepth: 7)
+            return
+        }
         if let cached = indexStore?.loadSnapshot(rootPath: selectedTarget.url.path) {
             root = cached
             scanIncremental(at: selectedTarget.url, base: cached)
@@ -577,16 +582,9 @@ final class RootViewModel: ObservableObject {
     private func mergeIncremental(base: FileNode, delta: FileNode) -> FileNode {
         var byPath = Dictionary(uniqueKeysWithValues: base.children.map { ($0.url.path, $0) })
         for updated in delta.children {
+            if updated.url.path == base.url.path { continue }
             if let existing = byPath[updated.url.path] {
-                let mergedChildren = mergeChildrenByPath(base: existing.children, delta: updated.children)
-                let mergedNode = FileNode(
-                    url: existing.url,
-                    name: existing.name,
-                    isDirectory: existing.isDirectory,
-                    sizeInBytes: updated.sizeInBytes > 0 ? updated.sizeInBytes : existing.sizeInBytes,
-                    children: mergedChildren
-                )
-                byPath[updated.url.path] = mergedNode
+                byPath[updated.url.path] = mergeNode(existing: existing, updated: updated)
             } else {
                 byPath[updated.url.path] = updated
             }
@@ -605,9 +603,25 @@ final class RootViewModel: ObservableObject {
     private func mergeChildrenByPath(base: [FileNode], delta: [FileNode]) -> [FileNode] {
         var byPath = Dictionary(uniqueKeysWithValues: base.map { ($0.url.path, $0) })
         for node in delta {
-            byPath[node.url.path] = node
+            if let existing = byPath[node.url.path] {
+                byPath[node.url.path] = mergeNode(existing: existing, updated: node)
+            } else {
+                byPath[node.url.path] = node
+            }
         }
         return Array(byPath.values).sorted { $0.sizeInBytes > $1.sizeInBytes }
+    }
+
+    private func mergeNode(existing: FileNode, updated: FileNode) -> FileNode {
+        let mergedChildren = mergeChildrenByPath(base: existing.children, delta: updated.children)
+        let mergedSize = updated.sizeInBytes > 0 ? updated.sizeInBytes : existing.sizeInBytes
+        return FileNode(
+            url: existing.url,
+            name: existing.name,
+            isDirectory: existing.isDirectory,
+            sizeInBytes: mergedSize,
+            children: mergedChildren
+        )
     }
 
     func rescan() {

@@ -6,11 +6,12 @@ struct BubbleMapView: View {
     @Binding var selectedPaths: Set<String>
     @State private var navigation: [FileNode] = []
     @State private var zoomPulse = false
+    @State private var didInitialReset = false
 
     var body: some View {
         GeometryReader { geo in
             let current = navigation.last ?? root
-            let layout = packedLayout(for: current, in: geo.size, maxItems: 36)
+            let layout = packedLayout(for: current, in: geo.size, maxItems: 24)
 
             ZStack {
                 LinearGradient(
@@ -119,6 +120,13 @@ struct BubbleMapView: View {
                 hoveredPath = nil
                 animateZoom()
             }
+            .onAppear {
+                if !didInitialReset {
+                    selectedPaths.removeAll()
+                    hoveredPath = nil
+                    didInitialReset = true
+                }
+            }
             .onChange(of: current.id) {
                 animateZoom()
             }
@@ -220,7 +228,7 @@ struct BubbleMapView: View {
             placed.append(BubbleLayoutItem(node: node, center: fallback, radius: radius))
         }
 
-        return relaxLayout(placed, center: center, coreRadius: coreRadius, width: width, height: height, iterations: 48)
+        return relaxLayout(placed, center: center, coreRadius: coreRadius, width: width, height: height, iterations: 14)
     }
 
     private func animateZoom() {
