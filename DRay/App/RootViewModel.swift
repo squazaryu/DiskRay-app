@@ -12,6 +12,7 @@ struct SearchPreset: Codable, Identifiable {
     let query: String
     let minSizeMB: Double
     let pathContains: String
+    let ownerContains: String
     let onlyDirectories: Bool
     let onlyFiles: Bool
     let useRegex: Bool
@@ -30,6 +31,7 @@ struct SearchPreset: Codable, Identifiable {
         query: String,
         minSizeMB: Double,
         pathContains: String,
+        ownerContains: String,
         onlyDirectories: Bool,
         onlyFiles: Bool,
         useRegex: Bool,
@@ -43,6 +45,7 @@ struct SearchPreset: Codable, Identifiable {
         self.query = query
         self.minSizeMB = minSizeMB
         self.pathContains = pathContains
+        self.ownerContains = ownerContains
         self.onlyDirectories = onlyDirectories
         self.onlyFiles = onlyFiles
         self.useRegex = useRegex
@@ -53,7 +56,7 @@ struct SearchPreset: Codable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, query, minSizeMB, pathContains, onlyDirectories, onlyFiles
+        case id, name, query, minSizeMB, pathContains, ownerContains, onlyDirectories, onlyFiles
         case useRegex, depthMin, depthMax, modifiedWithinDays, nodeTypeRaw
     }
 
@@ -64,6 +67,7 @@ struct SearchPreset: Codable, Identifiable {
         query = try c.decode(String.self, forKey: .query)
         minSizeMB = try c.decode(Double.self, forKey: .minSizeMB)
         pathContains = try c.decode(String.self, forKey: .pathContains)
+        ownerContains = try c.decodeIfPresent(String.self, forKey: .ownerContains) ?? ""
         onlyDirectories = try c.decode(Bool.self, forKey: .onlyDirectories)
         onlyFiles = try c.decode(Bool.self, forKey: .onlyFiles)
         useRegex = try c.decodeIfPresent(Bool.self, forKey: .useRegex) ?? false
@@ -123,6 +127,7 @@ final class RootViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var minSizeMB: Double = 0
     @Published var pathContains = ""
+    @Published var ownerContains = ""
     @Published var onlyDirectories = false
     @Published var onlyFiles = false
     @Published var searchUseRegex = false
@@ -142,12 +147,15 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var uninstallerRemnants: [AppRemnant] = []
     @Published private(set) var isUninstallerLoading = false
     @Published private(set) var uninstallReport: UninstallValidationReport?
+    @Published private(set) var performanceReport: PerformanceReport?
+    @Published private(set) var isPerformanceScanRunning = false
 
     let permissions = AppPermissionService()
 
     private let scanner = FileScanner()
     private let smartScanService = SmartScanService()
     private let uninstallerService = AppUninstallerService()
+    private let performanceService = PerformanceService()
     private let queryEngine = QueryEngine()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
@@ -175,6 +183,7 @@ final class RootViewModel: ObservableObject {
             query: searchQuery,
             minSizeBytes: Int64(minSizeMB * 1_048_576),
             pathContains: pathContains,
+            ownerContains: ownerContains,
             onlyDirectories: onlyDirectories,
             onlyFiles: onlyFiles,
             useRegex: searchUseRegex,
@@ -358,6 +367,19 @@ final class RootViewModel: ObservableObject {
         persistSmartExclusions()
     }
 
+    func runPerformanceScan() {
+        guard !isPerformanceScanRunning else { return }
+        isPerformanceScanRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await performanceService.buildReport()
+            await MainActor.run {
+                self.performanceReport = report
+                self.isPerformanceScanRunning = false
+            }
+        }
+    }
+
     private func scan(at url: URL) {
         scanTask?.cancel()
         isLoading = true
@@ -488,6 +510,7 @@ final class RootViewModel: ObservableObject {
             query: searchQuery,
             minSizeMB: minSizeMB,
             pathContains: pathContains,
+            ownerContains: ownerContains,
             onlyDirectories: onlyDirectories,
             onlyFiles: onlyFiles,
             useRegex: searchUseRegex,
@@ -504,6 +527,7 @@ final class RootViewModel: ObservableObject {
         searchQuery = preset.query
         minSizeMB = preset.minSizeMB
         pathContains = preset.pathContains
+        ownerContains = preset.ownerContains
         onlyDirectories = preset.onlyDirectories
         onlyFiles = preset.onlyFiles
         searchUseRegex = preset.useRegex

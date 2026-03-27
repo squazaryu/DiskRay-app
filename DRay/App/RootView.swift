@@ -29,6 +29,11 @@ struct RootView: View {
                 .tabItem {
                     Label("Search", systemImage: "magnifyingglass")
                 }
+
+            PerformanceView(model: model)
+                .tabItem {
+                    Label("Performance", systemImage: "gauge.with.dots.needle.67percent")
+                }
         }
         .fileImporter(
             isPresented: $isFolderPickerPresented,

@@ -23,6 +23,8 @@ struct SearchView: View {
             HStack {
                 TextField("Path contains", text: $model.pathContains)
                     .textFieldStyle(.roundedBorder)
+                TextField("Owner contains", text: $model.ownerContains)
+                    .textFieldStyle(.roundedBorder)
                 Text("Min MB")
                 TextField("0", value: $model.minSizeMB, format: .number)
                     .frame(width: 90)

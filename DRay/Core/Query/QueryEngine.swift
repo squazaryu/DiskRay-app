@@ -13,6 +13,7 @@ struct QueryEngine {
         query: String,
         minSizeBytes: Int64 = 0,
         pathContains: String = "",
+        ownerContains: String = "",
         onlyDirectories: Bool = false,
         onlyFiles: Bool = false,
         useRegex: Bool = false,
@@ -24,6 +25,7 @@ struct QueryEngine {
     ) -> [FileNode] {
         let normalized = query.lowercased()
         let pathFilter = pathContains.lowercased()
+        let ownerFilter = ownerContains.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let rootComponents = root.url.pathComponents.count
         let regex = useRegex ? (try? NSRegularExpression(pattern: query, options: [.caseInsensitive])) : nil
         let modifiedCutoff: Date? = modifiedWithinDays.map { Calendar.current.date(byAdding: .day, value: -$0, to: Date()) ?? .distantPast }
@@ -40,12 +42,13 @@ struct QueryEngine {
             }
             let sizeMatch = $0.sizeInBytes >= minSizeBytes
             let pathMatch = pathFilter.isEmpty || $0.url.path.lowercased().contains(pathFilter)
+            let ownerMatch = ownerFilter.isEmpty || ownerName(for: $0.url).lowercased().contains(ownerFilter)
             let typeMatch = (!onlyDirectories || $0.isDirectory) && (!onlyFiles || !$0.isDirectory)
             let depth = max(0, $0.url.pathComponents.count - rootComponents)
             let depthMatch = depth >= depthMin && depth <= depthMax
             let nodeTypeMatch = matchesNodeType($0, nodeType: nodeType)
             let modifiedMatch = matchesModified(node: $0, cutoff: modifiedCutoff)
-            return queryMatch && sizeMatch && pathMatch && typeMatch && depthMatch && nodeTypeMatch && modifiedMatch
+            return queryMatch && sizeMatch && pathMatch && ownerMatch && typeMatch && depthMatch && nodeTypeMatch && modifiedMatch
         }
         return Array(nodes.prefix(limit)).sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
@@ -68,5 +71,13 @@ struct QueryEngine {
         guard let values = try? node.url.resourceValues(forKeys: [.contentModificationDateKey]),
               let modified = values.contentModificationDate else { return false }
         return modified >= cutoff
+    }
+
+    private func ownerName(for url: URL) -> String {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let owner = attrs[.ownerAccountName] as? String else {
+            return ""
+        }
+        return owner
     }
 }

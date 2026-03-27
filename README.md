@@ -15,6 +15,7 @@ DRay is a macOS disk explorer that combines:
 - Permissions flow with `Restore` for TCC resets
 - Smart Care engine with cleanup analyzers and profile-based recommendations
 - Initial Uninstaller with app and remnant discovery
+- Performance diagnostics tab (startup entries + maintenance recommendations)
 
 ## Run
 ```bash
@@ -30,11 +31,11 @@ swift run
 - [x] Install script to `/Applications/DRay.app`
 - [ ] Incremental index updates (delta scan, not full tree pass)
 - [x] Search Pro filters (regex/date/depth/type)
-- [ ] Search Pro owner filter
+- [x] Search Pro owner filter
 - [ ] Smart Care: confidence scoring and explainability per item
 - [x] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
 - [x] Uninstaller: validation report (`removed / skipped / failed`)
-- [ ] Performance module (startup optimization + maintenance tasks)
+- [x] Performance module baseline (startup diagnostics + maintenance recommendations)
 - [ ] Privacy/Security module (trace review + safe cleanup)
 - [ ] Signed + notarized production build pipeline
 
