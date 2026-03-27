@@ -37,12 +37,19 @@ struct SmartCareView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            Button("Run Full Smart Scan") {
+                selectedItemPaths.removeAll()
+                model.runUnifiedScan()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isUnifiedScanRunning)
+
             Button("Run Smart Scan") {
                 selectedItemPaths.removeAll()
                 model.runSmartScan()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.isSmartScanRunning)
+            .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
 
             Button("Select Recommended") {
                 model.selectRecommendedSmartCategories()
@@ -116,6 +123,19 @@ struct SmartCareView: View {
 
     private var categoriesList: some View {
         List {
+            if let summary = model.unifiedScanSummary {
+                Section("Unified Scan Summary") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Smart Care: \(summary.smartCareCategories) categories · \(ByteCountFormatter.string(fromByteCount: summary.smartCareBytes, countStyle: .file))")
+                        Text("Privacy: \(summary.privacyCategories) categories · \(ByteCountFormatter.string(fromByteCount: summary.privacyBytes, countStyle: .file))")
+                        Text("Startup: \(summary.startupEntries) entries · \(ByteCountFormatter.string(fromByteCount: summary.startupBytes, countStyle: .file))")
+                        Text("Updated \(summary.finishedAt, style: .relative)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                }
+            }
             ForEach(model.smartScanCategories) { category in
                 Section {
                     categoryRow(category)

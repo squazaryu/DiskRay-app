@@ -107,6 +107,16 @@ struct PrivacyCategoryState: Identifiable {
     var isSelected: Bool
 }
 
+struct UnifiedScanSummary {
+    let smartCareCategories: Int
+    let smartCareBytes: Int64
+    let privacyCategories: Int
+    let privacyBytes: Int64
+    let startupEntries: Int
+    let startupBytes: Int64
+    let finishedAt: Date
+}
+
 enum SmartCleanProfile: String, CaseIterable, Identifiable {
     case conservative
     case balanced
@@ -160,6 +170,8 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var isPrivacyScanRunning = false
     @Published private(set) var privacyCleanReport: PrivacyCleanReport?
     @Published private(set) var lastExportedOperationLogURL: URL?
+    @Published private(set) var isUnifiedScanRunning = false
+    @Published private(set) var unifiedScanSummary: UnifiedScanSummary?
 
     let permissions = AppPermissionService()
     let operationLogs = OperationLogStore()
@@ -253,6 +265,7 @@ final class RootViewModel: ObservableObject {
                 }
                 self.selectRecommendedSmartCategories()
                 self.isSmartScanRunning = false
+                self.operationLogs.add(category: "smartcare", message: "Smart scan done: categories \(result.categories.count), bytes \(result.totalBytes)")
             }
         }
     }
@@ -396,6 +409,7 @@ final class RootViewModel: ObservableObject {
                 self.performanceReport = report
                 self.startupCleanupReport = nil
                 self.isPerformanceScanRunning = false
+                self.operationLogs.add(category: "performance", message: "Diagnostics done: startup entries \(report.startupEntries.count)")
             }
         }
     }
@@ -425,6 +439,52 @@ final class RootViewModel: ObservableObject {
                 }
                 self.privacyCleanReport = nil
                 self.isPrivacyScanRunning = false
+                self.operationLogs.add(category: "privacy", message: "Privacy scan done: categories \(report.categories.count), bytes \(report.totalBytes)")
+            }
+        }
+    }
+
+    func runUnifiedScan() {
+        guard !isUnifiedScanRunning else { return }
+        isUnifiedScanRunning = true
+        operationLogs.add(category: "scan", message: "Unified scan started")
+
+        Task { [weak self] in
+            guard let self else { return }
+            async let smartResult = smartScanService.runSmartScan(excludedPrefixes: smartExclusions)
+            async let privacyResult = privacyService.runScan()
+            async let performanceResult = performanceService.buildReport()
+
+            let (smart, privacy, performance) = await (smartResult, privacyResult, performanceResult)
+
+            await MainActor.run {
+                self.smartScanCategories = smart.categories.map {
+                    SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
+                }
+                self.selectRecommendedSmartCategories()
+
+                self.privacyCategories = privacy.categories.map {
+                    PrivacyCategoryState(id: $0.id, category: $0, isSelected: false)
+                }
+
+                self.performanceReport = performance
+                self.startupCleanupReport = nil
+
+                self.unifiedScanSummary = UnifiedScanSummary(
+                    smartCareCategories: smart.categories.count,
+                    smartCareBytes: smart.totalBytes,
+                    privacyCategories: privacy.categories.count,
+                    privacyBytes: privacy.totalBytes,
+                    startupEntries: performance.startupEntries.count,
+                    startupBytes: performance.startupTotalBytes,
+                    finishedAt: Date()
+                )
+
+                self.isUnifiedScanRunning = false
+                self.operationLogs.add(
+                    category: "scan",
+                    message: "Unified scan done: smart \(smart.categories.count), privacy \(privacy.categories.count), startup \(performance.startupEntries.count)"
+                )
             }
         }
     }
