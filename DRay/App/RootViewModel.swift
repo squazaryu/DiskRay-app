@@ -101,6 +101,12 @@ struct SmartCategoryState: Identifiable {
     var isSelected: Bool
 }
 
+struct PrivacyCategoryState: Identifiable {
+    let id: String
+    let category: PrivacyCategory
+    var isSelected: Bool
+}
+
 enum SmartCleanProfile: String, CaseIterable, Identifiable {
     case conservative
     case balanced
@@ -149,6 +155,9 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var uninstallReport: UninstallValidationReport?
     @Published private(set) var performanceReport: PerformanceReport?
     @Published private(set) var isPerformanceScanRunning = false
+    @Published private(set) var privacyCategories: [PrivacyCategoryState] = []
+    @Published private(set) var isPrivacyScanRunning = false
+    @Published private(set) var privacyCleanReport: PrivacyCleanReport?
 
     let permissions = AppPermissionService()
 
@@ -156,6 +165,7 @@ final class RootViewModel: ObservableObject {
     private let smartScanService = SmartScanService()
     private let uninstallerService = AppUninstallerService()
     private let performanceService = PerformanceService()
+    private let privacyService = PrivacyService()
     private let queryEngine = QueryEngine()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
@@ -376,6 +386,43 @@ final class RootViewModel: ObservableObject {
             await MainActor.run {
                 self.performanceReport = report
                 self.isPerformanceScanRunning = false
+            }
+        }
+    }
+
+    func runPrivacyScan() {
+        guard !isPrivacyScanRunning else { return }
+        isPrivacyScanRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await privacyService.runScan()
+            await MainActor.run {
+                self.privacyCategories = report.categories.map { category in
+                    PrivacyCategoryState(id: category.id, category: category, isSelected: false)
+                }
+                self.privacyCleanReport = nil
+                self.isPrivacyScanRunning = false
+            }
+        }
+    }
+
+    func togglePrivacyCategory(_ id: String) {
+        guard let idx = privacyCategories.firstIndex(where: { $0.id == id }) else { return }
+        privacyCategories[idx].isSelected.toggle()
+    }
+
+    func cleanSelectedPrivacyCategories() {
+        let artifacts = privacyCategories
+            .filter(\.isSelected)
+            .flatMap(\.category.artifacts)
+        guard !artifacts.isEmpty else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await privacyService.clean(artifacts: artifacts)
+            await MainActor.run {
+                self.privacyCleanReport = report
+                self.runPrivacyScan()
             }
         }
     }

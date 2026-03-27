@@ -34,6 +34,11 @@ struct RootView: View {
                 .tabItem {
                     Label("Performance", systemImage: "gauge.with.dots.needle.67percent")
                 }
+
+            PrivacyView(model: model)
+                .tabItem {
+                    Label("Privacy", systemImage: "lock.shield")
+                }
         }
         .fileImporter(
             isPresented: $isFolderPickerPresented,
