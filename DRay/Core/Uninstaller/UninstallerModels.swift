@@ -15,28 +15,32 @@ struct AppRemnant: Identifiable, Hashable, Sendable {
     var name: String { url.lastPathComponent }
 }
 
-enum UninstallItemType: String, Sendable {
+enum UninstallItemType: String, Codable, Sendable {
     case appBundle
     case remnant
 }
 
-enum UninstallActionStatus: String, Sendable {
+enum UninstallActionStatus: String, Codable, Sendable {
     case removed
     case skippedProtected
     case missing
     case failed
 }
 
-struct UninstallActionResult: Identifiable, Sendable {
+struct UninstallActionResult: Identifiable, Codable, Sendable {
     let id = UUID()
     let url: URL
     let type: UninstallItemType
     let status: UninstallActionStatus
     let trashedPath: String?
     let details: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url, type, status, trashedPath, details
+    }
 }
 
-struct UninstallValidationReport: Sendable {
+struct UninstallValidationReport: Codable, Sendable {
     let appName: String
     let createdAt: Date
     let results: [UninstallActionResult]
@@ -54,22 +58,26 @@ struct UninstallValidationReport: Sendable {
     }
 }
 
-enum UninstallRiskLevel: String, Sendable {
+enum UninstallRiskLevel: String, Codable, Sendable {
     case low
     case medium
     case high
 }
 
-struct UninstallPreviewItem: Identifiable, Sendable {
+struct UninstallPreviewItem: Identifiable, Codable, Sendable {
     let id = UUID()
     let url: URL
     let type: UninstallItemType
     let sizeInBytes: Int64
     let risk: UninstallRiskLevel
     let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case url, type, sizeInBytes, risk, reason
+    }
 }
 
-struct UninstallRollbackItem: Identifiable, Sendable {
+struct UninstallRollbackItem: Identifiable, Codable, Sendable {
     let id = UUID()
     let originalPath: String
     let trashedPath: String
@@ -78,11 +86,19 @@ struct UninstallRollbackItem: Identifiable, Sendable {
     var name: String {
         URL(fileURLWithPath: originalPath).lastPathComponent
     }
+
+    enum CodingKeys: String, CodingKey {
+        case originalPath, trashedPath, type
+    }
 }
 
-struct UninstallSession: Identifiable, Sendable {
+struct UninstallSession: Identifiable, Codable, Sendable {
     let id = UUID()
     let appName: String
     let createdAt: Date
     let rollbackItems: [UninstallRollbackItem]
+
+    enum CodingKeys: String, CodingKey {
+        case appName, createdAt, rollbackItems
+    }
 }

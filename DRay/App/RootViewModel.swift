@@ -234,6 +234,7 @@ final class RootViewModel: ObservableObject {
     private let searchPresetsKey = "dray.search.presets"
     private let recentlyDeletedKey = "dray.recently.deleted"
     private let smartExclusionsKey = "dray.smart.exclusions"
+    private let uninstallSessionsKey = "dray.uninstall.sessions"
     private var scanTask: Task<Void, Never>?
     private var liveSearchTask: Task<Void, Never>?
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
@@ -243,6 +244,7 @@ final class RootViewModel: ObservableObject {
         loadSearchPresets()
         loadRecentlyDeleted()
         loadSmartExclusions()
+        loadUninstallSessions()
         permissions.refreshFolderAccess(for: selectedTarget.url)
     }
 
@@ -522,6 +524,7 @@ final class RootViewModel: ObservableObject {
 
         if restored > 0 {
             operationLogs.add(category: "uninstaller", message: "Rollback restored \(restored) item(s) for \(session.appName)")
+            pruneRestoredItemsFromSessions(targets: targets)
         }
         return restored
     }
@@ -1031,6 +1034,7 @@ final class RootViewModel: ObservableObject {
         if uninstallSessions.count > 50 {
             uninstallSessions = Array(uninstallSessions.prefix(50))
         }
+        persistUninstallSessions()
     }
 
     private func loadRecentlyDeleted() {
@@ -1050,6 +1054,27 @@ final class RootViewModel: ObservableObject {
 
     private func persistSmartExclusions() {
         UserDefaults.standard.set(smartExclusions, forKey: smartExclusionsKey)
+    }
+
+    private func loadUninstallSessions() {
+        guard let data = UserDefaults.standard.data(forKey: uninstallSessionsKey),
+              let sessions = try? JSONDecoder().decode([UninstallSession].self, from: data) else { return }
+        uninstallSessions = sessions
+    }
+
+    private func persistUninstallSessions() {
+        guard let data = try? JSONEncoder().encode(uninstallSessions) else { return }
+        UserDefaults.standard.set(data, forKey: uninstallSessionsKey)
+    }
+
+    private func pruneRestoredItemsFromSessions(targets: [UninstallRollbackItem]) {
+        let restoredSet = Set(targets.map { $0.trashedPath })
+        uninstallSessions = uninstallSessions.compactMap { session in
+            let remaining = session.rollbackItems.filter { !restoredSet.contains($0.trashedPath) }
+            guard !remaining.isEmpty else { return nil }
+            return UninstallSession(appName: session.appName, createdAt: session.createdAt, rollbackItems: remaining)
+        }
+        persistUninstallSessions()
     }
 
     private func uniqueRestoreURL(for desiredURL: URL) -> URL {
