@@ -14,6 +14,7 @@ struct BubbleMapView: View {
     var body: some View {
         GeometryReader { geo in
             let current = navigation.last ?? root
+            let coreRadius = centerCoreRadius(for: geo.size)
 
             ZStack {
                 LinearGradient(
@@ -28,7 +29,7 @@ struct BubbleMapView: View {
                 Circle()
                     .fill(Color.white.opacity(0.90))
                     .overlay(Circle().stroke(Color.black.opacity(0.12), lineWidth: 1))
-                    .frame(width: 196, height: 196)
+                    .frame(width: coreRadius * 2, height: coreRadius * 2)
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
                     .overlay(alignment: .center) {
                         VStack(spacing: 6) {
@@ -62,6 +63,7 @@ struct BubbleMapView: View {
                     Circle()
                         .fill(fillColor)
                         .overlay(Circle().stroke(strokeColor, lineWidth: strokeWidth))
+                        .shadow(color: .black.opacity(isSelected ? 0.16 : 0.08), radius: isSelected ? 9 : 5, x: 0, y: 2)
                         .frame(width: item.radius * 2, height: item.radius * 2)
                         .position(x: item.center.x, y: item.center.y)
                         .overlay(alignment: .center) {
@@ -232,66 +234,50 @@ struct BubbleMapView: View {
         let items = Array(node.largestChildren.prefix(maxItems))
         guard !items.isEmpty else { return [] }
 
-        let width = max(size.width, 400)
-        let height = max(size.height, 320)
+        let width = max(size.width, 520)
+        let height = max(size.height, 360)
         let center = CGPoint(x: width / 2, y: height / 2)
-        let coreRadius: CGFloat = 112
+        let coreRadius = centerCoreRadius(for: size)
         let minCanvas = min(width, height)
 
         let maxSize = Double(max(items.first?.sizeInBytes ?? 1, 1))
-        let radii: [CGFloat] = items.map { child in
+        let baseRadii: [CGFloat] = items.map { child in
             let factor = sqrt(Double(max(child.sizeInBytes, 1)) / maxSize)
-            return CGFloat(22 + factor * 84)
+            let maxR = min(84, minCanvas * 0.16)
+            return CGFloat(24 + factor * maxR)
         }
 
-        var placed: [BubbleLayoutItem] = []
+        // Deterministic ring layout is much faster than iterative force relaxation and keeps
+        // bubbles distributed around the center in a predictable way.
+        let ringCaps = [6, 10, 14, 18]
+        var output: [BubbleLayoutItem] = []
+        var index = 0
+        var ring = 0
 
-        for (idx, node) in items.enumerated() {
-            let radius = radii[idx]
-            var placedPoint: CGPoint?
+        while index < items.count {
+            let cap = ring < ringCaps.count ? ringCaps[ring] : (18 + ring * 2)
+            let count = min(cap, items.count - index)
+            let ringDistance = coreRadius + 26 + CGFloat(ring) * (minCanvas * 0.12 + 18)
+            let stagger = ring.isMultiple(of: 2) ? 0.0 : (Double.pi / Double(max(count, 1)))
+            let yScale: CGFloat = width > height ? 0.82 : 1.0
 
-            let baseDistance = coreRadius + radius + 20
-            var ring = 0
-            while ring < 14 && placedPoint == nil {
-                let ringDistance = baseDistance + CGFloat(ring) * (radius * 1.2 + 18)
-                let attempts = max(24, 20 + ring * 14)
+            for slot in 0..<count {
+                let node = items[index]
+                let shrink = max(0.72, 1.0 - CGFloat(ring) * 0.08)
+                let radius = baseRadii[index] * shrink
+                let angle = (-Double.pi / 2) + (2 * Double.pi * Double(slot) / Double(max(count, 1))) + stagger
+                var x = center.x + CGFloat(cos(angle)) * ringDistance
+                var y = center.y + CGFloat(sin(angle)) * ringDistance * yScale
 
-                for i in 0..<attempts {
-                    let angle = (2 * Double.pi * Double(i) / Double(attempts)) + Double(ring) * 0.23
-                    let x = center.x + CGFloat(cos(angle)) * ringDistance
-                    let y = center.y + CGFloat(sin(angle)) * ringDistance
-                    let candidate = CGPoint(x: x, y: y)
-
-                    if !isInside(candidate: candidate, radius: radius, width: width, height: height) {
-                        continue
-                    }
-                    if intersectsCore(candidate: candidate, radius: radius, center: center, coreRadius: coreRadius) {
-                        continue
-                    }
-                    if intersectsPlaced(candidate: candidate, radius: radius, placed: placed) {
-                        continue
-                    }
-
-                    placedPoint = candidate
-                    break
-                }
-                ring += 1
+                x = min(max(x, radius + 10), width - radius - 10)
+                y = min(max(y, radius + 10), height - radius - 10)
+                output.append(BubbleLayoutItem(node: node, center: CGPoint(x: x, y: y), radius: radius))
+                index += 1
             }
-
-            let fallback = placedPoint ?? spiralFallback(
-                center: center,
-                radius: radius,
-                coreRadius: coreRadius,
-                width: width,
-                height: height,
-                placed: placed,
-                maxRadius: minCanvas * 0.55
-            )
-
-            placed.append(BubbleLayoutItem(node: node, center: fallback, radius: radius))
+            ring += 1
         }
 
-        return relaxLayout(placed, center: center, coreRadius: coreRadius, width: width, height: height, iterations: 14)
+        return output
     }
 
     private func animateZoom() {
@@ -311,119 +297,9 @@ struct BubbleMapView: View {
         cachedSize = size
     }
 
-    private func relaxLayout(
-        _ seed: [BubbleLayoutItem],
-        center: CGPoint,
-        coreRadius: CGFloat,
-        width: CGFloat,
-        height: CGFloat,
-        iterations: Int
-    ) -> [BubbleLayoutItem] {
-        var items = seed
-        guard !items.isEmpty else { return items }
-
-        for _ in 0..<iterations {
-            var deltas = Array(repeating: CGVector(dx: 0, dy: 0), count: items.count)
-
-            for i in items.indices {
-                for j in items.indices where j > i {
-                    let a = items[i]
-                    let b = items[j]
-                    let dx = b.center.x - a.center.x
-                    let dy = b.center.y - a.center.y
-                    let dist = max(0.001, hypot(dx, dy))
-                    let minDist = a.radius + b.radius + 8
-
-                    if dist < minDist {
-                        let push = (minDist - dist) * 0.52
-                        let nx = dx / dist
-                        let ny = dy / dist
-                        deltas[i].dx -= nx * push
-                        deltas[i].dy -= ny * push
-                        deltas[j].dx += nx * push
-                        deltas[j].dy += ny * push
-                    }
-                }
-            }
-
-            for i in items.indices {
-                let p = items[i].center
-                let toCenterX = p.x - center.x
-                let toCenterY = p.y - center.y
-                let radial = max(1, hypot(toCenterX, toCenterY))
-                let coreMin = coreRadius + items[i].radius + 10
-                if radial < coreMin {
-                    let nx = toCenterX / radial
-                    let ny = toCenterY / radial
-                    let push = (coreMin - radial) * 0.7
-                    deltas[i].dx += nx * push
-                    deltas[i].dy += ny * push
-                }
-            }
-
-            for i in items.indices {
-                var x = items[i].center.x + deltas[i].dx * 0.6
-                var y = items[i].center.y + deltas[i].dy * 0.6
-
-                let r = items[i].radius
-                x = min(max(x, r + 10), width - r - 10)
-                y = min(max(y, r + 10), height - r - 10)
-                items[i] = BubbleLayoutItem(node: items[i].node, center: CGPoint(x: x, y: y), radius: r)
-            }
-        }
-
-        return items
-    }
-
-    private func intersectsCore(candidate: CGPoint, radius: CGFloat, center: CGPoint, coreRadius: CGFloat) -> Bool {
-        let distance = hypot(candidate.x - center.x, candidate.y - center.y)
-        return distance < (radius + coreRadius + 10)
-    }
-
-    private func intersectsPlaced(candidate: CGPoint, radius: CGFloat, placed: [BubbleLayoutItem]) -> Bool {
-        placed.contains { existing in
-            let d = hypot(candidate.x - existing.center.x, candidate.y - existing.center.y)
-            return d < (radius + existing.radius + 8)
-        }
-    }
-
-    private func isInside(candidate: CGPoint, radius: CGFloat, width: CGFloat, height: CGFloat) -> Bool {
-        let margin: CGFloat = 10
-        return candidate.x - radius > margin &&
-               candidate.y - radius > margin &&
-               candidate.x + radius < width - margin &&
-               candidate.y + radius < height - margin
-    }
-
-    private func spiralFallback(
-        center: CGPoint,
-        radius: CGFloat,
-        coreRadius: CGFloat,
-        width: CGFloat,
-        height: CGFloat,
-        placed: [BubbleLayoutItem],
-        maxRadius: CGFloat
-    ) -> CGPoint {
-        var angle: Double = 0
-        var distance: CGFloat = coreRadius + radius + 16
-
-        while distance < maxRadius {
-            let p = CGPoint(
-                x: center.x + CGFloat(cos(angle)) * distance,
-                y: center.y + CGFloat(sin(angle)) * distance
-            )
-
-            if isInside(candidate: p, radius: radius, width: width, height: height) &&
-                !intersectsCore(candidate: p, radius: radius, center: center, coreRadius: coreRadius) &&
-                !intersectsPlaced(candidate: p, radius: radius, placed: placed) {
-                return p
-            }
-
-            angle += 0.4
-            distance += 2.6
-        }
-
-        return CGPoint(x: center.x + coreRadius + radius + 24, y: center.y)
+    private func centerCoreRadius(for size: CGSize) -> CGFloat {
+        let minSide = min(max(size.width, 400), max(size.height, 320))
+        return min(118, max(84, minSide * 0.15))
     }
 }
 
