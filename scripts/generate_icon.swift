@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "assets/icon.iconset", isDirectory: true)
+let theme = CommandLine.arguments.count > 2 ? CommandLine.arguments[2].lowercased() : "light"
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
 let sizes: [(String, CGFloat)] = [
@@ -24,13 +25,27 @@ func image(size: CGFloat) -> NSImage {
     let rect = NSRect(x: 0, y: 0, width: size, height: size)
     let bg = NSBezierPath(roundedRect: rect, xRadius: size * 0.22, yRadius: size * 0.22)
 
-    let gradient = NSGradient(colors: [
-        NSColor(calibratedRed: 0.96, green: 0.98, blue: 1.0, alpha: 1.0),
-        NSColor(calibratedRed: 0.80, green: 0.88, blue: 1.0, alpha: 1.0)
-    ])!
+    let gradient: NSGradient
+    let stroke: NSColor
+    let textColor: NSColor
+    if theme == "dark" {
+        gradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.16, green: 0.19, blue: 0.28, alpha: 1.0),
+            NSColor(calibratedRed: 0.10, green: 0.12, blue: 0.19, alpha: 1.0)
+        ])!
+        stroke = NSColor(calibratedRed: 0.55, green: 0.68, blue: 0.98, alpha: 0.50)
+        textColor = NSColor(calibratedRed: 0.86, green: 0.91, blue: 1.0, alpha: 1)
+    } else {
+        gradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.96, green: 0.98, blue: 1.0, alpha: 1.0),
+            NSColor(calibratedRed: 0.80, green: 0.88, blue: 1.0, alpha: 1.0)
+        ])!
+        stroke = NSColor(calibratedRed: 0.25, green: 0.45, blue: 0.92, alpha: 0.35)
+        textColor = NSColor(calibratedRed: 0.08, green: 0.16, blue: 0.35, alpha: 1)
+    }
     gradient.draw(in: bg, angle: -45)
 
-    NSColor(calibratedRed: 0.25, green: 0.45, blue: 0.92, alpha: 0.35).setStroke()
+    stroke.setStroke()
     bg.lineWidth = max(1, size * 0.018)
     bg.stroke()
 
@@ -40,7 +55,7 @@ func image(size: CGFloat) -> NSImage {
     paragraph.alignment = .center
     let attrs: [NSAttributedString.Key: Any] = [
         .font: NSFont.systemFont(ofSize: fontSize, weight: .bold),
-        .foregroundColor: NSColor(calibratedRed: 0.08, green: 0.16, blue: 0.35, alpha: 1),
+        .foregroundColor: textColor,
         .paragraphStyle: paragraph
     ]
     let textRect = NSRect(x: 0, y: size * 0.36, width: size, height: size * 0.3)

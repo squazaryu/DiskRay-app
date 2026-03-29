@@ -21,7 +21,7 @@ DRay is a macOS disk explorer that combines:
 - Operation diagnostics log store with JSON export for support/debug workflows
 - Dedicated Recovery tab for centralized restore of recently deleted items
 - One-click unified Smart Scan orchestrating Smart Care + Privacy + Performance
-- Menu bar popup window with health cards and quick actions
+- Menu bar popup window with live system health cards (CPU/RAM/Disk/Battery/Network) and quick actions
 
 ## Run
 ```bash
@@ -48,6 +48,8 @@ swift run
 - [x] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
 - [x] Menu bar popup baseline (top-bar quick actions + health mini panel)
 - [x] Menu bar popup visual parity with CleanMyMac cards
+- [x] Menu bar popup live metrics polling + adaptive light/dark theme
+- [x] Light/Dark icon variants for install builds (`DRayLight.icns` / `DRayDark.icns`)
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

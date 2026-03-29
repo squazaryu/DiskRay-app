@@ -27,9 +27,22 @@ struct DRayApp: App {
             }
         }
 
-        MenuBarExtra("DRay", systemImage: "circle.grid.3x3.fill") {
+        MenuBarExtra {
             MenuBarPopupView(model: model)
+        } label: {
+            MenuBarStatusIcon()
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+private struct MenuBarStatusIcon: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(systemName: "circle.grid.2x2.fill")
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(colorScheme == .dark ? .white : .black)
+            .accessibilityLabel("DRay")
     }
 }
