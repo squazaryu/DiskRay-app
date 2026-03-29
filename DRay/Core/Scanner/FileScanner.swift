@@ -61,16 +61,16 @@ actor FileScanner {
         }
 
         if !isDirectory.boolValue {
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            let size = quickFileSize(at: url)
             return FileNode(url: url, name: name, isDirectory: false, sizeInBytes: size, children: [])
         }
 
         if excludedPrefixes.contains(where: { url.path.hasPrefix($0) }) {
-            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: 0, children: [])
+            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: quickDirectorySize(at: url), children: [])
         }
 
         if depthRemaining <= 0 {
-            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: 0, children: [])
+            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: quickDirectorySize(at: url), children: [])
         }
 
         let urls: [URL]
@@ -81,7 +81,7 @@ actor FileScanner {
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             )
         } catch {
-            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: 0, children: [])
+            return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: quickDirectorySize(at: url), children: [])
         }
 
         var children: [FileNode] = []
@@ -99,6 +99,45 @@ actor FileScanner {
         }
 
         let total = children.reduce(Int64(0)) { $0 + $1.sizeInBytes }
-        return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: total, children: children)
+        let resolvedSize = total > 0 ? total : quickDirectorySize(at: url)
+        return FileNode(url: url, name: name, isDirectory: true, sizeInBytes: resolvedSize, children: children)
+    }
+
+    private func quickFileSize(at url: URL) -> Int64 {
+        do {
+            let values = try url.resourceValues(forKeys: [.fileAllocatedSizeKey, .fileSizeKey])
+            if let allocated = values.fileAllocatedSize {
+                return Int64(allocated)
+            }
+            if let raw = values.fileSize {
+                return Int64(raw)
+            }
+            return 0
+        } catch {
+            return 0
+        }
+    }
+
+    private func quickDirectorySize(at url: URL) -> Int64 {
+        do {
+            let values = try url.resourceValues(
+                forKeys: [.totalFileAllocatedSizeKey, .totalFileSizeKey, .fileAllocatedSizeKey, .fileSizeKey]
+            )
+            if let allocatedTotal = values.totalFileAllocatedSize {
+                return Int64(allocatedTotal)
+            }
+            if let total = values.totalFileSize {
+                return Int64(total)
+            }
+            if let allocated = values.fileAllocatedSize {
+                return Int64(allocated)
+            }
+            if let file = values.fileSize {
+                return Int64(file)
+            }
+            return 0
+        } catch {
+            return 0
+        }
     }
 }

@@ -19,20 +19,21 @@ struct BubbleMapView: View {
     @Binding var selectedPaths: Set<String>
     @Binding var tapMode: BubbleTapMode
     @State private var navigation: [FileNode] = []
-    @State private var zoomPulse = false
     @State private var didInitialReset = false
     @State private var cachedLayout: [BubbleLayoutItem] = []
     @State private var cachedNodeID: FileNode.ID?
     @State private var cachedSize: CGSize = .zero
+    private let maxVisibleBubbles = 20
 
     var body: some View {
         GeometryReader { geo in
             let current = navigation.last ?? root
             let coreRadius = centerCoreRadius(for: geo.size)
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
 
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.95, green: 0.96, blue: 0.98), Color(red: 0.90, green: 0.92, blue: 0.96)],
+                    colors: [Color(red: 0.97, green: 0.98, blue: 1.0), Color(red: 0.92, green: 0.94, blue: 0.98)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -44,69 +45,23 @@ struct BubbleMapView: View {
                     .fill(Color.white.opacity(0.90))
                     .overlay(Circle().stroke(Color.black.opacity(0.12), lineWidth: 1))
                     .frame(width: coreRadius * 2, height: coreRadius * 2)
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
-                    .overlay(alignment: .center) {
-                        VStack(spacing: 6) {
-                            Image(systemName: "folder.fill")
-                                .foregroundStyle(.black.opacity(0.75))
-                            Text(current.name)
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(.black.opacity(0.9))
-                                .lineLimit(1)
-                            Text(current.formattedSize)
-                                .font(.subheadline)
-                                .foregroundStyle(.black.opacity(0.65))
-                        }
-                        .frame(maxWidth: 170)
-                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
-                    }
-                    .scaleEffect(zoomPulse ? 1.0 : 0.94)
-                    .opacity(zoomPulse ? 1.0 : 0.82)
-                    .animation(.spring(response: 0.42, dampingFraction: 0.82), value: zoomPulse)
+                    .position(x: center.x, y: center.y)
+                VStack(spacing: 6) {
+                    Image(systemName: "folder.fill")
+                        .foregroundStyle(.black.opacity(0.75))
+                    Text(current.name)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.black.opacity(0.9))
+                        .lineLimit(1)
+                    Text(current.formattedSize)
+                        .font(.subheadline)
+                        .foregroundStyle(.black.opacity(0.65))
+                }
+                .frame(maxWidth: 170)
+                .position(x: center.x, y: center.y)
 
-                ForEach(cachedLayout, id: \.node.id) { item in
-                    let isSelected = selectedPaths.contains(item.node.url.path)
-                    let isHovered = hoveredPath == item.node.url.path
-                    let fillColor = isSelected ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84)
-                    let strokeColor: Color = {
-                        if isSelected { return Color.blue.opacity(0.6) }
-                        if isHovered { return Color.black.opacity(0.28) }
-                        return Color.black.opacity(0.12)
-                    }()
-                    let strokeWidth: CGFloat = isSelected ? 2 : 1
-                    Circle()
-                        .fill(fillColor)
-                        .overlay(Circle().stroke(strokeColor, lineWidth: strokeWidth))
-                        .shadow(color: .black.opacity(isSelected ? 0.16 : 0.08), radius: isSelected ? 9 : 5, x: 0, y: 2)
-                        .frame(width: item.radius * 2, height: item.radius * 2)
-                        .position(x: item.center.x, y: item.center.y)
-                        .overlay(alignment: .center) {
-                            VStack(spacing: 4) {
-                                Image(systemName: item.node.isDirectory ? "folder.fill" : "doc.fill")
-                                    .foregroundStyle(.black.opacity(0.75))
-                                Text(item.node.name)
-                                    .font(.system(size: fontSize(for: item.radius), weight: .semibold))
-                                    .foregroundStyle(.black.opacity(0.92))
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: item.radius * 1.55)
-                                if item.radius > 48 {
-                                    Text(item.node.formattedSize)
-                                        .font(.system(size: max(10, fontSize(for: item.radius) - 2)))
-                                        .foregroundStyle(.black.opacity(0.70))
-                                }
-                            }
-                            .position(x: item.center.x, y: item.center.y)
-                        }
-                        .onTapGesture {
-                            handlePrimaryTap(on: item.node)
-                        }
-                        .onHover { inside in
-                            hoveredPath = inside ? item.node.url.path : nil
-                        }
-                        .scaleEffect(zoomPulse ? 1.0 : 0.94)
-                        .opacity(zoomPulse ? 1.0 : 0.82)
-                        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: zoomPulse)
+                ForEach(cachedLayout, id: \.node.url.path) { item in
+                    bubbleView(for: item)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -161,7 +116,7 @@ struct BubbleMapView: View {
                 hoveredPath = nil
                 cachedLayout = []
                 cachedNodeID = nil
-                animateZoom()
+                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
             }
             .onAppear {
                 if !didInitialReset {
@@ -169,11 +124,12 @@ struct BubbleMapView: View {
                     hoveredPath = nil
                     didInitialReset = true
                 }
+                sanitizeSelection(for: current)
                 recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
             }
             .onChange(of: current.id) {
+                sanitizeSelection(for: current)
                 recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
-                animateZoom()
             }
             .onChange(of: geo.size.width) {
                 recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
@@ -181,6 +137,48 @@ struct BubbleMapView: View {
             .onChange(of: geo.size.height) {
                 recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
             }
+        }
+    }
+
+    private func bubbleView(for item: BubbleLayoutItem) -> some View {
+        let isSelected = selectedPaths.contains(item.node.url.path)
+        let isHovered = hoveredPath == item.node.url.path
+        let fillColor = isSelected ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84)
+        let strokeColor: Color = {
+            if isSelected { return Color.blue.opacity(0.62) }
+            if isHovered { return Color.black.opacity(0.30) }
+            return Color.black.opacity(0.13)
+        }()
+
+        return ZStack {
+            Circle()
+                .fill(fillColor)
+            Circle()
+                .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
+            VStack(spacing: 4) {
+                Image(systemName: item.node.isDirectory ? "folder.fill" : "doc.fill")
+                    .foregroundStyle(.black.opacity(0.75))
+                Text(item.node.name)
+                    .font(.system(size: fontSize(for: item.radius), weight: .semibold))
+                    .foregroundStyle(.black.opacity(0.92))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: item.radius * 1.55)
+                if item.radius > 50 {
+                    Text(item.node.formattedSize)
+                        .font(.system(size: max(10, fontSize(for: item.radius) - 2)))
+                        .foregroundStyle(.black.opacity(0.70))
+                }
+            }
+            .padding(.horizontal, item.radius * 0.12)
+        }
+        .shadow(color: .black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 8 : 4, x: 0, y: 2)
+        .frame(width: item.radius * 2, height: item.radius * 2)
+        .contentShape(Circle())
+        .position(x: item.center.x, y: item.center.y)
+        .onTapGesture { handlePrimaryTap(on: item.node) }
+        .onHover { inside in
+            hoveredPath = inside ? item.node.url.path : nil
         }
     }
 
@@ -264,52 +262,86 @@ struct BubbleMapView: View {
         let center = CGPoint(x: width / 2, y: height / 2)
         let coreRadius = centerCoreRadius(for: size)
         let minCanvas = min(width, height)
+        let bounds = CGRect(x: 12, y: 12, width: width - 24, height: height - 24)
 
         let maxSize = Double(max(items.first?.sizeInBytes ?? 1, 1))
+        let minR = max(26.0, minCanvas * 0.055)
+        let maxR = min(100.0, minCanvas * 0.18)
         let baseRadii: [CGFloat] = items.map { child in
             let factor = sqrt(Double(max(child.sizeInBytes, 1)) / maxSize)
-            let maxR = min(84, minCanvas * 0.16)
-            return CGFloat(24 + factor * maxR)
+            return CGFloat(minR + (maxR - minR) * factor)
         }
 
-        // Deterministic ring layout is much faster than iterative force relaxation and keeps
-        // bubbles distributed around the center in a predictable way.
-        let ringCaps = [6, 10, 14, 18]
         var output: [BubbleLayoutItem] = []
-        var index = 0
-        var ring = 0
-
-        while index < items.count {
-            let cap = ring < ringCaps.count ? ringCaps[ring] : (18 + ring * 2)
-            let count = min(cap, items.count - index)
-            let ringDistance = coreRadius + 26 + CGFloat(ring) * (minCanvas * 0.12 + 18)
-            let stagger = ring.isMultiple(of: 2) ? 0.0 : (Double.pi / Double(max(count, 1)))
-            let yScale: CGFloat = width > height ? 0.82 : 1.0
-
-            for slot in 0..<count {
-                let node = items[index]
-                let shrink = max(0.72, 1.0 - CGFloat(ring) * 0.08)
-                let radius = baseRadii[index] * shrink
-                let angle = (-Double.pi / 2) + (2 * Double.pi * Double(slot) / Double(max(count, 1))) + stagger
-                var x = center.x + CGFloat(cos(angle)) * ringDistance
-                var y = center.y + CGFloat(sin(angle)) * ringDistance * yScale
-
-                x = min(max(x, radius + 10), width - radius - 10)
-                y = min(max(y, radius + 10), height - radius - 10)
-                output.append(BubbleLayoutItem(node: node, center: CGPoint(x: x, y: y), radius: radius))
-                index += 1
-            }
-            ring += 1
+        output.reserveCapacity(items.count)
+        for (index, node) in items.enumerated() {
+            let radius = baseRadii[index]
+            let point = bestBubblePosition(
+                radius: radius,
+                index: index,
+                center: center,
+                coreRadius: coreRadius,
+                bounds: bounds,
+                placed: output
+            )
+            output.append(BubbleLayoutItem(node: node, center: point, radius: radius))
         }
-
         return output
     }
 
-    private func animateZoom() {
-        zoomPulse = false
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-            zoomPulse = true
+    private func bestBubblePosition(
+        radius: CGFloat,
+        index: Int,
+        center: CGPoint,
+        coreRadius: CGFloat,
+        bounds: CGRect,
+        placed: [BubbleLayoutItem]
+    ) -> CGPoint {
+        let goldenAngle = Double.pi * (3 - sqrt(5))
+        var bestPoint = CGPoint(x: center.x + coreRadius + radius + 18, y: center.y)
+        var bestPenalty = CGFloat.greatestFiniteMagnitude
+        let yScale: CGFloat = bounds.width > bounds.height ? 0.82 : 1.0
+
+        for step in 0..<240 {
+            let radialDistance = coreRadius + radius + 18 + CGFloat(step) * 4.8
+            let angle = Double(index) * goldenAngle + Double(step) * 0.44
+            var candidate = CGPoint(
+                x: center.x + CGFloat(cos(angle)) * radialDistance,
+                y: center.y + CGFloat(sin(angle)) * radialDistance * yScale
+            )
+            candidate.x = min(max(candidate.x, bounds.minX + radius), bounds.maxX - radius)
+            candidate.y = min(max(candidate.y, bounds.minY + radius), bounds.maxY - radius)
+
+            let overlapPenalty = overlapAmount(for: candidate, radius: radius, placed: placed)
+            let corePenalty = max(0, (coreRadius + radius + 12) - distance(candidate, center))
+            let centerPenalty = distance(candidate, center) * 0.01
+            let penalty = overlapPenalty * 30 + corePenalty * 40 + centerPenalty
+
+            if penalty < bestPenalty {
+                bestPenalty = penalty
+                bestPoint = candidate
+            }
+            if overlapPenalty <= 0.1 && corePenalty <= 0.1 {
+                break
+            }
         }
+        return bestPoint
+    }
+
+    private func overlapAmount(for point: CGPoint, radius: CGFloat, placed: [BubbleLayoutItem]) -> CGFloat {
+        var overlap: CGFloat = 0
+        for item in placed {
+            let minDistance = item.radius + radius + 8
+            let currentDistance = distance(point, item.center)
+            if currentDistance < minDistance {
+                overlap += (minDistance - currentDistance)
+            }
+        }
+        return overlap
+    }
+
+    private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        hypot(a.x - b.x, a.y - b.y)
     }
 
     private func recalcLayoutIfNeeded(current: FileNode, size: CGSize, force: Bool) {
@@ -317,9 +349,17 @@ struct BubbleMapView: View {
         let widthChanged = abs(size.width - cachedSize.width) > 24
         let heightChanged = abs(size.height - cachedSize.height) > 24
         guard force || nodeChanged || widthChanged || heightChanged else { return }
-        cachedLayout = packedLayout(for: current, in: size, maxItems: 24)
+        cachedLayout = packedLayout(for: current, in: size, maxItems: maxVisibleBubbles)
         cachedNodeID = current.id
         cachedSize = size
+    }
+
+    private func sanitizeSelection(for node: FileNode) {
+        let visible = Set(node.largestChildren.prefix(maxVisibleBubbles).map { $0.url.path })
+        selectedPaths = selectedPaths.filter { visible.contains($0) }
+        if let hoveredPath, !visible.contains(hoveredPath) {
+            self.hoveredPath = nil
+        }
     }
 
     private func centerCoreRadius(for size: CGSize) -> CGFloat {

@@ -52,6 +52,7 @@ final class SQLiteIndexStore {
 
     func loadSnapshot(rootPath: String) -> FileNode? {
         guard let db else { return nil }
+        let childPrefix = rootPath == "/" ? "/" : rootPath + "/"
 
         var stmt: OpaquePointer?
         let sql = "SELECT path,parent,name,is_dir,size_bytes FROM file_index"
@@ -63,7 +64,7 @@ final class SQLiteIndexStore {
                   let cName = sqlite3_column_text(stmt, 2) else { continue }
 
             let path = String(cString: cPath)
-            if path != rootPath && !path.hasPrefix(rootPath + "/") { continue }
+            if path != rootPath && !path.hasPrefix(childPrefix) { continue }
 
             let parent: String?
             if sqlite3_column_type(stmt, 1) == SQLITE_NULL {

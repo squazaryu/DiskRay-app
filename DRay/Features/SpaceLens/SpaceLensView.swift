@@ -9,7 +9,7 @@ struct SpaceLensView: View {
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
     @State private var nodeIndex: [String: FileNode] = [:]
-    @State private var bubbleTapMode: BubbleTapMode = .select
+    @State private var bubbleTapMode: BubbleTapMode = .openFolders
 
     var body: some View {
         NavigationSplitView {
