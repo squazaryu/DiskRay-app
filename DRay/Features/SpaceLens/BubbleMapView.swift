@@ -157,20 +157,22 @@ struct BubbleMapView: View {
         if selectedPaths.contains(path) {
             selectedPaths.remove(path)
         } else {
-            // Prevent accidental multi-select from rapid click streams.
-            if selectedPaths.count > 6 {
-                selectedPaths.removeAll()
-            }
+            selectedPaths.removeAll()
             selectedPaths.insert(path)
         }
     }
 
     private func handlePrimaryTap(on node: FileNode) {
-        if node.isDirectory, !node.children.isEmpty {
-            diveInto(node)
+        let path = node.url.path
+        if selectedPaths.contains(path) {
+            if node.isDirectory, !node.children.isEmpty {
+                diveInto(node)
+            } else {
+                selectedPaths.remove(path)
+            }
             return
         }
-        toggleSelection(for: node.url.path)
+        toggleSelection(for: path)
     }
 
     private func diveInto(_ node: FileNode) {

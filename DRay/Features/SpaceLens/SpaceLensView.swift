@@ -8,6 +8,7 @@ struct SpaceLensView: View {
     @State private var pendingTrashNodes: [FileNode] = []
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
+    @State private var nodeIndex: [String: FileNode] = [:]
 
     var body: some View {
         NavigationSplitView {
@@ -18,9 +19,11 @@ struct SpaceLensView: View {
         .onAppear {
             selectedPaths.removeAll()
             model.hoveredPath = nil
+            rebuildNodeIndex()
         }
         .onChange(of: model.root?.id) {
             selectedPaths.removeAll()
+            rebuildNodeIndex()
         }
     }
 
@@ -235,9 +238,8 @@ struct SpaceLensView: View {
     }
 
     private var selectedNodes: [FileNode] {
-        guard let root = model.root else { return [] }
-        return root.flattened
-            .filter { selectedPaths.contains($0.url.path) }
+        return selectedPaths
+            .compactMap { nodeIndex[$0] }
             .sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
@@ -247,5 +249,19 @@ struct SpaceLensView: View {
         } else {
             selectedPaths.insert(path)
         }
+    }
+
+    private func rebuildNodeIndex() {
+        guard let root = model.root else {
+            nodeIndex = [:]
+            return
+        }
+        var map: [String: FileNode] = [:]
+        var stack: [FileNode] = [root]
+        while let node = stack.popLast() {
+            map[node.url.path] = node
+            stack.append(contentsOf: node.children)
+        }
+        nodeIndex = map
     }
 }
