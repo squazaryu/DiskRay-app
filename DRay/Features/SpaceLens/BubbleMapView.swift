@@ -7,11 +7,13 @@ struct BubbleMapView: View {
     @State private var navigation: [FileNode] = []
     @State private var zoomPulse = false
     @State private var didInitialReset = false
+    @State private var cachedLayout: [BubbleLayoutItem] = []
+    @State private var cachedNodeID: FileNode.ID?
+    @State private var cachedSize: CGSize = .zero
 
     var body: some View {
         GeometryReader { geo in
             let current = navigation.last ?? root
-            let layout = packedLayout(for: current, in: geo.size, maxItems: 24)
 
             ZStack {
                 LinearGradient(
@@ -47,7 +49,7 @@ struct BubbleMapView: View {
                     .opacity(zoomPulse ? 1.0 : 0.82)
                     .animation(.spring(response: 0.42, dampingFraction: 0.82), value: zoomPulse)
 
-                ForEach(layout, id: \.node.id) { item in
+                ForEach(cachedLayout, id: \.node.id) { item in
                     let isSelected = selectedPaths.contains(item.node.url.path)
                     let isHovered = hoveredPath == item.node.url.path
                     let fillColor = isSelected ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84)
@@ -122,6 +124,8 @@ struct BubbleMapView: View {
                 navigation = []
                 selectedPaths.removeAll()
                 hoveredPath = nil
+                cachedLayout = []
+                cachedNodeID = nil
                 animateZoom()
             }
             .onAppear {
@@ -130,9 +134,17 @@ struct BubbleMapView: View {
                     hoveredPath = nil
                     didInitialReset = true
                 }
+                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
             }
             .onChange(of: current.id) {
+                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
                 animateZoom()
+            }
+            .onChange(of: geo.size.width) {
+                recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
+            }
+            .onChange(of: geo.size.height) {
+                recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
             }
         }
     }
@@ -252,6 +264,16 @@ struct BubbleMapView: View {
         withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
             zoomPulse = true
         }
+    }
+
+    private func recalcLayoutIfNeeded(current: FileNode, size: CGSize, force: Bool) {
+        let nodeChanged = cachedNodeID != current.id
+        let widthChanged = abs(size.width - cachedSize.width) > 24
+        let heightChanged = abs(size.height - cachedSize.height) > 24
+        guard force || nodeChanged || widthChanged || heightChanged else { return }
+        cachedLayout = packedLayout(for: current, in: size, maxItems: 24)
+        cachedNodeID = current.id
+        cachedSize = size
     }
 
     private func relaxLayout(
