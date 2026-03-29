@@ -14,6 +14,11 @@ struct RootView: View {
                         Label("Smart Care", systemImage: "sparkles")
                     }
 
+                ClutterView(model: model)
+                    .tabItem {
+                        Label("My Clutter", systemImage: "square.on.square")
+                    }
+
                 UninstallerView(model: model)
                     .tabItem {
                         Label("Uninstaller", systemImage: "trash")

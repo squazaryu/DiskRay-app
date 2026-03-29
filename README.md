@@ -40,10 +40,12 @@ swift run
 - [x] Smart Care: confidence scoring and explainability per item
 - [x] Uninstaller: mandatory residue sweep (`~/Library`, `/Library`, login items, launch agents, helpers)
 - [x] Uninstaller: validation report (`removed / skipped / failed`)
+- [x] My Clutter baseline (exact duplicates scan + selective delete to Trash)
 - [x] Performance module baseline (startup diagnostics + maintenance recommendations)
 - [x] Privacy/Security module baseline (trace review + safe cleanup + transparency report)
 - [x] Signed + notarized production build pipeline baseline
 - [ ] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
+- [ ] Menu bar popup (status cards + quick actions)
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

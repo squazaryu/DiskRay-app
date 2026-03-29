@@ -208,6 +208,15 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var isUninstallerLoading = false
     @Published private(set) var uninstallReport: UninstallValidationReport?
     @Published private(set) var uninstallSessions: [UninstallSession] = []
+    @Published private(set) var duplicateGroups: [DuplicateGroup] = []
+    @Published private(set) var isDuplicateScanRunning = false
+    @Published private(set) var duplicateScanProgress = DuplicateScanProgress(
+        phase: "Idle",
+        currentPath: "",
+        visitedFiles: 0,
+        candidateGroups: 0
+    )
+    @Published var duplicateMinSizeMB: Double = 10
     @Published private(set) var performanceReport: PerformanceReport?
     @Published private(set) var isPerformanceScanRunning = false
     @Published private(set) var startupCleanupReport: StartupCleanupReport?
@@ -225,6 +234,7 @@ final class RootViewModel: ObservableObject {
     private let scanner = FileScanner()
     private let smartScanService = SmartScanService()
     private let uninstallerService = AppUninstallerService()
+    private let duplicateFinderService = DuplicateFinderService()
     private let performanceService = PerformanceService()
     private let privacyService = PrivacyService()
     private let queryEngine = QueryEngine()
@@ -237,6 +247,7 @@ final class RootViewModel: ObservableObject {
     private let uninstallSessionsKey = "dray.uninstall.sessions"
     private var scanTask: Task<Void, Never>?
     private var liveSearchTask: Task<Void, Never>?
+    private var duplicateScanTask: Task<Void, Never>?
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 
     init() {
@@ -548,6 +559,56 @@ final class RootViewModel: ObservableObject {
         persistSmartExclusions()
     }
 
+    func scanDuplicatesInSelectedTarget() {
+        scanDuplicates(roots: [selectedTarget.url], targetDescription: selectedTarget.url.path)
+    }
+
+    func scanDuplicatesInHome() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        scanDuplicates(roots: [home], targetDescription: home.path)
+    }
+
+    func cancelDuplicateScan() {
+        duplicateScanTask?.cancel()
+        isDuplicateScanRunning = false
+        duplicateScanProgress = DuplicateScanProgress(
+            phase: "Canceled",
+            currentPath: duplicateScanProgress.currentPath,
+            visitedFiles: duplicateScanProgress.visitedFiles,
+            candidateGroups: duplicateScanProgress.candidateGroups
+        )
+        operationLogs.add(category: "clutter", message: "Duplicate scan canceled")
+    }
+
+    func clearDuplicateResults() {
+        duplicateGroups = []
+    }
+
+    func moveDuplicatePathsToTrash(_ paths: [String]) -> TrashOperationResult {
+        let nodes = paths.compactMap { nodeForPath($0) }
+        let result = moveToTrash(nodes: nodes)
+        let attempted = Set(paths)
+        let skipped = Set(result.skippedProtected)
+        let failed = Set(result.failed)
+        let movedPaths = attempted.subtracting(skipped).subtracting(failed)
+        if !movedPaths.isEmpty {
+            duplicateGroups = duplicateGroups.compactMap { group in
+                let remaining = group.files.filter { !movedPaths.contains($0.url.path) }
+                guard remaining.count > 1 else { return nil }
+                return DuplicateGroup(
+                    signature: group.signature,
+                    files: remaining,
+                    sizeInBytes: group.sizeInBytes
+                )
+            }
+            operationLogs.add(
+                category: "clutter",
+                message: "Duplicate cleanup moved \(movedPaths.count) file(s), failed \(result.failed.count), skipped \(result.skippedProtected.count)"
+            )
+        }
+        return result
+    }
+
     func runPerformanceScan() {
         guard !isPerformanceScanRunning else { return }
         isPerformanceScanRunning = true
@@ -561,6 +622,64 @@ final class RootViewModel: ObservableObject {
                 self.operationLogs.add(category: "performance", message: "Diagnostics done: startup entries \(report.startupEntries.count)")
             }
         }
+    }
+
+    private func scanDuplicates(roots: [URL], targetDescription: String) {
+        duplicateScanTask?.cancel()
+        isDuplicateScanRunning = true
+        duplicateGroups = []
+        let minSizeBytes = Int64(max(1, duplicateMinSizeMB) * 1_048_576)
+        duplicateScanProgress = DuplicateScanProgress(
+            phase: "Starting",
+            currentPath: targetDescription,
+            visitedFiles: 0,
+            candidateGroups: 0
+        )
+        operationLogs.add(
+            category: "clutter",
+            message: "Duplicate scan started for \(targetDescription), min size \(Int(duplicateMinSizeMB)) MB"
+        )
+
+        duplicateScanTask = Task { [weak self] in
+            guard let self else { return }
+            let groups = await duplicateFinderService.scan(
+                roots: roots,
+                minFileSizeBytes: minSizeBytes
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.duplicateScanProgress = progress
+                }
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self.duplicateGroups = groups
+                self.isDuplicateScanRunning = false
+                self.duplicateScanProgress = DuplicateScanProgress(
+                    phase: "Completed",
+                    currentPath: targetDescription,
+                    visitedFiles: self.duplicateScanProgress.visitedFiles,
+                    candidateGroups: groups.count
+                )
+                self.operationLogs.add(
+                    category: "clutter",
+                    message: "Duplicate scan completed for \(targetDescription): groups \(groups.count)"
+                )
+            }
+        }
+    }
+
+    private func nodeForPath(_ path: String) -> FileNode? {
+        let url = URL(fileURLWithPath: path)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+        return FileNode(
+            url: url,
+            name: url.lastPathComponent,
+            isDirectory: isDirectory.boolValue,
+            sizeInBytes: size,
+            children: []
+        )
     }
 
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
