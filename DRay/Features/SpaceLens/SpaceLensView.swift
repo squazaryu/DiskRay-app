@@ -9,6 +9,7 @@ struct SpaceLensView: View {
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
     @State private var nodeIndex: [String: FileNode] = [:]
+    @State private var bubbleTapMode: BubbleTapMode = .select
 
     var body: some View {
         NavigationSplitView {
@@ -123,7 +124,12 @@ struct SpaceLensView: View {
     private var detail: some View {
         Group {
             if let root = model.root {
-                BubbleMapView(root: root, hoveredPath: $model.hoveredPath, selectedPaths: $selectedPaths)
+                BubbleMapView(
+                    root: root,
+                    hoveredPath: $model.hoveredPath,
+                    selectedPaths: $selectedPaths,
+                    tapMode: $bubbleTapMode
+                )
             } else {
                 emptyState
             }
@@ -179,6 +185,13 @@ struct SpaceLensView: View {
             targetPicker
             Button("Scan") { model.scanSelected() }
                 .disabled(model.isLoading)
+            Picker("Tap Mode", selection: $bubbleTapMode) {
+                ForEach(BubbleTapMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 240)
             if model.isLoading {
                 Button(model.isPaused ? "Resume" : "Pause") { model.togglePauseScan() }
                 Button("Cancel") { model.cancelScan() }

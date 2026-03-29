@@ -1,9 +1,23 @@
 import SwiftUI
 
+enum BubbleTapMode: String, CaseIterable, Identifiable {
+    case select
+    case openFolders
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .select: return "Select"
+        case .openFolders: return "Open folders"
+        }
+    }
+}
+
 struct BubbleMapView: View {
     let root: FileNode
     @Binding var hoveredPath: String?
     @Binding var selectedPaths: Set<String>
+    @Binding var tapMode: BubbleTapMode
     @State private var navigation: [FileNode] = []
     @State private var zoomPulse = false
     @State private var didInitialReset = false
@@ -134,6 +148,9 @@ struct BubbleMapView: View {
                         .font(.caption2)
                         .foregroundStyle(.black.opacity(0.65))
                         .lineLimit(1)
+                    Text(tapMode == .select ? "Tap bubble: select item" : "Tap folder bubble: open level")
+                        .font(.caption2)
+                        .foregroundStyle(.black.opacity(0.55))
                 }
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -182,6 +199,14 @@ struct BubbleMapView: View {
 
     private func handlePrimaryTap(on node: FileNode) {
         let path = node.url.path
+        if tapMode == .openFolders {
+            if node.isDirectory, !node.children.isEmpty {
+                diveInto(node)
+            } else {
+                toggleSelection(for: path)
+            }
+            return
+        }
         if selectedPaths.contains(path) {
             if node.isDirectory, !node.children.isEmpty {
                 diveInto(node)
