@@ -228,6 +228,7 @@ final class RootViewModel: ObservableObject {
     private let performanceService = PerformanceService()
     private let privacyService = PrivacyService()
     private let queryEngine = QueryEngine()
+    private let liveSearchService = LiveSearchService()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
     private let searchPresetsKey = "dray.search.presets"
@@ -295,7 +296,7 @@ final class RootViewModel: ObservableObject {
 
         liveSearchTask = Task { [weak self] in
             guard let self else { return }
-            let results = self.runLiveSearch(
+            let request = LiveSearchRequest(
                 rootURL: rootURL,
                 query: query,
                 useRegex: useRegex,
@@ -307,8 +308,10 @@ final class RootViewModel: ObservableObject {
                 modifiedWithinDays: modifiedWithinDays,
                 nodeType: modeType,
                 onlyDirectories: onlyDirs,
-                onlyFiles: onlyFiles
+                onlyFiles: onlyFiles,
+                limit: 300
             )
+            let results = await self.liveSearchService.search(request)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.liveSearchResults = results
@@ -1071,100 +1074,6 @@ final class RootViewModel: ObservableObject {
     private func isProtectedPath(_ path: String) -> Bool {
         if path == "/" { return true }
         return protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
-    }
-
-    private func runLiveSearch(
-        rootURL: URL,
-        query: String,
-        useRegex: Bool,
-        pathContains: String,
-        ownerContains: String,
-        minSizeBytes: Int64,
-        depthMin: Int,
-        depthMax: Int,
-        modifiedWithinDays: Int?,
-        nodeType: QueryEngine.SearchNodeType,
-        onlyDirectories: Bool,
-        onlyFiles: Bool
-    ) -> [FileNode] {
-        let started = rootURL.startAccessingSecurityScopedResource()
-        defer {
-            if started { rootURL.stopAccessingSecurityScopedResource() }
-        }
-
-        let regex = useRegex ? (try? NSRegularExpression(pattern: query, options: [.caseInsensitive])) : nil
-        let cutoff: Date? = modifiedWithinDays.map { Calendar.current.date(byAdding: .day, value: -$0, to: Date()) ?? .distantPast }
-        let rootComponents = rootURL.pathComponents.count
-        let fm = FileManager.default
-
-        guard let enumerator = fm.enumerator(
-            at: rootURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
-
-        var results: [FileNode] = []
-        for case let fileURL as URL in enumerator {
-            if Task.isCancelled { break }
-
-            let depth = max(0, fileURL.pathComponents.count - rootComponents)
-            if depth > depthMax {
-                enumerator.skipDescendants()
-                continue
-            }
-            if depth < depthMin { continue }
-
-            guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]) else {
-                continue
-            }
-            let isDir = values.isDirectory == true
-            let size = Int64(values.fileSize ?? 0)
-
-            let queryMatch: Bool
-            if let regex {
-                let text = fileURL.path
-                let range = NSRange(text.startIndex..<text.endIndex, in: text)
-                queryMatch = regex.firstMatch(in: text, options: [], range: range) != nil
-            } else {
-                let lower = query.lowercased()
-                queryMatch = fileURL.lastPathComponent.lowercased().contains(lower) || fileURL.path.lowercased().contains(lower)
-            }
-            guard queryMatch else { continue }
-            guard pathContains.isEmpty || fileURL.path.lowercased().contains(pathContains) else { continue }
-
-            if !ownerContains.isEmpty {
-                let owner = (try? fm.attributesOfItem(atPath: fileURL.path)[.ownerAccountName] as? String) ?? ""
-                guard owner.lowercased().contains(ownerContains) else { continue }
-            }
-            guard size >= minSizeBytes else { continue }
-            if let cutoff, let modified = values.contentModificationDate {
-                guard modified >= cutoff else { continue }
-            } else if cutoff != nil {
-                continue
-            }
-            guard (!onlyDirectories || isDir) && (!onlyFiles || !isDir) else { continue }
-            guard matchesNodeTypeLive(isDirectory: isDir, url: fileURL, nodeType: nodeType) else { continue }
-
-            results.append(FileNode(
-                url: fileURL,
-                name: fileURL.lastPathComponent,
-                isDirectory: isDir,
-                sizeInBytes: size,
-                children: []
-            ))
-            if results.count >= 300 { break }
-        }
-
-        return results.sorted { $0.sizeInBytes > $1.sizeInBytes }
-    }
-
-    private func matchesNodeTypeLive(isDirectory: Bool, url: URL, nodeType: QueryEngine.SearchNodeType) -> Bool {
-        switch nodeType {
-        case .any: return true
-        case .file: return !isDirectory
-        case .directory: return isDirectory
-        case .package: return isDirectory && url.pathExtension == "app"
-        }
     }
 
     private func previewItem(for remnant: AppRemnant) -> UninstallPreviewItem {

@@ -33,6 +33,12 @@ struct SearchView: View {
                         model.triggerLiveSearch()
                     }
                     .buttonStyle(.borderedProminent)
+                    if model.isLiveSearchRunning {
+                        Button("Stop") {
+                            model.cancelLiveSearch()
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 if model.isLoading || model.isLiveSearchRunning {
