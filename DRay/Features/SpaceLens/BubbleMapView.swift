@@ -112,9 +112,25 @@ struct BubbleMapView: View {
                         .disabled(navigation.isEmpty)
                     }
 
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(breadcrumbNodes(), id: \.url.path) { node in
+                                Button {
+                                    jumpTo(node)
+                                } label: {
+                                    Text(node.name == "/" ? "Root" : node.name)
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+
                     Text(current.url.path)
-                        .font(.caption)
-                        .foregroundStyle(.black.opacity(0.7))
+                        .font(.caption2)
+                        .foregroundStyle(.black.opacity(0.65))
                         .lineLimit(1)
                 }
                 .padding()
@@ -193,6 +209,23 @@ struct BubbleMapView: View {
         navigation.removeAll()
         selectedPaths.removeAll()
         hoveredPath = nil
+    }
+
+    private func breadcrumbNodes() -> [FileNode] {
+        if navigation.isEmpty { return [root] }
+        return [root] + navigation
+    }
+
+    private func jumpTo(_ node: FileNode) {
+        if node.url.path == root.url.path {
+            resetToRoot()
+            return
+        }
+        if let idx = navigation.firstIndex(where: { $0.url.path == node.url.path }) {
+            navigation = Array(navigation.prefix(through: idx))
+            selectedPaths.removeAll()
+            hoveredPath = nil
+        }
     }
 
     private func packedLayout(for node: FileNode, in size: CGSize, maxItems: Int) -> [BubbleLayoutItem] {
