@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct HealthPopupView: View {
     @ObservedObject var model: RootViewModel
@@ -42,6 +43,12 @@ struct HealthPopupView: View {
             HStack {
                 Button("Run Full Smart Scan") { model.runUnifiedScan() }
                     .buttonStyle(.borderedProminent)
+                Button("Export Report") {
+                    if let url = model.exportDiagnosticReport() {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                }
+                .buttonStyle(.bordered)
                 Spacer()
                 Button("Close") { dismiss() }
                     .buttonStyle(.bordered)

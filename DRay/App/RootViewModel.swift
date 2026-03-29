@@ -125,6 +125,26 @@ struct UnifiedScanSummary {
     let finishedAt: Date
 }
 
+struct DiagnosticReport: Codable {
+    let generatedAt: Date
+    let selectedTargetPath: String
+    let unifiedScanSummary: UnifiedScanSnapshot?
+    let smartCareCategoryCount: Int
+    let privacyCategoryCount: Int
+    let startupEntryCount: Int
+    let operationLogs: [OperationLogEntry]
+}
+
+struct UnifiedScanSnapshot: Codable {
+    let smartCareCategories: Int
+    let smartCareBytes: Int64
+    let privacyCategories: Int
+    let privacyBytes: Int64
+    let startupEntries: Int
+    let startupBytes: Int64
+    let finishedAt: Date
+}
+
 enum SearchExecutionMode: String, CaseIterable, Identifiable {
     case indexed
     case live
@@ -197,6 +217,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var lastExportedOperationLogURL: URL?
     @Published private(set) var isUnifiedScanRunning = false
     @Published private(set) var unifiedScanSummary: UnifiedScanSummary?
+    @Published private(set) var lastExportedDiagnosticURL: URL?
 
     let permissions = AppPermissionService()
     let operationLogs = OperationLogStore()
@@ -634,6 +655,50 @@ final class RootViewModel: ObservableObject {
             operationLogs.add(category: "telemetry", message: "Failed to export operation log report")
         }
         return url
+    }
+
+    @discardableResult
+    func exportDiagnosticReport() -> URL? {
+        let report = DiagnosticReport(
+            generatedAt: Date(),
+            selectedTargetPath: selectedTarget.url.path,
+            unifiedScanSummary: unifiedScanSummary.map {
+                UnifiedScanSnapshot(
+                    smartCareCategories: $0.smartCareCategories,
+                    smartCareBytes: $0.smartCareBytes,
+                    privacyCategories: $0.privacyCategories,
+                    privacyBytes: $0.privacyBytes,
+                    startupEntries: $0.startupEntries,
+                    startupBytes: $0.startupBytes,
+                    finishedAt: $0.finishedAt
+                )
+            },
+            smartCareCategoryCount: smartScanCategories.count,
+            privacyCategoryCount: privacyCategories.count,
+            startupEntryCount: performanceReport?.startupEntries.count ?? 0,
+            operationLogs: Array(operationLogs.entries.prefix(300))
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(report),
+              let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+            operationLogs.add(category: "telemetry", message: "Failed to export diagnostic report")
+            return nil
+        }
+
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let url = downloads.appendingPathComponent("dray-diagnostic-\(stamp).json")
+        do {
+            try data.write(to: url, options: [.atomic])
+            lastExportedDiagnosticURL = url
+            operationLogs.add(category: "telemetry", message: "Exported diagnostic report to \(url.path)")
+            return url
+        } catch {
+            operationLogs.add(category: "telemetry", message: "Failed to save diagnostic report")
+            return nil
+        }
     }
 
     private func scan(at url: URL, maxDepth: Int) {
