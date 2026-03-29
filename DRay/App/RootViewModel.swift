@@ -20,9 +20,14 @@ struct SearchPreset: Codable, Identifiable {
     let depthMax: Int
     let modifiedWithinDays: Int?
     let nodeTypeRaw: String
+    let searchModeRaw: String
 
     var nodeType: QueryEngine.SearchNodeType {
         QueryEngine.SearchNodeType(rawValue: nodeTypeRaw) ?? .any
+    }
+
+    var searchMode: SearchExecutionMode {
+        SearchExecutionMode(rawValue: searchModeRaw) ?? .indexed
     }
 
     init(
@@ -38,7 +43,8 @@ struct SearchPreset: Codable, Identifiable {
         depthMin: Int,
         depthMax: Int,
         modifiedWithinDays: Int?,
-        nodeType: QueryEngine.SearchNodeType
+        nodeType: QueryEngine.SearchNodeType,
+        searchMode: SearchExecutionMode
     ) {
         self.id = id
         self.name = name
@@ -53,11 +59,12 @@ struct SearchPreset: Codable, Identifiable {
         self.depthMax = depthMax
         self.modifiedWithinDays = modifiedWithinDays
         self.nodeTypeRaw = nodeType.rawValue
+        self.searchModeRaw = searchMode.rawValue
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, query, minSizeMB, pathContains, ownerContains, onlyDirectories, onlyFiles
-        case useRegex, depthMin, depthMax, modifiedWithinDays, nodeTypeRaw
+        case useRegex, depthMin, depthMax, modifiedWithinDays, nodeTypeRaw, searchModeRaw
     }
 
     init(from decoder: Decoder) throws {
@@ -75,6 +82,7 @@ struct SearchPreset: Codable, Identifiable {
         depthMax = try c.decodeIfPresent(Int.self, forKey: .depthMax) ?? 128
         modifiedWithinDays = try c.decodeIfPresent(Int.self, forKey: .modifiedWithinDays)
         nodeTypeRaw = try c.decodeIfPresent(String.self, forKey: .nodeTypeRaw) ?? QueryEngine.SearchNodeType.any.rawValue
+        searchModeRaw = try c.decodeIfPresent(String.self, forKey: .searchModeRaw) ?? SearchExecutionMode.indexed.rawValue
     }
 }
 
@@ -117,6 +125,19 @@ struct UnifiedScanSummary {
     let finishedAt: Date
 }
 
+enum SearchExecutionMode: String, CaseIterable, Identifiable {
+    case indexed
+    case live
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .indexed: return "Indexed"
+        case .live: return "Live"
+        }
+    }
+}
+
 enum SmartCleanProfile: String, CaseIterable, Identifiable {
     case conservative
     case balanced
@@ -151,6 +172,9 @@ final class RootViewModel: ObservableObject {
     @Published var searchDepthMax = 12
     @Published var searchModifiedWithinDays = 0
     @Published var searchNodeType: QueryEngine.SearchNodeType = .any
+    @Published var searchMode: SearchExecutionMode = .indexed
+    @Published private(set) var isLiveSearchRunning = false
+    @Published private(set) var liveSearchResults: [FileNode] = []
     @Published private(set) var searchPresets: [SearchPreset] = []
     @Published private(set) var recentlyDeleted: [RecentlyDeletedItem] = []
     @Published var hoveredPath: String?
@@ -189,6 +213,7 @@ final class RootViewModel: ObservableObject {
     private let recentlyDeletedKey = "dray.recently.deleted"
     private let smartExclusionsKey = "dray.smart.exclusions"
     private var scanTask: Task<Void, Never>?
+    private var liveSearchTask: Task<Void, Never>?
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 
     init() {
@@ -200,10 +225,13 @@ final class RootViewModel: ObservableObject {
     }
 
     var searchResults: [FileNode] {
-        guard let root else { return [] }
         guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
+        if searchMode == .live {
+            return liveSearchResults
+        }
+        guard let root else { return [] }
         return queryEngine.search(
             in: root,
             query: searchQuery,
@@ -220,6 +248,54 @@ final class RootViewModel: ObservableObject {
         )
     }
 
+    func triggerLiveSearch() {
+        guard searchMode == .live else { return }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            liveSearchTask?.cancel()
+            liveSearchResults = []
+            isLiveSearchRunning = false
+            return
+        }
+
+        liveSearchTask?.cancel()
+        isLiveSearchRunning = true
+        let rootURL = selectedTarget.url
+        let modeType = searchNodeType
+        let useRegex = searchUseRegex
+        let pathContains = self.pathContains.lowercased()
+        let ownerContains = self.ownerContains.lowercased()
+        let minSize = Int64(minSizeMB * 1_048_576)
+        let depthMin = searchDepthMin
+        let depthMax = max(searchDepthMin, searchDepthMax)
+        let modifiedWithinDays = searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil
+        let onlyDirs = onlyDirectories
+        let onlyFiles = onlyFiles
+
+        liveSearchTask = Task { [weak self] in
+            guard let self else { return }
+            let results = self.runLiveSearch(
+                rootURL: rootURL,
+                query: query,
+                useRegex: useRegex,
+                pathContains: pathContains,
+                ownerContains: ownerContains,
+                minSizeBytes: minSize,
+                depthMin: depthMin,
+                depthMax: depthMax,
+                modifiedWithinDays: modifiedWithinDays,
+                nodeType: modeType,
+                onlyDirectories: onlyDirs,
+                onlyFiles: onlyFiles
+            )
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self.liveSearchResults = results
+                self.isLiveSearchRunning = false
+            }
+        }
+    }
+
     var selectedTargetPath: String {
         selectedTarget.url.path
     }
@@ -228,6 +304,7 @@ final class RootViewModel: ObservableObject {
         selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
         clearSavedTargetBookmark()
         permissions.refreshFolderAccess(for: selectedTarget.url)
+        triggerLiveSearch()
     }
 
     func selectHome() {
@@ -235,6 +312,7 @@ final class RootViewModel: ObservableObject {
         selectedTarget = ScanTarget(name: "Home", url: url)
         clearSavedTargetBookmark()
         permissions.refreshFolderAccess(for: selectedTarget.url)
+        triggerLiveSearch()
     }
 
     func selectFolder(_ url: URL) {
@@ -242,6 +320,7 @@ final class RootViewModel: ObservableObject {
         selectedTarget = ScanTarget(name: scopedURL.lastPathComponent, url: scopedURL)
         permissions.markOnboardingCompleted()
         permissions.refreshFolderAccess(for: selectedTarget.url)
+        triggerLiveSearch()
     }
 
     func scanSelected() {
@@ -765,7 +844,8 @@ final class RootViewModel: ObservableObject {
             depthMin: searchDepthMin,
             depthMax: searchDepthMax,
             modifiedWithinDays: searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil,
-            nodeType: searchNodeType
+            nodeType: searchNodeType,
+            searchMode: searchMode
         )
         searchPresets.insert(preset, at: 0)
         persistSearchPresets()
@@ -783,6 +863,8 @@ final class RootViewModel: ObservableObject {
         searchDepthMax = preset.depthMax
         searchModifiedWithinDays = preset.modifiedWithinDays ?? 0
         searchNodeType = preset.nodeType
+        searchMode = preset.searchMode
+        triggerLiveSearch()
     }
 
     func deletePreset(_ preset: SearchPreset) {
@@ -915,6 +997,100 @@ final class RootViewModel: ObservableObject {
     private func isProtectedPath(_ path: String) -> Bool {
         if path == "/" { return true }
         return protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    private func runLiveSearch(
+        rootURL: URL,
+        query: String,
+        useRegex: Bool,
+        pathContains: String,
+        ownerContains: String,
+        minSizeBytes: Int64,
+        depthMin: Int,
+        depthMax: Int,
+        modifiedWithinDays: Int?,
+        nodeType: QueryEngine.SearchNodeType,
+        onlyDirectories: Bool,
+        onlyFiles: Bool
+    ) -> [FileNode] {
+        let started = rootURL.startAccessingSecurityScopedResource()
+        defer {
+            if started { rootURL.stopAccessingSecurityScopedResource() }
+        }
+
+        let regex = useRegex ? (try? NSRegularExpression(pattern: query, options: [.caseInsensitive])) : nil
+        let cutoff: Date? = modifiedWithinDays.map { Calendar.current.date(byAdding: .day, value: -$0, to: Date()) ?? .distantPast }
+        let rootComponents = rootURL.pathComponents.count
+        let fm = FileManager.default
+
+        guard let enumerator = fm.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        var results: [FileNode] = []
+        for case let fileURL as URL in enumerator {
+            if Task.isCancelled { break }
+
+            let depth = max(0, fileURL.pathComponents.count - rootComponents)
+            if depth > depthMax {
+                enumerator.skipDescendants()
+                continue
+            }
+            if depth < depthMin { continue }
+
+            guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]) else {
+                continue
+            }
+            let isDir = values.isDirectory == true
+            let size = Int64(values.fileSize ?? 0)
+
+            let queryMatch: Bool
+            if let regex {
+                let text = fileURL.path
+                let range = NSRange(text.startIndex..<text.endIndex, in: text)
+                queryMatch = regex.firstMatch(in: text, options: [], range: range) != nil
+            } else {
+                let lower = query.lowercased()
+                queryMatch = fileURL.lastPathComponent.lowercased().contains(lower) || fileURL.path.lowercased().contains(lower)
+            }
+            guard queryMatch else { continue }
+            guard pathContains.isEmpty || fileURL.path.lowercased().contains(pathContains) else { continue }
+
+            if !ownerContains.isEmpty {
+                let owner = (try? fm.attributesOfItem(atPath: fileURL.path)[.ownerAccountName] as? String) ?? ""
+                guard owner.lowercased().contains(ownerContains) else { continue }
+            }
+            guard size >= minSizeBytes else { continue }
+            if let cutoff, let modified = values.contentModificationDate {
+                guard modified >= cutoff else { continue }
+            } else if cutoff != nil {
+                continue
+            }
+            guard (!onlyDirectories || isDir) && (!onlyFiles || !isDir) else { continue }
+            guard matchesNodeTypeLive(isDirectory: isDir, url: fileURL, nodeType: nodeType) else { continue }
+
+            results.append(FileNode(
+                url: fileURL,
+                name: fileURL.lastPathComponent,
+                isDirectory: isDir,
+                sizeInBytes: size,
+                children: []
+            ))
+            if results.count >= 300 { break }
+        }
+
+        return results.sorted { $0.sizeInBytes > $1.sizeInBytes }
+    }
+
+    private func matchesNodeTypeLive(isDirectory: Bool, url: URL, nodeType: QueryEngine.SearchNodeType) -> Bool {
+        switch nodeType {
+        case .any: return true
+        case .file: return !isDirectory
+        case .directory: return isDirectory
+        case .package: return isDirectory && url.pathExtension == "app"
+        }
     }
 
     private func previewItem(for remnant: AppRemnant) -> UninstallPreviewItem {

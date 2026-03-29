@@ -15,7 +15,15 @@ struct SearchView: View {
                 TextField("Search by name or path...", text: $model.searchQuery)
                     .textFieldStyle(.roundedBorder)
 
-                if model.isLoading {
+                Picker("Mode", selection: $model.searchMode) {
+                    ForEach(SearchExecutionMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 170)
+
+                if model.isLoading || model.isLiveSearchRunning {
                     ProgressView()
                 }
             }
@@ -202,6 +210,21 @@ struct SearchView: View {
         } message: {
             Text("Could not restore this item. It may be removed from Trash or blocked by permissions.")
         }
+        .onAppear {
+            model.triggerLiveSearch()
+        }
+        .onChange(of: model.searchMode) { model.triggerLiveSearch() }
+        .onChange(of: model.searchQuery) { model.triggerLiveSearch() }
+        .onChange(of: model.pathContains) { model.triggerLiveSearch() }
+        .onChange(of: model.ownerContains) { model.triggerLiveSearch() }
+        .onChange(of: model.minSizeMB) { model.triggerLiveSearch() }
+        .onChange(of: model.searchUseRegex) { model.triggerLiveSearch() }
+        .onChange(of: model.searchDepthMin) { model.triggerLiveSearch() }
+        .onChange(of: model.searchDepthMax) { model.triggerLiveSearch() }
+        .onChange(of: model.searchModifiedWithinDays) { model.triggerLiveSearch() }
+        .onChange(of: model.searchNodeType) { model.triggerLiveSearch() }
+        .onChange(of: model.onlyDirectories) { model.triggerLiveSearch() }
+        .onChange(of: model.onlyFiles) { model.triggerLiveSearch() }
     }
 
     private func selectedNodes() -> [FileNode] {
