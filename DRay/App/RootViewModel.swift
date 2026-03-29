@@ -173,8 +173,20 @@ enum SmartCleanProfile: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppSection: String, Hashable {
+    case smartCare
+    case clutter
+    case uninstaller
+    case spaceLens
+    case search
+    case performance
+    case privacy
+    case recovery
+}
+
 @MainActor
 final class RootViewModel: ObservableObject {
+    @Published var selectedSection: AppSection = .smartCare
     @Published private(set) var root: FileNode?
     @Published private(set) var isLoading = false
     @Published private(set) var selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
@@ -344,6 +356,11 @@ final class RootViewModel: ObservableObject {
 
     var selectedTargetPath: String {
         selectedTarget.url.path
+    }
+
+    func openSection(_ section: AppSection) {
+        selectedSection = section
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func selectMacDisk() {

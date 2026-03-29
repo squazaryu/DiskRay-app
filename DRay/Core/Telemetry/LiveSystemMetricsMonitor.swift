@@ -1,6 +1,16 @@
 import Foundation
 import Darwin
 import IOKit.ps
+import AppKit
+
+struct ProcessConsumer: Identifiable, Sendable {
+    let id = UUID()
+    let pid: Int32
+    let name: String
+    let cpuPercent: Double
+    let memoryMB: Double
+    let batteryImpactScore: Double
+}
 
 struct LiveSystemSnapshot: Sendable {
     let updatedAt: Date
@@ -18,6 +28,8 @@ struct LiveSystemSnapshot: Sendable {
     let networkDownBytesPerSecond: Double
     let networkUpBytesPerSecond: Double
     let uptimeSeconds: TimeInterval
+    let topCPUConsumers: [ProcessConsumer]
+    let topBatteryConsumers: [ProcessConsumer]
 
     static let empty = LiveSystemSnapshot(
         updatedAt: Date(),
@@ -34,7 +46,9 @@ struct LiveSystemSnapshot: Sendable {
         batteryMinutesRemaining: nil,
         networkDownBytesPerSecond: 0,
         networkUpBytesPerSecond: 0,
-        uptimeSeconds: ProcessInfo.processInfo.systemUptime
+        uptimeSeconds: ProcessInfo.processInfo.systemUptime,
+        topCPUConsumers: [],
+        topBatteryConsumers: []
     )
 }
 
@@ -45,6 +59,9 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private var timer: Timer?
     private var previousCPU: CPUCounters?
     private var previousNetwork: NetworkCounters?
+    private var cachedCPUConsumers: [ProcessConsumer] = []
+    private var cachedBatteryConsumers: [ProcessConsumer] = []
+    private var tickCounter = 0
 
     func start() {
         guard timer == nil else { return }
@@ -69,6 +86,12 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let disk = diskSample()
         let battery = batterySample()
         let network = networkSample(at: now)
+        tickCounter += 1
+        if tickCounter.isMultiple(of: 4) || cachedCPUConsumers.isEmpty {
+            let consumers = processConsumersSample()
+            cachedCPUConsumers = consumers.topCPU
+            cachedBatteryConsumers = consumers.topBattery
+        }
 
         snapshot = LiveSystemSnapshot(
             updatedAt: now,
@@ -85,7 +108,9 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             batteryMinutesRemaining: battery.minutesRemaining,
             networkDownBytesPerSecond: network.downPerSecond,
             networkUpBytesPerSecond: network.upPerSecond,
-            uptimeSeconds: ProcessInfo.processInfo.systemUptime
+            uptimeSeconds: ProcessInfo.processInfo.systemUptime,
+            topCPUConsumers: cachedCPUConsumers,
+            topBatteryConsumers: cachedBatteryConsumers
         )
     }
 
@@ -156,14 +181,30 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         var pressure = total > 0 ? (Double(workingSet) / Double(total)) * 100.0 : 0
 
         // Extra pressure boost when compressed memory is significant.
+        var compressedShare = 0.0
         if total > 0 {
-            let compressedShare = Double(compressed) / Double(total)
+            compressedShare = Double(compressed) / Double(total)
             if compressedShare > 0.12 {
                 pressure += min(18.0, compressedShare * 60.0)
             }
         }
+        if let systemPressure = systemMemoryPressureLevel() {
+            let kernelMapped = systemPressure * 0.72
+            pressure = max(kernelMapped, pressure * 0.35)
+            if compressedShare > 0.20 {
+                pressure += 6
+            }
+        }
         pressure = min(100, max(0, pressure))
         return (used, total, pressure)
+    }
+
+    private func systemMemoryPressureLevel() -> Double? {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("kern.memorystatus_level", &level, &size, nil, 0)
+        guard result == 0 else { return nil }
+        return min(100, max(0, Double(level)))
     }
 
     private func diskSample() -> (free: Int64, total: Int64) {
@@ -253,6 +294,98 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         }
 
         return NetworkCounters(timestamp: now, inboundBytes: inbound, outboundBytes: outbound)
+    }
+
+    private func processConsumersSample() -> (topCPU: [ProcessConsumer], topBattery: [ProcessConsumer]) {
+        let command = "/bin/ps"
+        let args = ["-A", "-o", "pid=,%cpu=,rss=,comm="]
+        let output = runCommand(command, arguments: args)
+        guard !output.isEmpty else { return ([], []) }
+
+        let runningApps = Dictionary(
+            uniqueKeysWithValues: NSWorkspace.shared.runningApplications.compactMap { app -> (Int32, String)? in
+                guard app.processIdentifier > 0, let name = app.localizedName, !name.isEmpty else { return nil }
+                // Prioritize user-facing apps; fallback to any app if needed.
+                if app.activationPolicy == .regular || app.activationPolicy == .accessory {
+                    return (app.processIdentifier, name)
+                }
+                return nil
+            }
+        )
+
+        var rows: [ProcessConsumer] = []
+        rows.reserveCapacity(64)
+
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            let parts = trimmed.split(maxSplits: 3, omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+            guard parts.count >= 4,
+                  let pid = Int32(parts[0]),
+                  let cpu = Double(parts[1]),
+                  let rssKB = Double(parts[2]),
+                  cpu >= 0 else { continue }
+
+            let processName = String(parts[3])
+            let appName = runningApps[pid] ?? processName
+            guard !appName.isEmpty else { continue }
+
+            let memoryMB = rssKB / 1024.0
+            let batteryImpact = cpu * 1.7 + memoryMB * 0.02
+            rows.append(
+                ProcessConsumer(
+                    pid: pid,
+                    name: appName,
+                    cpuPercent: cpu,
+                    memoryMB: memoryMB,
+                    batteryImpactScore: batteryImpact
+                )
+            )
+        }
+
+        // Deduplicate by displayed app name, keep the most expensive row.
+        var byName: [String: ProcessConsumer] = [:]
+        for row in rows {
+            if let existing = byName[row.name] {
+                if row.cpuPercent + row.memoryMB * 0.01 > existing.cpuPercent + existing.memoryMB * 0.01 {
+                    byName[row.name] = row
+                }
+            } else {
+                byName[row.name] = row
+            }
+        }
+
+        let unique = Array(byName.values)
+        let topCPU = unique
+            .filter { $0.cpuPercent > 0.1 }
+            .sorted { $0.cpuPercent > $1.cpuPercent }
+            .prefix(5)
+        let topBattery = unique
+            .filter { $0.batteryImpactScore > 0.3 }
+            .sorted { $0.batteryImpactScore > $1.batteryImpactScore }
+            .prefix(5)
+
+        return (Array(topCPU), Array(topBattery))
+    }
+
+    private func runCommand(_ launchPath: String, arguments: [String]) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return ""
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }
 

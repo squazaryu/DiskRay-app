@@ -12,6 +12,7 @@ struct MenuBarPopupView: View {
             header
             cardsGrid
             recommendationCard
+            consumersSection
             footer
         }
         .padding(12)
@@ -68,14 +69,22 @@ struct MenuBarPopupView: View {
                     subtitle: diskSubtitle,
                     value: diskValue + diskUsePercentText,
                     actionTitle: "Free Up",
-                    action: { model.scanSelected() }
+                    action: {
+                        open(section: .spaceLens) {
+                            model.scanSelected()
+                        }
+                    }
                 )
                 metricCard(
                     title: "Memory",
                     subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
                     value: memoryValue,
                     actionTitle: "Open DRay",
-                    action: { NSApp.activate(ignoringOtherApps: true) }
+                    action: {
+                        open(section: .performance) {
+                            model.runPerformanceScan()
+                        }
+                    }
                 )
             }
             HStack(spacing: 10) {
@@ -84,14 +93,18 @@ struct MenuBarPopupView: View {
                     subtitle: batteryStateText,
                     value: batteryValueText,
                     actionTitle: "Health",
-                    action: { NSApp.activate(ignoringOtherApps: true) }
+                    action: { open(section: .performance) }
                 )
                 metricCard(
                     title: "CPU",
                     subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))% load",
                     actionTitle: "Diagnose",
-                    action: { model.runPerformanceScan() }
+                    action: {
+                        open(section: .performance) {
+                            model.runPerformanceScan()
+                        }
+                    }
                 )
             }
             HStack(spacing: 10) {
@@ -100,17 +113,56 @@ struct MenuBarPopupView: View {
                     subtitle: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond)) · ↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))",
                     value: "\(Int(monitor.snapshot.uptimeSeconds / 3600))h uptime",
                     actionTitle: "Open DRay",
-                    action: { NSApp.activate(ignoringOtherApps: true) }
+                    action: { open(section: .smartCare) }
                 )
                 metricCard(
                     title: "My Clutter",
                     subtitle: "Duplicate groups",
                     value: "\(model.duplicateGroups.count)",
                     actionTitle: "Scan",
-                    action: { model.scanDuplicatesInHome() }
+                    action: {
+                        open(section: .clutter) {
+                            model.scanDuplicatesInHome()
+                        }
+                    }
                 )
             }
         }
+    }
+
+    private var consumersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Top Consumers")
+                .font(.headline)
+                .foregroundStyle(.primary)
+            if monitor.snapshot.topCPUConsumers.isEmpty && monitor.snapshot.topBatteryConsumers.isEmpty {
+                Text("Collecting process telemetry...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(consumerRows) { row in
+                        HStack(spacing: 8) {
+                            Text(row.name)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text("CPU \(row.cpuText)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("MEM \(row.memoryText)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("BAT \(row.batteryText)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(cardBackground)
     }
 
     private var recommendationCard: some View {
@@ -137,14 +189,15 @@ struct MenuBarPopupView: View {
     private var footer: some View {
         HStack {
             Button("Smart Scan") {
-                model.runUnifiedScan()
-                NSApp.activate(ignoringOtherApps: true)
+                open(section: .smartCare) {
+                    model.runUnifiedScan()
+                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
             Button("Open DRay") {
-                NSApp.activate(ignoringOtherApps: true)
+                open(section: .smartCare)
             }
             .controlSize(.small)
 
@@ -182,8 +235,9 @@ struct MenuBarPopupView: View {
             HStack {
                 Spacer()
                 Button("Open Performance") {
-                    model.runPerformanceScan()
-                    NSApp.activate(ignoringOtherApps: true)
+                    open(section: .performance) {
+                        model.runPerformanceScan()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -374,14 +428,20 @@ struct MenuBarPopupView: View {
 
     private func recommendationAction() {
         if healthIssues.contains(where: { $0.severity == .critical || $0.severity == .warning }) {
-            model.runPerformanceScan()
+            open(section: .performance) {
+                model.runPerformanceScan()
+            }
             return
         }
         if model.duplicateGroups.count > 0 {
-            model.scanDuplicatesInHome()
+            open(section: .clutter) {
+                model.scanDuplicatesInHome()
+            }
             return
         }
-        model.runUnifiedScan()
+        open(section: .smartCare) {
+            model.runUnifiedScan()
+        }
     }
 
     private var memoryValue: String {
@@ -465,6 +525,52 @@ struct MenuBarPopupView: View {
         default: return .red
         }
     }
+
+    private var consumerRows: [ConsumerRow] {
+        var rows: [ConsumerRow] = []
+        var seen = Set<String>()
+
+        for cpu in monitor.snapshot.topCPUConsumers {
+            let key = cpu.name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            let battery = monitor.snapshot.topBatteryConsumers.first { $0.name.caseInsensitiveCompare(cpu.name) == .orderedSame }
+            rows.append(
+                ConsumerRow(
+                    id: cpu.name,
+                    name: cpu.name,
+                    cpuText: "\(Int(cpu.cpuPercent))%",
+                    memoryText: "\(Int(cpu.memoryMB))MB",
+                    batteryText: battery.map { String(format: "%.1f", $0.batteryImpactScore) } ?? String(format: "%.1f", cpu.batteryImpactScore)
+                )
+            )
+            if rows.count >= 5 { break }
+        }
+
+        if rows.count < 5 {
+            for battery in monitor.snapshot.topBatteryConsumers {
+                let key = battery.name.lowercased()
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                rows.append(
+                    ConsumerRow(
+                        id: battery.name,
+                        name: battery.name,
+                        cpuText: "\(Int(battery.cpuPercent))%",
+                        memoryText: "\(Int(battery.memoryMB))MB",
+                        batteryText: String(format: "%.1f", battery.batteryImpactScore)
+                    )
+                )
+                if rows.count >= 5 { break }
+            }
+        }
+        return rows
+    }
+
+    private func open(section: AppSection, action: (() -> Void)? = nil) {
+        action?()
+        model.openSection(section)
+    }
 }
 
 private struct HealthIssue: Identifiable {
@@ -472,6 +578,14 @@ private struct HealthIssue: Identifiable {
     let title: String
     let details: String
     let severity: HealthIssueSeverity
+}
+
+private struct ConsumerRow: Identifiable {
+    let id: String
+    let name: String
+    let cpuText: String
+    let memoryText: String
+    let batteryText: String
 }
 
 private enum HealthIssueSeverity {
