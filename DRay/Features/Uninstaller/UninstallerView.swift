@@ -12,7 +12,7 @@ struct UninstallerView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        HSplitView {
             List(model.installedApps, selection: $selectedAppPath) { app in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.name)
@@ -24,21 +24,14 @@ struct UninstallerView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { selectedAppPath = app.appURL.path }
             }
+            .listStyle(.sidebar)
+            .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
             .overlay {
                 if model.isUninstallerLoading {
                     ProgressView("Loading apps...")
                 }
             }
-            .onAppear {
-                if model.installedApps.isEmpty {
-                    model.loadInstalledApps()
-                }
-            }
-            .onChange(of: selectedAppPath) {
-                guard let selectedApp else { return }
-                model.loadRemnants(for: selectedApp)
-            }
-        } detail: {
+
             VStack(alignment: .leading, spacing: 12) {
                 if let selectedApp {
                     HStack {
@@ -128,17 +121,27 @@ struct UninstallerView: View {
                 }
             }
             .padding()
-            .sheet(isPresented: $showUninstallPreview) {
-                if let selectedApp {
-                    UninstallPreviewSheet(
-                        app: selectedApp,
-                        previewItems: model.uninstallPreview(for: selectedApp),
-                        onConfirm: { selectedItems in
-                            model.uninstall(app: selectedApp, selectedItems: selectedItems)
-                            showUninstallPreview = false
-                        }
-                    )
-                }
+            .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            if model.installedApps.isEmpty {
+                model.loadInstalledApps()
+            }
+        }
+        .onChange(of: selectedAppPath) {
+            guard let selectedApp else { return }
+            model.loadRemnants(for: selectedApp)
+        }
+        .sheet(isPresented: $showUninstallPreview) {
+            if let selectedApp {
+                UninstallPreviewSheet(
+                    app: selectedApp,
+                    previewItems: model.uninstallPreview(for: selectedApp),
+                    onConfirm: { selectedItems in
+                        model.uninstall(app: selectedApp, selectedItems: selectedItems)
+                        showUninstallPreview = false
+                    }
+                )
             }
         }
     }
