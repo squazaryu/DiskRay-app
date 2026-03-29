@@ -145,8 +145,24 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         var pageSizeValue: vm_size_t = 0
         host_page_size(mach_host_self(), &pageSizeValue)
         let pageSize = Int64(pageSizeValue)
-        let used = Int64(stats.active_count + stats.inactive_count + stats.wire_count + stats.compressor_page_count) * pageSize
-        let pressure = total > 0 ? min(100, max(0, (Double(used) / Double(total)) * 100)) : 0
+        let active = Int64(stats.active_count) * pageSize
+        let inactive = Int64(stats.inactive_count) * pageSize
+        let wired = Int64(stats.wire_count) * pageSize
+        let compressed = Int64(stats.compressor_page_count) * pageSize
+
+        // Inactive pages are typically reclaimable; counting them fully inflates "pressure".
+        let used = active + inactive + wired + compressed
+        let workingSet = active + wired + compressed
+        var pressure = total > 0 ? (Double(workingSet) / Double(total)) * 100.0 : 0
+
+        // Extra pressure boost when compressed memory is significant.
+        if total > 0 {
+            let compressedShare = Double(compressed) / Double(total)
+            if compressedShare > 0.12 {
+                pressure += min(18.0, compressedShare * 60.0)
+            }
+        }
+        pressure = min(100, max(0, pressure))
         return (used, total, pressure)
     }
 

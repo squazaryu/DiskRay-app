@@ -12,10 +12,11 @@ struct SpaceLensView: View {
     @State private var bubbleTapMode: BubbleTapMode = .openFolders
 
     var body: some View {
-        NavigationSplitView {
+        HSplitView {
             sidebar
-        } detail: {
+                .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
             detail
+                .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             selectedPaths.removeAll()
