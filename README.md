@@ -5,7 +5,7 @@ DRay is a macOS disk explorer that combines:
 - Fast file search similar to FindAnyFile
 
 ## Current status
-- SwiftUI app shell with `Smart Care`, `Uninstaller`, `Space Lens`, and `Search` tabs
+- SwiftUI app shell with `Smart Care`, `My Clutter`, `Uninstaller`, `Space Lens`, and `Search` tabs
 - Recursive disk scanner (`FileScanner`) with pause/cancel/progress
 - SQLite snapshot index for fast restore between scans
 - Advanced in-memory query engine (`QueryEngine`) with filters and presets
@@ -21,6 +21,7 @@ DRay is a macOS disk explorer that combines:
 - Operation diagnostics log store with JSON export for support/debug workflows
 - Dedicated Recovery tab for centralized restore of recently deleted items
 - One-click unified Smart Scan orchestrating Smart Care + Privacy + Performance
+- Menu bar popup window with health cards and quick actions
 
 ## Run
 ```bash
@@ -44,9 +45,9 @@ swift run
 - [x] Performance module baseline (startup diagnostics + maintenance recommendations)
 - [x] Privacy/Security module baseline (trace review + safe cleanup + transparency report)
 - [x] Signed + notarized production build pipeline baseline
-- [ ] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
+- [x] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
 - [x] Menu bar popup baseline (top-bar quick actions + health mini panel)
-- [ ] Menu bar popup visual parity with CleanMyMac cards
+- [x] Menu bar popup visual parity with CleanMyMac cards
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

@@ -34,6 +34,7 @@ struct SpaceLensView: View {
             scanTargetSection
             largestSection
         }
+        .listStyle(.sidebar)
         .overlay {
             if model.isLoading {
                 ProgressView("Scanning disk...")
@@ -87,26 +88,39 @@ struct SpaceLensView: View {
     }
 
     private func largestRow(_ node: FileNode) -> some View {
-        HStack {
-            Image(systemName: selectedPaths.contains(node.url.path) ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(selectedPaths.contains(node.url.path) ? Color.accentColor : Color.secondary.opacity(0.4))
-            Image(systemName: node.isDirectory ? "folder.fill" : "doc.fill")
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading) {
-                Text(node.name)
-                Text(node.url.path)
-                    .font(.caption)
+        Button {
+            toggleSelection(node.url.path)
+        } label: {
+            HStack {
+                Image(systemName: selectedPaths.contains(node.url.path) ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selectedPaths.contains(node.url.path) ? Color.accentColor : Color.secondary.opacity(0.4))
+                Image(systemName: node.isDirectory ? "folder.fill" : "doc.fill")
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading) {
+                    Text(node.name)
+                    Text(node.url.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(node.formattedSize)
+                    .fontWeight(.semibold)
             }
-            Spacer()
-            Text(node.formattedSize)
-                .fontWeight(.semibold)
+            .contentShape(Rectangle())
+            .background(model.hoveredPath == node.url.path ? Color.accentColor.opacity(0.12) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
-        .contentShape(Rectangle())
-        .background(model.hoveredPath == node.url.path ? Color.accentColor.opacity(0.12) : .clear)
-        .onTapGesture { toggleSelection(node.url.path) }
-        .onHover { inside in model.hoveredPath = inside ? node.url.path : nil }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside {
+                if model.hoveredPath != node.url.path {
+                    model.hoveredPath = node.url.path
+                }
+            } else if model.hoveredPath == node.url.path {
+                model.hoveredPath = nil
+            }
+        }
         .contextMenu {
             Button("Open") { model.openItem(node) }
             Button("Reveal in Finder") { model.revealInFinder(node) }

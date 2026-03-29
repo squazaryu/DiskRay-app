@@ -30,5 +30,6 @@ struct DRayApp: App {
         MenuBarExtra("DRay", systemImage: "circle.grid.3x3.fill") {
             MenuBarPopupView(model: model)
         }
+        .menuBarExtraStyle(.window)
     }
 }

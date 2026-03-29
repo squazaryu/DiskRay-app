@@ -24,6 +24,9 @@ struct BubbleMapView: View {
     @State private var cachedNodeID: FileNode.ID?
     @State private var cachedSize: CGSize = .zero
     private let maxVisibleBubbles = 20
+    private let surfaceColor = Color(red: 0.96, green: 0.97, blue: 0.99)
+    private let accentColor = Color(red: 0.27, green: 0.53, blue: 0.93)
+    private let neutralStroke = Color.black.opacity(0.13)
 
     var body: some View {
         GeometryReader { geo in
@@ -33,29 +36,30 @@ struct BubbleMapView: View {
 
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.97, green: 0.98, blue: 1.0), Color(red: 0.92, green: 0.94, blue: 0.98)],
+                    colors: [Color(red: 0.98, green: 0.99, blue: 1.0), Color(red: 0.93, green: 0.95, blue: 0.98)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-                .onTapGesture(count: 2) { goUp() }
                 .onTapGesture { selectedPaths.removeAll() }
 
                 Circle()
-                    .fill(Color.white.opacity(0.90))
-                    .overlay(Circle().stroke(Color.black.opacity(0.12), lineWidth: 1))
+                    .fill(surfaceColor.opacity(0.94))
+                    .overlay(Circle().stroke(Color.black.opacity(0.10), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.09), radius: 14, x: 0, y: 6)
                     .frame(width: coreRadius * 2, height: coreRadius * 2)
                     .position(x: center.x, y: center.y)
                 VStack(spacing: 6) {
                     Image(systemName: "folder.fill")
-                        .foregroundStyle(.black.opacity(0.75))
+                        .foregroundStyle(.black.opacity(0.72))
                     Text(current.name)
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(.black.opacity(0.9))
+                        .foregroundStyle(.black.opacity(0.88))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Text(current.formattedSize)
                         .font(.subheadline)
-                        .foregroundStyle(.black.opacity(0.65))
+                        .foregroundStyle(.black.opacity(0.62))
                 }
                 .frame(maxWidth: 170)
                 .position(x: center.x, y: center.y)
@@ -72,7 +76,7 @@ struct BubbleMapView: View {
                             Label("Root", systemImage: "house")
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.black.opacity(0.08))
+                        .tint(Color.black.opacity(0.12))
 
                         Button {
                             goUp()
@@ -108,6 +112,8 @@ struct BubbleMapView: View {
                         .foregroundStyle(.black.opacity(0.55))
                 }
                 .padding()
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .onChange(of: root.id) {
@@ -116,7 +122,7 @@ struct BubbleMapView: View {
                 hoveredPath = nil
                 cachedLayout = []
                 cachedNodeID = nil
-                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
+                recalcLayoutIfNeeded(current: root, size: geo.size, force: true)
             }
             .onAppear {
                 if !didInitialReset {
@@ -143,16 +149,24 @@ struct BubbleMapView: View {
     private func bubbleView(for item: BubbleLayoutItem) -> some View {
         let isSelected = selectedPaths.contains(item.node.url.path)
         let isHovered = hoveredPath == item.node.url.path
-        let fillColor = isSelected ? Color(red: 0.82, green: 0.88, blue: 1.0) : Color.white.opacity(0.84)
+        let fillColor = isSelected ? accentColor.opacity(0.24) : surfaceColor.opacity(0.86)
         let strokeColor: Color = {
-            if isSelected { return Color.blue.opacity(0.62) }
+            if isSelected { return accentColor.opacity(0.80) }
             if isHovered { return Color.black.opacity(0.30) }
-            return Color.black.opacity(0.13)
+            return neutralStroke
         }()
 
         return ZStack {
             Circle()
                 .fill(fillColor)
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.40), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             Circle()
                 .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
             VStack(spacing: 4) {
@@ -164,6 +178,7 @@ struct BubbleMapView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: item.radius * 1.55)
+                    .minimumScaleFactor(0.74)
                 if item.radius > 50 {
                     Text(item.node.formattedSize)
                         .font(.system(size: max(10, fontSize(for: item.radius) - 2)))
@@ -172,13 +187,23 @@ struct BubbleMapView: View {
             }
             .padding(.horizontal, item.radius * 0.12)
         }
-        .shadow(color: .black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 8 : 4, x: 0, y: 2)
+        .shadow(color: .black.opacity(isSelected ? 0.13 : 0.06), radius: isSelected ? 9 : 4, x: 0, y: 2)
         .frame(width: item.radius * 2, height: item.radius * 2)
         .contentShape(Circle())
         .position(x: item.center.x, y: item.center.y)
-        .onTapGesture { handlePrimaryTap(on: item.node) }
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .onTapGesture(perform: {
+            handlePrimaryTap(on: item.node)
+        })
         .onHover { inside in
-            hoveredPath = inside ? item.node.url.path : nil
+            if inside {
+                if hoveredPath != item.node.url.path {
+                    hoveredPath = item.node.url.path
+                }
+            } else if hoveredPath == item.node.url.path {
+                hoveredPath = nil
+            }
         }
     }
 
@@ -187,11 +212,13 @@ struct BubbleMapView: View {
     }
 
     private func toggleSelection(for path: String) {
-        if selectedPaths.contains(path) {
-            selectedPaths.remove(path)
-        } else {
-            selectedPaths.removeAll()
-            selectedPaths.insert(path)
+        withAnimation(.easeOut(duration: 0.12)) {
+            if selectedPaths.contains(path) {
+                selectedPaths.remove(path)
+            } else {
+                selectedPaths.removeAll()
+                selectedPaths.insert(path)
+            }
         }
     }
 
@@ -218,22 +245,28 @@ struct BubbleMapView: View {
 
     private func diveInto(_ node: FileNode) {
         guard node.isDirectory, !node.children.isEmpty else { return }
-        navigation.append(node)
-        selectedPaths.removeAll()
-        hoveredPath = nil
+        withAnimation(.easeInOut(duration: 0.18)) {
+            navigation.append(node)
+            selectedPaths.removeAll()
+            hoveredPath = nil
+        }
     }
 
     private func goUp() {
         guard !navigation.isEmpty else { return }
-        navigation.removeLast()
-        selectedPaths.removeAll()
-        hoveredPath = nil
+        withAnimation(.easeInOut(duration: 0.18)) {
+            navigation.removeLast()
+            selectedPaths.removeAll()
+            hoveredPath = nil
+        }
     }
 
     private func resetToRoot() {
-        navigation.removeAll()
-        selectedPaths.removeAll()
-        hoveredPath = nil
+        withAnimation(.easeInOut(duration: 0.18)) {
+            navigation.removeAll()
+            selectedPaths.removeAll()
+            hoveredPath = nil
+        }
     }
 
     private func breadcrumbNodes() -> [FileNode] {
@@ -247,9 +280,11 @@ struct BubbleMapView: View {
             return
         }
         if let idx = navigation.firstIndex(where: { $0.url.path == node.url.path }) {
-            navigation = Array(navigation.prefix(through: idx))
-            selectedPaths.removeAll()
-            hoveredPath = nil
+            withAnimation(.easeInOut(duration: 0.18)) {
+                navigation = Array(navigation.prefix(through: idx))
+                selectedPaths.removeAll()
+                hoveredPath = nil
+            }
         }
     }
 
