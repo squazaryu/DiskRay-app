@@ -14,6 +14,11 @@ struct SearchView: View {
             HStack {
                 TextField("Search by name or path...", text: $model.searchQuery)
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        if model.searchMode == .live {
+                            model.triggerLiveSearch()
+                        }
+                    }
 
                 Picker("Mode", selection: $model.searchMode) {
                     ForEach(SearchExecutionMode.allCases) { mode in
@@ -22,6 +27,13 @@ struct SearchView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 170)
+
+                if model.searchMode == .live {
+                    Button("Search") {
+                        model.triggerLiveSearch()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
 
                 if model.isLoading || model.isLiveSearchRunning {
                     ProgressView()
@@ -210,21 +222,13 @@ struct SearchView: View {
         } message: {
             Text("Could not restore this item. It may be removed from Trash or blocked by permissions.")
         }
-        .onAppear {
-            model.triggerLiveSearch()
+        .onChange(of: model.searchMode) {
+            if model.searchMode == .indexed {
+                model.cancelLiveSearch()
+            } else {
+                model.clearLiveSearchResults()
+            }
         }
-        .onChange(of: model.searchMode) { model.triggerLiveSearch() }
-        .onChange(of: model.searchQuery) { model.triggerLiveSearch() }
-        .onChange(of: model.pathContains) { model.triggerLiveSearch() }
-        .onChange(of: model.ownerContains) { model.triggerLiveSearch() }
-        .onChange(of: model.minSizeMB) { model.triggerLiveSearch() }
-        .onChange(of: model.searchUseRegex) { model.triggerLiveSearch() }
-        .onChange(of: model.searchDepthMin) { model.triggerLiveSearch() }
-        .onChange(of: model.searchDepthMax) { model.triggerLiveSearch() }
-        .onChange(of: model.searchModifiedWithinDays) { model.triggerLiveSearch() }
-        .onChange(of: model.searchNodeType) { model.triggerLiveSearch() }
-        .onChange(of: model.onlyDirectories) { model.triggerLiveSearch() }
-        .onChange(of: model.onlyFiles) { model.triggerLiveSearch() }
     }
 
     private func selectedNodes() -> [FileNode] {

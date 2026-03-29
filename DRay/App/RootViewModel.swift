@@ -317,6 +317,15 @@ final class RootViewModel: ObservableObject {
         }
     }
 
+    func cancelLiveSearch() {
+        liveSearchTask?.cancel()
+        isLiveSearchRunning = false
+    }
+
+    func clearLiveSearchResults() {
+        liveSearchResults = []
+    }
+
     var selectedTargetPath: String {
         selectedTarget.url.path
     }
