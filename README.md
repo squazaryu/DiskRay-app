@@ -23,6 +23,7 @@ DRay is a macOS disk explorer that combines:
 - One-click unified Smart Scan orchestrating Smart Care + Privacy + Performance
 - Menu bar popup window with live system health cards (CPU/RAM/Disk/Battery/Network) and quick actions
 - Menu bar popup: interactive health diagnostics + top consumer list (CPU/MEM/Battery impact estimate)
+- Popup quick actions: `Reduce CPU` / `Reduce Memory` (close top heavy user apps with confirmation)
 
 ## Run
 ```bash

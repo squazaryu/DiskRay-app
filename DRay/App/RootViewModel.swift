@@ -92,6 +92,12 @@ struct TrashOperationResult {
     let failed: [String]
 }
 
+struct LoadReliefResult {
+    let terminated: [String]
+    let skipped: [String]
+    let failed: [String]
+}
+
 struct RecentlyDeletedItem: Codable, Identifiable {
     let id: UUID
     let originalPath: String
@@ -361,6 +367,14 @@ final class RootViewModel: ObservableObject {
     func openSection(_ section: AppSection) {
         selectedSection = section
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func reduceCPULoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
+        terminateTopConsumers(consumers.sorted { $0.cpuPercent > $1.cpuPercent }, limit: limit, label: "cpu")
+    }
+
+    func reduceMemoryLoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
+        terminateTopConsumers(consumers.sorted { $0.memoryMB > $1.memoryMB }, limit: limit, label: "memory")
     }
 
     func selectMacDisk() {
@@ -1171,6 +1185,54 @@ final class RootViewModel: ObservableObject {
             uninstallSessions = Array(uninstallSessions.prefix(50))
         }
         persistUninstallSessions()
+    }
+
+    private func terminateTopConsumers(_ consumers: [ProcessConsumer], limit: Int, label: String) -> LoadReliefResult {
+        var terminated: [String] = []
+        var skipped: [String] = []
+        var failed: [String] = []
+        var processed = 0
+
+        for consumer in consumers {
+            if processed >= limit { break }
+            guard let app = NSRunningApplication(processIdentifier: consumer.pid) else {
+                skipped.append(consumer.name)
+                continue
+            }
+            guard canTerminate(app: app) else {
+                skipped.append(consumer.name)
+                continue
+            }
+
+            processed += 1
+            let name = app.localizedName ?? consumer.name
+            if app.terminate() || app.forceTerminate() {
+                terminated.append(name)
+            } else {
+                failed.append(name)
+            }
+        }
+
+        operationLogs.add(
+            category: "relief",
+            message: "Load relief (\(label)): terminated \(terminated.count), skipped \(skipped.count), failed \(failed.count)"
+        )
+        return LoadReliefResult(terminated: terminated, skipped: skipped, failed: failed)
+    }
+
+    private func canTerminate(app: NSRunningApplication) -> Bool {
+        guard app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
+        guard !app.isTerminated else { return false }
+        switch app.activationPolicy {
+        case .regular, .accessory:
+            break
+        default:
+            return false
+        }
+        if let bundleID = app.bundleIdentifier, bundleID.hasPrefix("com.apple.") {
+            return false
+        }
+        return true
     }
 
     private func loadRecentlyDeleted() {

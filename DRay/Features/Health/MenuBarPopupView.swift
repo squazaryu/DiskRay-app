@@ -6,6 +6,9 @@ struct MenuBarPopupView: View {
     @StateObject private var monitor = LiveSystemMetricsMonitor()
     @Environment(\.colorScheme) private var colorScheme
     @State private var showHealthDetails = false
+    @State private var pendingReliefAction: ReliefAction?
+    @State private var showReliefConfirm = false
+    @State private var reliefResultMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -25,6 +28,26 @@ struct MenuBarPopupView: View {
         .frame(width: 430)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
+        .confirmationDialog(
+            reliefDialogTitle,
+            isPresented: $showReliefConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(reliefActionTitle, role: .destructive) {
+                executeReliefAction()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingReliefAction = nil
+            }
+        }
+        .alert("Load Reduction", isPresented: Binding(
+            get: { reliefResultMessage != nil },
+            set: { if !$0 { reliefResultMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(reliefResultMessage ?? "")
+        }
     }
 
     private var header: some View {
@@ -132,9 +155,26 @@ struct MenuBarPopupView: View {
 
     private var consumersSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Top Consumers")
-                .font(.headline)
-                .foregroundStyle(.primary)
+            HStack {
+                Text("Top Consumers")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button("Reduce CPU") {
+                    pendingReliefAction = .cpu
+                    showReliefConfirm = true
+                }
+                .disabled(cpuReliefCandidates.isEmpty)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+                Button("Reduce Memory") {
+                    pendingReliefAction = .memory
+                    showReliefConfirm = true
+                }
+                .disabled(memoryReliefCandidates.isEmpty)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+            }
             if monitor.snapshot.topCPUConsumers.isEmpty && monitor.snapshot.topBatteryConsumers.isEmpty {
                 Text("Collecting process telemetry...")
                     .font(.caption)
@@ -548,6 +588,25 @@ struct MenuBarPopupView: View {
         }
 
         if rows.count < 5 {
+            for memory in monitor.snapshot.topMemoryConsumers {
+                let key = memory.name.lowercased()
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                let battery = monitor.snapshot.topBatteryConsumers.first { $0.name.caseInsensitiveCompare(memory.name) == .orderedSame }
+                rows.append(
+                    ConsumerRow(
+                        id: memory.name,
+                        name: memory.name,
+                        cpuText: "\(Int(memory.cpuPercent))%",
+                        memoryText: "\(Int(memory.memoryMB))MB",
+                        batteryText: battery.map { String(format: "%.1f", $0.batteryImpactScore) } ?? String(format: "%.1f", memory.batteryImpactScore)
+                    )
+                )
+                if rows.count >= 5 { break }
+            }
+        }
+
+        if rows.count < 5 {
             for battery in monitor.snapshot.topBatteryConsumers {
                 let key = battery.name.lowercased()
                 guard !seen.contains(key) else { continue }
@@ -565,6 +624,55 @@ struct MenuBarPopupView: View {
             }
         }
         return rows
+    }
+
+    private var cpuReliefCandidates: [ProcessConsumer] {
+        let heavy = monitor.snapshot.topCPUConsumers.filter { $0.cpuPercent >= 18 }
+        return heavy.isEmpty ? Array(monitor.snapshot.topCPUConsumers.prefix(3)) : heavy
+    }
+
+    private var memoryReliefCandidates: [ProcessConsumer] {
+        let heavy = monitor.snapshot.topMemoryConsumers.filter { $0.memoryMB >= 700 }
+        return heavy.isEmpty ? Array(monitor.snapshot.topMemoryConsumers.prefix(3)) : heavy
+    }
+
+    private var reliefDialogTitle: String {
+        switch pendingReliefAction {
+        case .cpu:
+            return "Reduce CPU load by closing heavy apps?"
+        case .memory:
+            return "Reduce memory load by closing heavy apps?"
+        case .none:
+            return "Reduce load?"
+        }
+    }
+
+    private var reliefActionTitle: String {
+        switch pendingReliefAction {
+        case .cpu: return "Close Top CPU Apps"
+        case .memory: return "Close Top Memory Apps"
+        case .none: return "Run"
+        }
+    }
+
+    private func executeReliefAction() {
+        guard let action = pendingReliefAction else { return }
+        let result: LoadReliefResult
+        switch action {
+        case .cpu:
+            result = model.reduceCPULoad(consumers: cpuReliefCandidates, limit: 3)
+        case .memory:
+            result = model.reduceMemoryLoad(consumers: memoryReliefCandidates, limit: 3)
+        }
+        pendingReliefAction = nil
+        open(section: .performance) {
+            model.runPerformanceScan()
+        }
+
+        let terminatedText = result.terminated.isEmpty ? "0" : "\(result.terminated.count): " + result.terminated.joined(separator: ", ")
+        let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
+        let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
+        reliefResultMessage = "Terminated \(terminatedText)\nFailed \(failedText)\nSkipped \(skippedText)"
     }
 
     private func open(section: AppSection, action: (() -> Void)? = nil) {
@@ -586,6 +694,11 @@ private struct ConsumerRow: Identifiable {
     let cpuText: String
     let memoryText: String
     let batteryText: String
+}
+
+private enum ReliefAction {
+    case cpu
+    case memory
 }
 
 private enum HealthIssueSeverity {

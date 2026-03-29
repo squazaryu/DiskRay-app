@@ -29,6 +29,7 @@ struct LiveSystemSnapshot: Sendable {
     let networkUpBytesPerSecond: Double
     let uptimeSeconds: TimeInterval
     let topCPUConsumers: [ProcessConsumer]
+    let topMemoryConsumers: [ProcessConsumer]
     let topBatteryConsumers: [ProcessConsumer]
 
     static let empty = LiveSystemSnapshot(
@@ -48,6 +49,7 @@ struct LiveSystemSnapshot: Sendable {
         networkUpBytesPerSecond: 0,
         uptimeSeconds: ProcessInfo.processInfo.systemUptime,
         topCPUConsumers: [],
+        topMemoryConsumers: [],
         topBatteryConsumers: []
     )
 }
@@ -60,6 +62,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private var previousCPU: CPUCounters?
     private var previousNetwork: NetworkCounters?
     private var cachedCPUConsumers: [ProcessConsumer] = []
+    private var cachedMemoryConsumers: [ProcessConsumer] = []
     private var cachedBatteryConsumers: [ProcessConsumer] = []
     private var tickCounter = 0
 
@@ -90,6 +93,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         if tickCounter.isMultiple(of: 4) || cachedCPUConsumers.isEmpty {
             let consumers = processConsumersSample()
             cachedCPUConsumers = consumers.topCPU
+            cachedMemoryConsumers = consumers.topMemory
             cachedBatteryConsumers = consumers.topBattery
         }
 
@@ -110,6 +114,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             networkUpBytesPerSecond: network.upPerSecond,
             uptimeSeconds: ProcessInfo.processInfo.systemUptime,
             topCPUConsumers: cachedCPUConsumers,
+            topMemoryConsumers: cachedMemoryConsumers,
             topBatteryConsumers: cachedBatteryConsumers
         )
     }
@@ -296,11 +301,11 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return NetworkCounters(timestamp: now, inboundBytes: inbound, outboundBytes: outbound)
     }
 
-    private func processConsumersSample() -> (topCPU: [ProcessConsumer], topBattery: [ProcessConsumer]) {
+    private func processConsumersSample() -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
         let command = "/bin/ps"
         let args = ["-A", "-o", "pid=,%cpu=,rss=,comm="]
         let output = runCommand(command, arguments: args)
-        guard !output.isEmpty else { return ([], []) }
+        guard !output.isEmpty else { return ([], [], []) }
 
         let runningApps = Dictionary(
             uniqueKeysWithValues: NSWorkspace.shared.runningApplications.compactMap { app -> (Int32, String)? in
@@ -360,12 +365,16 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             .filter { $0.cpuPercent > 0.1 }
             .sorted { $0.cpuPercent > $1.cpuPercent }
             .prefix(5)
+        let topMemory = unique
+            .filter { $0.memoryMB > 200 }
+            .sorted { $0.memoryMB > $1.memoryMB }
+            .prefix(5)
         let topBattery = unique
             .filter { $0.batteryImpactScore > 0.3 }
             .sorted { $0.batteryImpactScore > $1.batteryImpactScore }
             .prefix(5)
 
-        return (Array(topCPU), Array(topBattery))
+        return (Array(topCPU), Array(topMemory), Array(topBattery))
     }
 
     private func runCommand(_ launchPath: String, arguments: [String]) -> String {
