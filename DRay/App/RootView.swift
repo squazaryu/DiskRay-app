@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct RootView: View {
-    @StateObject private var model = RootViewModel()
+    @ObservedObject var model: RootViewModel
     @State private var isFolderPickerPresented = false
     @State private var isHealthPopupPresented = false
 

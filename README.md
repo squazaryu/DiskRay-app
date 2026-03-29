@@ -45,7 +45,8 @@ swift run
 - [x] Privacy/Security module baseline (trace review + safe cleanup + transparency report)
 - [x] Signed + notarized production build pipeline baseline
 - [ ] Space Lens UI/UX rework (visual quality + selection responsiveness + fix false blue highlight on `Library`)
-- [ ] Menu bar popup (status cards + quick actions)
+- [x] Menu bar popup baseline (top-bar quick actions + health mini panel)
+- [ ] Menu bar popup visual parity with CleanMyMac cards
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`
