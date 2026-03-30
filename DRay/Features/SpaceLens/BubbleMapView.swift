@@ -18,15 +18,13 @@ struct BubbleMapView: View {
     @Binding var hoveredPath: String?
     @Binding var selectedPaths: Set<String>
     @Binding var tapMode: BubbleTapMode
+    @Environment(\.colorScheme) private var colorScheme
     @State private var navigation: [FileNode] = []
     @State private var didInitialReset = false
     @State private var cachedLayout: [BubbleLayoutItem] = []
     @State private var cachedNodeID: FileNode.ID?
     @State private var cachedSize: CGSize = .zero
     private let maxVisibleBubbles = 20
-    private let surfaceColor = Color(red: 0.96, green: 0.97, blue: 0.99)
-    private let accentColor = Color(red: 0.27, green: 0.53, blue: 0.93)
-    private let neutralStroke = Color.black.opacity(0.13)
 
     var body: some View {
         GeometryReader { geo in
@@ -36,7 +34,7 @@ struct BubbleMapView: View {
 
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.98, green: 0.99, blue: 1.0), Color(red: 0.93, green: 0.95, blue: 0.98)],
+                    colors: backgroundColors,
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -45,21 +43,21 @@ struct BubbleMapView: View {
 
                 Circle()
                     .fill(surfaceColor.opacity(0.94))
-                    .overlay(Circle().stroke(Color.black.opacity(0.10), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.09), radius: 14, x: 0, y: 6)
+                    .overlay(Circle().stroke(neutralStroke.opacity(0.65), lineWidth: 1))
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.09), radius: 14, x: 0, y: 6)
                     .frame(width: coreRadius * 2, height: coreRadius * 2)
                     .position(x: center.x, y: center.y)
                 VStack(spacing: 6) {
                     Image(systemName: "folder.fill")
-                        .foregroundStyle(.black.opacity(0.72))
+                        .foregroundStyle(primaryTextColor.opacity(0.74))
                     Text(current.name)
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(.black.opacity(0.88))
+                        .foregroundStyle(primaryTextColor.opacity(0.9))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(current.formattedSize)
                         .font(.subheadline)
-                        .foregroundStyle(.black.opacity(0.62))
+                        .foregroundStyle(secondaryTextColor)
                 }
                 .frame(maxWidth: 170)
                 .position(x: center.x, y: center.y)
@@ -76,7 +74,7 @@ struct BubbleMapView: View {
                             Label("Root", systemImage: "house")
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(Color.black.opacity(0.12))
+                        .tint(accentColor)
 
                         Button {
                             goUp()
@@ -105,11 +103,11 @@ struct BubbleMapView: View {
 
                     Text(current.url.path)
                         .font(.caption2)
-                        .foregroundStyle(.black.opacity(0.65))
+                        .foregroundStyle(secondaryTextColor)
                         .lineLimit(1)
                     Text(tapMode == .select ? "Tap bubble: select item" : "Tap folder bubble: open level")
                         .font(.caption2)
-                        .foregroundStyle(.black.opacity(0.55))
+                        .foregroundStyle(secondaryTextColor.opacity(0.9))
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -171,10 +169,10 @@ struct BubbleMapView: View {
                 .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
             VStack(spacing: 4) {
                 Image(systemName: item.node.isDirectory ? "folder.fill" : "doc.fill")
-                    .foregroundStyle(.black.opacity(0.75))
+                    .foregroundStyle(primaryTextColor.opacity(0.78))
                 Text(item.node.name)
                     .font(.system(size: fontSize(for: item.radius), weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.92))
+                    .foregroundStyle(primaryTextColor.opacity(0.94))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: item.radius * 1.55)
@@ -182,12 +180,12 @@ struct BubbleMapView: View {
                 if item.radius > 50 {
                     Text(item.node.formattedSize)
                         .font(.system(size: max(10, fontSize(for: item.radius) - 2)))
-                        .foregroundStyle(.black.opacity(0.70))
+                        .foregroundStyle(secondaryTextColor)
                 }
             }
             .padding(.horizontal, item.radius * 0.12)
         }
-        .shadow(color: .black.opacity(isSelected ? 0.13 : 0.06), radius: isSelected ? 9 : 4, x: 0, y: 2)
+        .shadow(color: .black.opacity(isSelected ? 0.16 : (colorScheme == .dark ? 0.2 : 0.06)), radius: isSelected ? 10 : 4, x: 0, y: 2)
         .frame(width: item.radius * 2, height: item.radius * 2)
         .contentShape(Circle())
         .position(x: item.center.x, y: item.center.y)
@@ -400,6 +398,33 @@ struct BubbleMapView: View {
     private func centerCoreRadius(for size: CGSize) -> CGFloat {
         let minSide = min(max(size.width, 400), max(size.height, 320))
         return min(118, max(84, minSide * 0.15))
+    }
+
+    private var backgroundColors: [Color] {
+        if colorScheme == .dark {
+            return [Color(red: 0.08, green: 0.11, blue: 0.17), Color(red: 0.12, green: 0.15, blue: 0.21)]
+        }
+        return [Color(red: 0.98, green: 0.99, blue: 1.0), Color(red: 0.93, green: 0.95, blue: 0.98)]
+    }
+
+    private var surfaceColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.1) : Color(red: 0.96, green: 0.97, blue: 0.99)
+    }
+
+    private var accentColor: Color {
+        colorScheme == .dark ? Color.cyan.opacity(0.75) : Color(red: 0.27, green: 0.53, blue: 0.93)
+    }
+
+    private var neutralStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.24) : Color.black.opacity(0.13)
+    }
+
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? Color.white : Color.black
+    }
+
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.65)
     }
 }
 

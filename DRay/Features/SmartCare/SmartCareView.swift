@@ -7,25 +7,33 @@ struct SmartCareView: View {
     @State private var newExclusion = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             header
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
             exclusionsPanel
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
-            if model.isSmartScanRunning {
-                ProgressView("Analyzing cleanup categories...")
-            }
+            Group {
+                if model.isSmartScanRunning {
+                    ProgressView("Analyzing cleanup categories...")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                }
 
-            if model.smartScanCategories.isEmpty, !model.isSmartScanRunning {
-                ContentUnavailableView(
-                    "No Scan Results",
-                    systemImage: "sparkles",
-                    description: Text("Run Smart Scan to build a cleanup plan.")
-                )
-            } else {
-                categoriesList
+                if model.smartScanCategories.isEmpty, !model.isSmartScanRunning {
+                    ContentUnavailableView(
+                        "No Scan Results",
+                        systemImage: "sparkles",
+                        description: Text("Run Smart Scan to build a cleanup plan.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    categoriesList
+                }
             }
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
         }
-        .padding()
+        .padding(12)
     }
 
     private var header: some View {
@@ -41,7 +49,7 @@ struct SmartCareView: View {
                 selectedItemPaths.removeAll()
                 model.runUnifiedScan()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
             .disabled(model.isUnifiedScanRunning)
 
             Button("Run Smart Scan") {
@@ -113,7 +121,7 @@ struct SmartCareView: View {
                             .font(.caption)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(.quaternary, in: Capsule())
+                            .background(.regularMaterial, in: Capsule())
                         }
                     }
                 }
@@ -146,6 +154,8 @@ struct SmartCareView: View {
             }
         }
         .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
     }
 
     private func categoryRow(_ category: SmartCategoryState) -> some View {

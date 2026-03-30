@@ -17,7 +17,9 @@ struct SpaceLensView: View {
                 .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
             detail
                 .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 8)
         }
+        .padding(8)
         .onAppear {
             selectedPaths.removeAll()
             model.hoveredPath = nil
@@ -30,12 +32,23 @@ struct SpaceLensView: View {
     }
 
     private var sidebar: some View {
-        List {
-            permissionsSection
-            scanTargetSection
-            largestSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionCard(title: "Permissions") {
+                    permissionsSection
+                }
+                sectionCard(title: "Scan Target") {
+                    scanTargetSection
+                }
+                if let root = model.root {
+                    sectionCard(title: "Largest") {
+                        largestSection(root: root)
+                    }
+                }
+            }
+            .padding(10)
         }
-        .listStyle(.sidebar)
+        .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 0)
         .overlay {
             if model.isLoading {
                 ProgressView("Scanning disk...")
@@ -44,7 +57,7 @@ struct SpaceLensView: View {
     }
 
     private var permissionsSection: some View {
-        Section("Permissions") {
+        VStack(alignment: .leading, spacing: 8) {
             Text(model.permissions.hasFolderPermission
                  ? "Folder access granted for selected target."
                  : "Folder access is not granted for current target.")
@@ -56,15 +69,17 @@ struct SpaceLensView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
             Button("Grant Folder Access") { onChooseFolder() }
+                .buttonStyle(.bordered)
             Button("Open Full Disk Access") { model.permissions.openFullDiskAccessSettings() }
+                .buttonStyle(.bordered)
             Button("Restore") { model.restorePermissions() }
+                .buttonStyle(.bordered)
         }
     }
 
     private var scanTargetSection: some View {
-        Section("Scan Target") {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(model.selectedTarget.name, systemImage: "externaldrive")
                 Spacer()
@@ -77,13 +92,10 @@ struct SpaceLensView: View {
         }
     }
 
-    @ViewBuilder
-    private var largestSection: some View {
-        if let root = model.root {
-            Section("Largest") {
-                ForEach(root.largestChildren.prefix(20)) { node in
-                    largestRow(node)
-                }
+    private func largestSection(root: FileNode) -> some View {
+        VStack(spacing: 6) {
+            ForEach(root.largestChildren.prefix(20)) { node in
+                largestRow(node)
             }
         }
     }
@@ -108,9 +120,16 @@ struct SpaceLensView: View {
                 Text(node.formattedSize)
                     .fontWeight(.semibold)
             }
+            .padding(6)
             .contentShape(Rectangle())
-            .background(model.hoveredPath == node.url.path ? Color.accentColor.opacity(0.12) : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        model.hoveredPath == node.url.path
+                        ? AnyShapeStyle(Color.accentColor.opacity(0.12))
+                        : AnyShapeStyle(.thinMaterial)
+                    )
+            )
         }
         .buttonStyle(.plain)
         .onHover { inside in
@@ -173,6 +192,18 @@ struct SpaceLensView: View {
         } message: {
             Text(trashResultMessage ?? "")
         }
+    }
+
+    private func sectionCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var emptyState: some View {

@@ -6,28 +6,41 @@ struct MenuBarPopupView: View {
     @StateObject private var monitor = LiveSystemMetricsMonitor()
     @Environment(\.colorScheme) private var colorScheme
     @State private var showHealthDetails = false
+    @State private var showBatteryDetails = false
+    @State private var batterySnapshot: BatteryDiagnosticsSnapshot?
+    @State private var isBatteryDetailsLoading = false
+    @State private var batteryDetailsError: String?
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     @State private var reliefResultMessage: String?
+    private let batteryService = BatteryDiagnosticsService()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             header
             cardsGrid
             recommendationCard
             consumersSection
             footer
         }
-        .padding(12)
+        .padding(14)
         .background(shellBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(borderColor, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(borderColor.opacity(0.9), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .frame(width: 430)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(width: 452)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
+        .sheet(isPresented: $showBatteryDetails) {
+            BatteryDetailsSheetView(
+                snapshot: batterySnapshot,
+                isLoading: isBatteryDetailsLoading,
+                errorText: batteryDetailsError,
+                onRefresh: loadBatteryDetails
+            )
+        }
         .confirmationDialog(
             reliefDialogTitle,
             isPresented: $showReliefConfirm,
@@ -54,7 +67,7 @@ struct MenuBarPopupView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Mac Health: \(healthTitle)")
-                    .font(.title3.weight(.bold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                 Text(healthSummaryLine)
                     .font(.subheadline)
@@ -68,8 +81,12 @@ struct MenuBarPopupView: View {
                 showHealthDetails.toggle()
             } label: {
                 Circle()
-                    .fill(healthColor.opacity(colorScheme == .dark ? 0.25 : 0.14))
+                    .fill(.ultraThinMaterial)
                     .frame(width: 38, height: 38)
+                    .overlay(
+                        Circle()
+                            .stroke(borderColor.opacity(0.6), lineWidth: 0.9)
+                    )
                     .overlay(
                         Image(systemName: "heart.fill")
                             .font(.system(size: 16, weight: .semibold))
@@ -102,7 +119,7 @@ struct MenuBarPopupView: View {
                     title: "Memory",
                     subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
                     value: memoryValue,
-                    actionTitle: "Open DRay",
+                    actionTitle: "Inspect",
                     action: {
                         open(section: .performance) {
                             model.runPerformanceScan()
@@ -111,13 +128,7 @@ struct MenuBarPopupView: View {
                 )
             }
             HStack(spacing: 10) {
-                metricCard(
-                    title: "Battery",
-                    subtitle: batteryStateText,
-                    value: batteryValueText,
-                    actionTitle: "Health",
-                    action: { open(section: .performance) }
-                )
+                batteryMetricCard
                 metricCard(
                     title: "CPU",
                     subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
@@ -135,14 +146,14 @@ struct MenuBarPopupView: View {
                     title: "Network",
                     subtitle: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond)) · ↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))",
                     value: "\(Int(monitor.snapshot.uptimeSeconds / 3600))h uptime",
-                    actionTitle: "Open DRay",
+                    actionTitle: "Open",
                     action: { open(section: .smartCare) }
                 )
                 metricCard(
                     title: "My Clutter",
                     subtitle: "Duplicate groups",
                     value: "\(model.duplicateGroups.count)",
-                    actionTitle: "Scan",
+                    actionTitle: "Review",
                     action: {
                         open(section: .clutter) {
                             model.scanDuplicatesInHome()
@@ -241,6 +252,11 @@ struct MenuBarPopupView: View {
             }
             .controlSize(.small)
 
+            Button("Quit Completely", role: .destructive) {
+                AppTerminationCoordinator.shared.terminateCompletely()
+            }
+            .controlSize(.small)
+
             Spacer()
 
             if let url = model.lastExportedDiagnosticURL {
@@ -294,16 +310,16 @@ struct MenuBarPopupView: View {
         actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Text(value)
-                .font(.title3.weight(.semibold))
+                .font(.title3.weight(.bold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
@@ -314,33 +330,114 @@ struct MenuBarPopupView: View {
                     .buttonStyle(.bordered)
             }
         }
-        .padding(10)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+    }
+
+    private var batteryMetricCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text("Battery")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    openBatteryDetails()
+                } label: {
+                    Image(systemName: "chevron.right.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(tintColor)
+                }
+                .buttonStyle(.plain)
+                .help("Open battery details")
+            }
+            Text(batteryStateText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(batteryValueText)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            HStack {
+                if let health = batterySnapshot?.healthPercent {
+                    Text("Health \(health)%")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(health >= 80 ? .green : .orange)
+                } else {
+                    Text("Tap arrow for details")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Details") {
+                    open(section: .performance)
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
     }
 
     private var shellBackground: some View {
         ZStack {
-            Rectangle()
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.42),
+                            Color.clear,
+                            Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             LinearGradient(
                 colors: [
-                    tintColor.opacity(colorScheme == .dark ? 0.16 : 0.08),
-                    Color.clear
+                    tintColor.opacity(colorScheme == .dark ? 0.24 : 0.15),
+                    Color.clear,
+                    tintColor.opacity(colorScheme == .dark ? 0.12 : 0.06)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [Color.indigo.opacity(colorScheme == .dark ? 0.20 : 0.10), .clear],
+                center: .bottomTrailing,
+                startRadius: 40,
+                endRadius: 320
             )
         }
     }
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(.thinMaterial)
+            .fill(.regularMaterial)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(borderColor.opacity(0.7), lineWidth: 0.8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.08 : 0.26),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(borderColor.opacity(0.85), lineWidth: 0.85)
+            )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 8, y: 4)
     }
 
     private var tintColor: Color {
@@ -675,6 +772,27 @@ struct MenuBarPopupView: View {
         reliefResultMessage = "Terminated \(terminatedText)\nFailed \(failedText)\nSkipped \(skippedText)"
     }
 
+    private func openBatteryDetails() {
+        showBatteryDetails = true
+        loadBatteryDetails()
+    }
+
+    private func loadBatteryDetails() {
+        guard !isBatteryDetailsLoading else { return }
+        isBatteryDetailsLoading = true
+        batteryDetailsError = nil
+        Task(priority: .userInitiated) {
+            let snapshot = batteryService.fetchSnapshot()
+            await MainActor.run {
+                self.batterySnapshot = snapshot
+                self.isBatteryDetailsLoading = false
+                if snapshot.currentCapacityMAh == nil && snapshot.chargePercent == nil {
+                    self.batteryDetailsError = "Battery details are unavailable on this Mac."
+                }
+            }
+        }
+    }
+
     private func open(section: AppSection, action: (() -> Void)? = nil) {
         action?()
         model.openSection(section)
@@ -720,5 +838,218 @@ private enum HealthIssueSeverity {
         case .warning: return .orange
         case .critical: return .red
         }
+    }
+}
+
+private struct BatteryDetailsSheetView: View {
+    let snapshot: BatteryDiagnosticsSnapshot?
+    let isLoading: Bool
+    let errorText: String?
+    let onRefresh: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Battery Details")
+                    .font(.title3.weight(.bold))
+                Spacer()
+                Button("Refresh") { onRefresh() }
+                    .buttonStyle(.bordered)
+                Button("Close") { dismiss() }
+                    .buttonStyle(.bordered)
+            }
+
+            if let snapshot {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(snapshot.deviceName)
+                                .font(.headline)
+                            Text("Identifier: \(snapshot.machineIdentifier)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        BatteryProgressCard(
+                            title: "Battery Charge",
+                            valueText: formattedMAh(snapshot.currentCapacityMAh),
+                            percentText: percentString(snapshot.chargePercent),
+                            percentValue: normalizedPercent(snapshot.chargePercent),
+                            tint: .green
+                        )
+
+                        BatteryProgressCard(
+                            title: "Battery Health",
+                            valueText: formattedMAh(snapshot.fullChargeCapacityMAh),
+                            percentText: percentString(snapshot.healthPercent),
+                            percentValue: normalizedPercent(snapshot.healthPercent),
+                            tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
+                        )
+
+                        VStack(spacing: 8) {
+                            detailRow("Full Charge Capacity", formattedMAh(snapshot.fullChargeCapacityMAh))
+                            detailRow("Design Capacity", formattedMAh(snapshot.designCapacityMAh))
+                            detailRow("Charge Cycles", formattedInt(snapshot.cycleCount))
+                            detailRow("Design Cycles", formattedInt(snapshot.designCycleCount))
+                            detailRow("Battery Temperature", formattedTemperature(snapshot.temperatureCelsius))
+                            detailRow("Voltage", formattedVoltage(snapshot.voltageVolts))
+                            detailRow("Amperage", formattedAmperage(snapshot.amperageAmps))
+                            detailRow("Power", formattedPower(snapshot.powerWatts))
+                            detailRow("Adapter", formattedAdapter(snapshot.adapterWatts))
+                            detailRow("Status", chargingText(snapshot))
+                            detailRow("Low Power Mode", snapshot.lowPowerModeEnabled ? "Enabled" : "Disabled")
+                            detailRow("Manufacture Date", snapshot.manufactureDate ?? "n/a")
+                            detailRow("Updated", snapshot.updatedAt.formatted(date: .abbreviated, time: .standard))
+                        }
+                        .padding(12)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .padding(.vertical, 2)
+                }
+            } else if isLoading {
+                VStack(spacing: 10) {
+                    ProgressView("Loading battery diagnostics...")
+                    Text("Reading AppleSmartBattery telemetry")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorText ?? "No battery diagnostics available yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button("Retry") { onRefresh() }
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .padding(16)
+        .frame(width: 460, height: 610)
+        .background(.ultraThinMaterial)
+    }
+
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+        }
+    }
+
+    private func formattedInt(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value)"
+    }
+
+    private func formattedMAh(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value.formatted(.number.grouping(.automatic))) mAh"
+    }
+
+    private func formattedTemperature(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f °C", value)
+    }
+
+    private func formattedVoltage(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f V", value)
+    }
+
+    private func formattedAmperage(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f A", value)
+    }
+
+    private func formattedPower(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        if value < 0 {
+            return String(format: "Discharging %.1f W", abs(value))
+        }
+        if value > 0 {
+            return String(format: "Charging %.1f W", value)
+        }
+        return "0 W"
+    }
+
+    private func formattedAdapter(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.0f W", value)
+    }
+
+    private func percentString(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value)%"
+    }
+
+    private func normalizedPercent(_ value: Int?) -> Double {
+        guard let value else { return 0 }
+        return min(1, max(0, Double(value) / 100.0))
+    }
+
+    private func chargingText(_ snapshot: BatteryDiagnosticsSnapshot) -> String {
+        if snapshot.isCharging == true {
+            if let minutes = snapshot.minutesRemaining {
+                return "Charging (\(minutes / 60)h \(minutes % 60)m)"
+            }
+            return "Charging"
+        }
+        if let minutes = snapshot.minutesRemaining {
+            return "\(minutes / 60)h \(minutes % 60)m remaining"
+        }
+        return "On battery"
+    }
+}
+
+private struct BatteryProgressCard: View {
+    let title: String
+    let valueText: String
+    let percentText: String
+    let percentValue: Double
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Text(valueText)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.secondary.opacity(0.16))
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(0.88), tint],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(0, proxy.size.width * percentValue))
+                    Text(percentText)
+                        .font(.subheadline.weight(.bold))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .frame(height: 22)
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

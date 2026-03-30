@@ -366,6 +366,9 @@ final class RootViewModel: ObservableObject {
 
     func openSection(_ section: AppSection) {
         selectedSection = section
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
+            window.makeKeyAndOrderFront(nil)
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 

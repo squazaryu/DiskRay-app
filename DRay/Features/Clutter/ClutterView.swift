@@ -10,28 +10,33 @@ struct ClutterView: View {
     @State private var trashResultMessage: String?
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             controls
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
             if model.isDuplicateScanRunning {
                 progressPanel
             }
 
-            if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
-                ContentUnavailableView(
-                    "No Duplicates",
-                    systemImage: "square.on.square",
-                    description: Text("Run duplicate scan for selected target or Home folder.")
-                )
-            } else {
-                duplicateList
+            Group {
+                if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
+                    ContentUnavailableView(
+                        "No Duplicates",
+                        systemImage: "square.on.square",
+                        description: Text("Run duplicate scan for selected target or Home folder.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    duplicateList
+                }
             }
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
 
             if !selectedPaths.isEmpty {
                 selectionPanel
             }
         }
-        .padding()
+        .padding(12)
         .onAppear { selectRecommendedDuplicates() }
         .onChange(of: groupsSignature) {
             syncSelectionWithExistingFiles()
@@ -76,6 +81,14 @@ struct ClutterView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Groups \(model.duplicateGroups.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Stepper(value: $model.duplicateMinSizeMB, in: 1...2_048, step: 1) {
                 Text("Min \(Int(model.duplicateMinSizeMB)) MB")
                     .frame(minWidth: 120, alignment: .trailing)
@@ -124,8 +137,7 @@ struct ClutterView: View {
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
     }
 
     private var duplicateList: some View {
@@ -148,6 +160,8 @@ struct ClutterView: View {
             }
         }
         .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
     }
 
     private func duplicateRow(_ file: DuplicateFile, group: DuplicateGroup) -> some View {
@@ -225,8 +239,7 @@ struct ClutterView: View {
             }
         }
         .buttonStyle(.bordered)
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -240,6 +253,10 @@ struct ClutterView: View {
         selectedPaths.reduce(Int64(0)) { partial, path in
             partial + (fileByPath[path]?.sizeInBytes ?? 0)
         }
+    }
+
+    private var totalReclaimableBytes: Int64 {
+        model.duplicateGroups.reduce(0) { $0 + $1.reclaimableBytes }
     }
 
     private var fileByPath: [String: DuplicateFile] {

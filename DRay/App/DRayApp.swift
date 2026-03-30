@@ -1,8 +1,44 @@
 import SwiftUI
 import AppKit
 
+@MainActor
+final class AppTerminationCoordinator {
+    static let shared = AppTerminationCoordinator()
+    private(set) var allowTermination = false
+
+    func closeToMenuBar() {
+        NSApp.windows.forEach { window in
+            if window.isVisible {
+                window.orderOut(nil)
+            }
+        }
+        AppLogger.telemetry.info("Main windows closed to menu bar")
+    }
+
+    func terminateCompletely() {
+        allowTermination = true
+        NSApp.terminate(nil)
+    }
+}
+
+@MainActor
+final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if AppTerminationCoordinator.shared.allowTermination {
+            return .terminateNow
+        }
+        AppTerminationCoordinator.shared.closeToMenuBar()
+        return .terminateCancel
+    }
+}
+
 @main
 struct DRayApp: App {
+    @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var appDelegate
     @StateObject private var model = RootViewModel()
 
     init() {
@@ -23,6 +59,35 @@ struct DRayApp: App {
                 Button("About DRay") {
                     NSApp.orderFrontStandardAboutPanel(nil)
                     AppLogger.telemetry.info("About panel opened")
+                }
+            }
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit DRay (Keep Menu Bar)") {
+                    AppTerminationCoordinator.shared.closeToMenuBar()
+                }
+                .keyboardShortcut("q")
+
+                Divider()
+
+                Button("Quit DRay Completely", role: .destructive) {
+                    AppTerminationCoordinator.shared.terminateCompletely()
+                }
+            }
+            CommandMenu("DRay") {
+                Button("Hide Main Window") {
+                    NSApp.keyWindow?.orderOut(nil)
+                }
+                .keyboardShortcut("w")
+
+                Button("Show Main Window") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.windows.first?.makeKeyAndOrderFront(nil)
+                }
+
+                Divider()
+
+                Button("Quit DRay Completely", role: .destructive) {
+                    AppTerminationCoordinator.shared.terminateCompletely()
                 }
             }
         }
