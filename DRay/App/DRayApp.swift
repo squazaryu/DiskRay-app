@@ -93,6 +93,11 @@ final class AppTerminationCoordinator {
     }
 
     @discardableResult
+    func ensureMenuBarHelperRunning() -> Bool {
+        launchMenuBarHelperIfNeeded()
+    }
+
+    @discardableResult
     private func launchMenuBarHelperIfNeeded(openSection: AppSection? = nil) -> Bool {
         if isHelperRunning() { return true }
         guard let helperPath = resolveHelperExecutablePath() else {
@@ -179,6 +184,10 @@ final class AppTerminationCoordinator {
 final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashTelemetryService.shared.beginSession(mode: AppRuntime.shared.launchContext.mode)
+        let helperReady = AppTerminationCoordinator.shared.ensureMenuBarHelperRunning()
+        if !helperReady {
+            AppLogger.telemetry.error("Menu bar helper did not start on app launch")
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

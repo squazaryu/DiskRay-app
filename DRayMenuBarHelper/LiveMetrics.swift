@@ -1,7 +1,6 @@
 import Foundation
 import Darwin
 import IOKit.ps
-import AppKit
 
 struct ProcessConsumer: Identifiable, Sendable {
     let id = UUID()
@@ -65,6 +64,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private var cachedMemoryConsumers: [ProcessConsumer] = []
     private var cachedBatteryConsumers: [ProcessConsumer] = []
     private var tickCounter = 0
+    private var isSamplingConsumers = false
 
     func start() {
         guard timer == nil else { return }
@@ -92,11 +92,17 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let battery = batterySample()
         let network = networkSample(at: now)
         tickCounter += 1
-        if tickCounter.isMultiple(of: 4) || cachedCPUConsumers.isEmpty {
-            let consumers = processConsumersSample()
-            cachedCPUConsumers = consumers.topCPU
-            cachedMemoryConsumers = consumers.topMemory
-            cachedBatteryConsumers = consumers.topBattery
+        if (tickCounter.isMultiple(of: 4) || cachedCPUConsumers.isEmpty), !isSamplingConsumers {
+            isSamplingConsumers = true
+            DispatchQueue.global(qos: .utility).async {
+                let consumers = ProcessConsumerSampler.sample()
+                DispatchQueue.main.async {
+                    self.cachedCPUConsumers = consumers.topCPU
+                    self.cachedMemoryConsumers = consumers.topMemory
+                    self.cachedBatteryConsumers = consumers.topBattery
+                    self.isSamplingConsumers = false
+                }
+            }
         }
 
         snapshot = LiveSystemSnapshot(
@@ -307,19 +313,25 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return NetworkCounters(timestamp: now, inboundBytes: inbound, outboundBytes: outbound)
     }
 
-    private func processConsumersSample() -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
-        let output = runCommand("/bin/ps", arguments: ["-A", "-o", "pid=,%cpu=,rss=,comm="])
-        guard !output.isEmpty else { return ([], [], []) }
+}
 
-        let runningApps = Dictionary(
-            uniqueKeysWithValues: NSWorkspace.shared.runningApplications.compactMap { app -> (Int32, String)? in
-                guard app.processIdentifier > 0, let name = app.localizedName, !name.isEmpty else { return nil }
-                if app.activationPolicy == .regular || app.activationPolicy == .accessory {
-                    return (app.processIdentifier, name)
-                }
-                return nil
-            }
-        )
+private struct CPUCounters {
+    let user: UInt64
+    let system: UInt64
+    let idle: UInt64
+    let nice: UInt64
+}
+
+private struct NetworkCounters {
+    let timestamp: Date
+    let inboundBytes: UInt64
+    let outboundBytes: UInt64
+}
+
+private enum ProcessConsumerSampler {
+    static func sample() -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
+        let output = runCommand("/bin/ps", arguments: ["-A", "-o", "pid=,%cpu=,rss=,comm="], timeout: 1.2)
+        guard !output.isEmpty else { return ([], [], []) }
 
         var rows: [ProcessConsumer] = []
         rows.reserveCapacity(96)
@@ -335,15 +347,15 @@ final class LiveSystemMetricsMonitor: ObservableObject {
                   cpu >= 0 else { continue }
 
             let processName = String(parts[3])
-            let appName = runningApps[pid] ?? normalizedProcessName(processName)
-            guard !appName.isEmpty else { continue }
+            let normalizedName = normalizedProcessName(processName)
+            guard !normalizedName.isEmpty else { continue }
 
             let memoryMB = rssKB / 1024.0
             let batteryImpact = cpu * 1.7 + memoryMB * 0.02
             rows.append(
                 ProcessConsumer(
                     pid: pid,
-                    name: appName,
+                    name: normalizedName,
                     cpuPercent: cpu,
                     memoryMB: memoryMB,
                     batteryImpactScore: batteryImpact
@@ -351,20 +363,13 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             )
         }
 
-        let topCPU = rows
-            .sorted { $0.cpuPercent > $1.cpuPercent }
-            .prefix(6)
-        let topMemory = rows
-            .sorted { $0.memoryMB > $1.memoryMB }
-            .prefix(6)
-        let topBattery = rows
-            .sorted { $0.batteryImpactScore > $1.batteryImpactScore }
-            .prefix(6)
-
+        let topCPU = rows.sorted { $0.cpuPercent > $1.cpuPercent }.prefix(6)
+        let topMemory = rows.sorted { $0.memoryMB > $1.memoryMB }.prefix(6)
+        let topBattery = rows.sorted { $0.batteryImpactScore > $1.batteryImpactScore }.prefix(6)
         return (Array(topCPU), Array(topMemory), Array(topBattery))
     }
 
-    private func normalizedProcessName(_ commandPath: String) -> String {
+    private static func normalizedProcessName(_ commandPath: String) -> String {
         let url = URL(fileURLWithPath: commandPath)
         var name = url.lastPathComponent
         if name.isEmpty { return "" }
@@ -374,7 +379,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return name
     }
 
-    private func runCommand(_ launchPath: String, arguments: [String]) -> String {
+    private static func runCommand(_ launchPath: String, arguments: [String], timeout: TimeInterval) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
@@ -383,7 +388,14 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         process.standardError = Pipe()
         do {
             try process.run()
-            process.waitUntilExit()
+            let deadline = Date().addingTimeInterval(timeout)
+            while process.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            if process.isRunning {
+                process.terminate()
+                return ""
+            }
             guard process.terminationStatus == 0 else { return "" }
             let data = output.fileHandleForReading.readDataToEndOfFile()
             return String(decoding: data, as: UTF8.self)
@@ -391,17 +403,4 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             return ""
         }
     }
-}
-
-private struct CPUCounters {
-    let user: UInt64
-    let system: UInt64
-    let idle: UInt64
-    let nice: UInt64
-}
-
-private struct NetworkCounters {
-    let timestamp: Date
-    let inboundBytes: UInt64
-    let outboundBytes: UInt64
 }
