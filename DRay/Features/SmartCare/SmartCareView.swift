@@ -9,7 +9,6 @@ struct SmartCareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
             exclusionsPanel
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
@@ -37,57 +36,75 @@ struct SmartCareView: View {
     }
 
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Smart Care")
-                    .font(.title2.bold())
-                Text("Run one scan to find safe cleanup opportunities.")
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Run Full Smart Scan") {
-                selectedItemPaths.removeAll()
-                model.runUnifiedScan()
-            }
-            .buttonStyle(.bordered)
-            .disabled(model.isUnifiedScanRunning)
+        ModuleHeaderCard(
+            title: "Smart Care",
+            subtitle: headerSubtitle
+        ) {
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Categories \(model.smartScanCategories.count)", tint: .blue)
+                    GlassPillBadge(title: "Selected \(selectedCategoryCount)", tint: .green)
+                    GlassPillBadge(title: "Items \(selectedItemPaths.count)", tint: .orange)
+                }
 
-            Button("Run Smart Scan") {
-                selectedItemPaths.removeAll()
-                model.runSmartScan()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
+                HStack(spacing: 8) {
+                    Button("Run Full Smart Scan") {
+                        selectedItemPaths.removeAll()
+                        model.runUnifiedScan()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.isUnifiedScanRunning)
 
-            Button("Select Recommended") {
-                model.selectRecommendedSmartCategories()
-            }
-            .buttonStyle(.bordered)
-            .disabled(model.smartScanCategories.isEmpty)
+                    Button("Run Smart Scan") {
+                        selectedItemPaths.removeAll()
+                        model.runSmartScan()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
 
-            Picker("Profile", selection: Binding(
-                get: { model.smartProfile },
-                set: { model.applySmartProfile($0) }
-            )) {
-                ForEach(SmartCleanProfile.allCases) { profile in
-                    Text(profile.title).tag(profile)
+                    Button("Clean Selected") {
+                        cleanSelection()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Select Recommended") {
+                        model.selectRecommendedSmartCategories()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.smartScanCategories.isEmpty)
+
+                    Picker("Profile", selection: Binding(
+                        get: { model.smartProfile },
+                        set: { model.applySmartProfile($0) }
+                    )) {
+                        ForEach(SmartCleanProfile.allCases) { profile in
+                            Text(profile.title).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
                 }
             }
-            .pickerStyle(.menu)
-            .frame(width: 150)
-
-            Button("Clean Selected") {
-                cleanSelection()
-            }
-            .buttonStyle(.bordered)
-            .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
         }
     }
 
     private var exclusionsPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Exclusions")
-                .font(.headline)
+            HStack {
+                Text("Exclusions")
+                    .font(.headline)
+                Spacer()
+                Text("Applied: \(model.smartExclusions.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             HStack {
                 Text("Min size MB")
                     .font(.caption)
@@ -126,6 +143,64 @@ struct SmartCareView: View {
                     }
                 }
             }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Common Exclusions")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(quickExclusionTargets, id: \.path) { target in
+                            let excluded = model.smartExclusions.contains(target.path)
+                            Button {
+                                model.toggleSmartExclusion(target.path)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: excluded ? "slash.circle.fill" : "plus.circle.fill")
+                                        .foregroundStyle(excluded ? Color.orange : Color.green)
+                                    Text(target.title)
+                                }
+                                .font(.caption)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(.regularMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .help(excluded ? "Remove exclusion for \(target.title)" : "Exclude \(target.title) from Smart Scan")
+                        }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Analyzer Scope")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(model.smartAnalyzerOptions) { analyzer in
+                            let enabled = !model.smartExcludedAnalyzerKeys.contains(analyzer.key)
+                            Button {
+                                model.toggleSmartAnalyzerExclusion(analyzer.key)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: enabled ? "checkmark.circle.fill" : "slash.circle.fill")
+                                        .foregroundStyle(enabled ? Color.green : Color.orange)
+                                    Text(analyzer.title)
+                                }
+                                .font(.caption)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(.regularMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .help(enabled ? "Analyzer enabled" : "Analyzer excluded")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -144,10 +219,45 @@ struct SmartCareView: View {
                     .font(.subheadline)
                 }
             }
+            if !model.smartAnalyzerTelemetry.isEmpty {
+                Section("Analyzer Telemetry") {
+                    ForEach(model.smartAnalyzerTelemetry) { item in
+                        HStack(spacing: 8) {
+                            Text(item.title)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            if item.skipped {
+                                GlassPillBadge(title: "Excluded", tint: .orange)
+                            } else {
+                                GlassPillBadge(title: durationText(item.durationMs), tint: .blue)
+                            }
+                            Spacer()
+                            if !item.skipped {
+                                Text("\(item.itemCount) items")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(ByteCountFormatter.string(fromByteCount: item.totalBytes, countStyle: .file))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
             ForEach(model.smartScanCategories) { category in
                 Section {
                     categoryRow(category)
                     if expandedCategories.contains(category.id) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Why recommended: \(category.result.recommendationReason)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Why detected: \(category.result.explainability)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        .padding(.top, 2)
                         categoryItems(category)
                     }
                 }
@@ -175,36 +285,27 @@ struct SmartCareView: View {
                 Text("\(category.result.items.count) items · \(ByteCountFormatter.string(fromByteCount: category.result.totalBytes, countStyle: .file))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Why recommended: \(category.result.recommendationReason)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
                 Text("Confidence: \(Int(category.result.confidenceScore * 100))%")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("Why detected: \(category.result.explainability)")
-                    .font(.caption2)
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             Spacer()
 
             if category.result.isSafeByDefault {
-                Text("Safe")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.15), in: Capsule())
+                GlassPillBadge(title: "Safe", tint: .green)
             }
-            Text(riskTitle(category.result.riskLevel))
-                .font(.caption2.bold())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(riskColor(category.result.riskLevel).opacity(0.15), in: Capsule())
+            GlassPillBadge(
+                title: riskTitle(category.result.riskLevel),
+                tint: riskColor(category.result.riskLevel)
+            )
 
             Button(expandedCategories.contains(category.id) ? "Hide" : "Preview") {
                 toggleExpanded(category.id)
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
         }
+        .padding(.vertical, 2)
     }
 
     private func categoryItems(_ category: SmartCategoryState) -> some View {
@@ -231,11 +332,22 @@ struct SmartCareView: View {
                 Text(ByteCountFormatter.string(fromByteCount: item.sizeInBytes, countStyle: .file))
                     .font(.caption)
             }
+            .padding(.vertical, 1)
         }
     }
 
     private var selectedCategoryCount: Int {
         model.smartScanCategories.filter(\.isSelected).count
+    }
+
+    private var quickExclusionTargets: [(title: String, path: String)] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            ("Desktop", home + "/Desktop"),
+            ("Documents", home + "/Documents"),
+            ("Downloads", home + "/Downloads"),
+            ("iCloud Drive", home + "/Library/Mobile Documents")
+        ]
     }
 
     private func toggleExpanded(_ id: String) {
@@ -244,6 +356,16 @@ struct SmartCareView: View {
         } else {
             expandedCategories.insert(id)
         }
+    }
+
+    private var headerSubtitle: String {
+        let categories = model.smartScanCategories.count
+        let selectedCategories = selectedCategoryCount
+        let selectedItems = selectedItemPaths.count
+        if categories == 0 {
+            return "Run one scan to find safe cleanup opportunities."
+        }
+        return "Found \(categories) categories · selected \(selectedCategories) categories and \(selectedItems) items."
     }
 
     private func toggleItem(_ path: String) {
@@ -280,5 +402,10 @@ struct SmartCareView: View {
         case .medium: return .orange
         case .high: return .red
         }
+    }
+
+    private func durationText(_ ms: Int) -> String {
+        if ms < 1000 { return "\(ms) ms" }
+        return String(format: "%.1f s", Double(ms) / 1000.0)
     }
 }

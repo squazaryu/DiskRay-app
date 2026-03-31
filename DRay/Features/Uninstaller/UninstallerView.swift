@@ -8,6 +8,11 @@ struct UninstallerView: View {
     @State private var appSearchQuery = ""
     @State private var showUninstallPreview = false
 
+    private var remnantTotalSizeText: String {
+        let total = model.uninstallerRemnants.reduce(Int64(0)) { $0 + $1.sizeInBytes }
+        return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+    }
+
     private var selectedApp: InstalledApp? {
         guard let selectedAppPath else { return nil }
         return model.installedApps.first { $0.appURL.path == selectedAppPath }
@@ -25,161 +30,188 @@ struct UninstallerView: View {
     }
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Filter applications", text: $appSearchQuery)
-                        .textFieldStyle(.plain)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        VStack(spacing: 10) {
+            header
 
-                List(filteredApps, selection: $selectedAppPath) { app in
-                    HStack(spacing: 10) {
-                        Image(nsImage: iconCache.icon(for: app.appURL.path))
-                            .resizable()
-                            .frame(width: 22, height: 22)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .stroke(Color.black.opacity(0.12), lineWidth: 0.6)
-                            )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.name)
-                                .font(.headline)
-                                .lineLimit(1)
-                            Text(app.bundleID)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+            HSplitView {
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Filter applications", text: $appSearchQuery)
+                            .textFieldStyle(.plain)
                     }
-                    .padding(.vertical, 4)
-                    .tag(app.appURL.path)
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectedAppPath = app.appURL.path }
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-            }
-            .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
-            .padding(10)
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 0)
-            .overlay {
-                if model.isUninstallerLoading {
-                    ProgressView("Loading apps...")
-                }
-            }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 12) {
-                if let selectedApp {
-                    HStack {
-                        Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
-                            .resizable()
-                            .frame(width: 32, height: 32)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(Color.black.opacity(0.12), lineWidth: 0.6)
-                            )
-                        VStack(alignment: .leading) {
-                            Text(selectedApp.name)
-                                .font(.title3.bold())
-                            Text(selectedApp.appURL.path)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                    List(filteredApps, selection: $selectedAppPath) { app in
+                        HStack(spacing: 10) {
+                            Image(nsImage: iconCache.icon(for: app.appURL.path))
+                                .resizable()
+                                .frame(width: 22, height: 22)
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(Color.black.opacity(0.12), lineWidth: 0.6)
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.name)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Text(app.bundleID)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
-                        Spacer()
-                        Button("Uninstall", role: .destructive) {
-                            showUninstallPreview = true
-                        }
-                        .buttonStyle(.borderedProminent)
+                        .padding(.vertical, 4)
+                        .tag(app.appURL.path)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedAppPath = app.appURL.path }
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    selectedAppPath == app.appURL.path
+                                    ? Color.accentColor.opacity(0.15)
+                                    : Color.clear
+                                )
+                        )
                     }
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                }
+                .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+                .padding(10)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 0)
+                .overlay {
+                    if model.isUninstallerLoading {
+                        ProgressView("Loading apps...")
+                    }
+                }
 
-                    Text("Detected remnants: \(model.uninstallerRemnants.count)")
-                        .font(.subheadline)
-
-                    List(model.uninstallerRemnants) { remnant in
+                VStack(alignment: .leading, spacing: 12) {
+                    if let selectedApp {
                         HStack {
+                            Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
+                                .resizable()
+                                .frame(width: 32, height: 32)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(Color.black.opacity(0.12), lineWidth: 0.6)
+                                )
                             VStack(alignment: .leading) {
-                                Text(remnant.name)
-                                Text(remnant.url.path)
+                                Text(selectedApp.name)
+                                    .font(.title3.bold())
+                                Text(selectedApp.appURL.path)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                             Spacer()
-                            Text(ByteCountFormatter.string(fromByteCount: remnant.sizeInBytes, countStyle: .file))
-                                .font(.caption)
-                        }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 0)
-
-                    if let report = model.uninstallReport {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Validation report")
-                                .font(.headline)
-                            Text("Removed \(report.removedCount) · Skipped \(report.skippedCount) · Failed \(report.failedCount)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            uninstallReportSections(report)
+                            Button("Uninstall", role: .destructive) {
+                                showUninstallPreview = true
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                         .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
-                    }
-                    if !model.uninstallSessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Rollback sessions")
-                                .font(.headline)
-                            List(model.uninstallSessions.prefix(10)) { session in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(session.appName)
-                                            .font(.subheadline.bold())
-                                        Spacer()
-                                        Text(session.createdAt, style: .relative)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Button("Restore All") {
-                                            _ = model.restoreFromUninstallSession(session)
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                    ForEach(session.rollbackItems.prefix(8)) { item in
+
+                        HStack(spacing: 8) {
+                            GlassPillBadge(title: "Detected remnants: \(model.uninstallerRemnants.count)", tint: .orange)
+                            GlassPillBadge(title: "Size \(remnantTotalSizeText)", tint: .blue)
+                            if let report = model.uninstallReport {
+                                GlassPillBadge(title: "Removed \(report.removedCount)", tint: .green)
+                                GlassPillBadge(title: "Failed \(report.failedCount)", tint: .red)
+                            }
+                        }
+
+                        List(model.uninstallerRemnants) { remnant in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(remnant.name)
+                                    Text(remnant.url.path)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Text(ByteCountFormatter.string(fromByteCount: remnant.sizeInBytes, countStyle: .file))
+                                    .font(.caption)
+                            }
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
+                        .overlay {
+                            if model.uninstallerRemnants.isEmpty && !model.isUninstallerLoading {
+                                ContentUnavailableView(
+                                    "No remnants found",
+                                    systemImage: "checkmark.seal",
+                                    description: Text("Selected app has no removable leftovers in known locations.")
+                                )
+                            }
+                        }
+
+                        if let report = model.uninstallReport {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Validation report")
+                                    .font(.headline)
+                                Text("Removed \(report.removedCount) · Skipped \(report.skippedCount) · Failed \(report.failedCount)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                uninstallReportSections(report)
+                            }
+                            .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
+                        }
+                        if !model.uninstallSessions.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Rollback sessions")
+                                    .font(.headline)
+                                List(model.uninstallSessions.prefix(10)) { session in
+                                    VStack(alignment: .leading, spacing: 6) {
                                         HStack {
-                                            Text(item.name)
-                                                .font(.caption)
-                                                .lineLimit(1)
+                                            Text(session.appName)
+                                                .font(.subheadline.bold())
                                             Spacer()
-                                            Button("Restore") {
-                                                _ = model.restoreFromUninstallSession(session, item: item)
+                                            Text(session.createdAt, style: .relative)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Button("Restore All") {
+                                                _ = model.restoreFromUninstallSession(session)
                                             }
                                             .buttonStyle(.borderless)
                                         }
+                                        ForEach(session.rollbackItems.prefix(8)) { item in
+                                            HStack {
+                                                Text(item.name)
+                                                    .font(.caption)
+                                                    .lineLimit(1)
+                                                Spacer()
+                                                Button("Restore") {
+                                                    _ = model.restoreFromUninstallSession(session, item: item)
+                                                }
+                                                .buttonStyle(.borderless)
+                                            }
+                                        }
                                     }
+                                    .padding(.vertical, 2)
                                 }
-                                .padding(.vertical, 2)
+                                .frame(minHeight: 170)
                             }
-                            .frame(minHeight: 170)
+                            .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
                         }
-                        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
+                    } else {
+                        ContentUnavailableView("Uninstaller", systemImage: "trash", description: Text("Select app to inspect remnants."))
                     }
-                } else {
-                    ContentUnavailableView("Uninstaller", systemImage: "trash", description: Text("Select app to inspect remnants."))
                 }
+                .padding(12)
+                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(12)
-            .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
+            .padding(8)
         }
-        .padding(8)
         .onAppear {
             if model.installedApps.isEmpty {
                 model.loadInstalledApps()
@@ -206,6 +238,28 @@ struct UninstallerView: View {
                         showUninstallPreview = false
                     }
                 )
+            }
+        }
+    }
+
+    private var header: some View {
+        ModuleHeaderCard(
+            title: "Uninstaller",
+            subtitle: "Inspect app remnants and remove applications with rollback support. Apps: \(filteredApps.count)."
+        ) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
+                GlassPillBadge(title: "\(model.uninstallerRemnants.count) remnants", tint: .orange)
+
+                Button("Rescan Apps") {
+                    model.loadInstalledApps()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Open App Repair") {
+                    model.openSection(.repair)
+                }
+                .buttonStyle(.bordered)
             }
         }
     }

@@ -1,19 +1,161 @@
 import SwiftUI
 import AppKit
 
-struct MenuBarPopupView: View {
-    @ObservedObject var model: RootViewModel
+@MainActor
+final class MenuBarPopupModel: ObservableObject {
+    @Published private(set) var launchAtLoginEnabled = false
+    @Published var reliefResultMessage: String?
+
+    let bridge: DRayMainBridge
+    private let loginAgentService: MenuBarLoginAgentService
+    private let reliefService = LoadReliefService()
+    private let batteryService = BatteryDiagnosticsService()
+
+    init(config: HelperConfig) {
+        let helperPath = CommandLine.arguments.first ?? ""
+        bridge = DRayMainBridge(appPath: config.appPath)
+        loginAgentService = MenuBarLoginAgentService(appPath: config.appPath, helperPath: helperPath)
+        refreshLaunchAtLoginStatus()
+    }
+
+    func refreshLaunchAtLoginStatus() {
+        launchAtLoginEnabled = loginAgentService.isEnabled()
+    }
+
+    func toggleLaunchAtLogin() {
+        _ = loginAgentService.setEnabled(!launchAtLoginEnabled)
+        refreshLaunchAtLoginStatus()
+    }
+
+    func open(section: AppSection, action: AppLaunchAction? = nil) {
+        bridge.open(section: section, action: action)
+    }
+
+    func openMain() {
+        bridge.open(section: .smartCare, action: nil)
+    }
+
+    func quitCompletely() {
+        bridge.requestFullQuit()
+        NSApp.terminate(nil)
+    }
+
+    func reduceCPU(consumers: [ProcessConsumer], limit: Int = 3) {
+        let result = reliefService.reduceCPU(consumers: consumers, limit: limit)
+        reliefResultMessage = formatReliefResult(result)
+    }
+
+    func reduceMemory(consumers: [ProcessConsumer], limit: Int = 3) {
+        let result = reliefService.reduceMemory(consumers: consumers, limit: limit)
+        reliefResultMessage = formatReliefResult(result)
+    }
+
+    func restorePriorities() {
+        let result = reliefService.restore(limit: 5)
+        reliefResultMessage = formatReliefResult(result)
+    }
+
+    var canRestorePriorities: Bool {
+        reliefService.hasAdjustments
+    }
+
+    func fetchBatteryDetails() -> BatteryDiagnosticsSnapshot {
+        batteryService.fetchSnapshot()
+    }
+
+    private func formatReliefResult(_ result: LoadReliefResult) -> String {
+        let adjustedText = result.adjusted.isEmpty ? "0" : "\(result.adjusted.count): " + result.adjusted.joined(separator: ", ")
+        let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
+        let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
+        return "Adjusted \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+    }
+}
+
+@MainActor
+final class MenuBarHelperAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = NSApp.setActivationPolicy(.accessory)
+        guard HelperSingleInstanceLock.acquire() else {
+            NSApp.terminate(nil)
+            return
+        }
+    }
+}
+
+@main
+struct DRayMenuBarHelperApp: App {
+    @NSApplicationDelegateAdaptor(MenuBarHelperAppDelegate.self) private var appDelegate
+    private let config = HelperConfig(arguments: CommandLine.arguments)
+    @StateObject private var model: MenuBarPopupModel
     @StateObject private var monitor = LiveSystemMetricsMonitor()
+
+    init() {
+        let config = HelperConfig(arguments: CommandLine.arguments)
+        _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
+        if let startupSection = config.startupSection {
+            let bridge = DRayMainBridge(appPath: config.appPath)
+            bridge.open(section: startupSection, action: nil)
+        }
+    }
+
+    var body: some Scene {
+        MenuBarExtra {
+            MenuBarPopupView(model: model, monitor: monitor)
+        } label: {
+            MenuBarStatusIcon(monitor: monitor)
+        }
+        .menuBarExtraStyle(.window)
+    }
+}
+
+private struct MenuBarStatusIcon: View {
+    @ObservedObject var monitor: LiveSystemMetricsMonitor
     @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: batterySymbol)
+                .symbolRenderingMode(.monochrome)
+            if let percent = monitor.snapshot.batteryLevelPercent {
+                Text("\(percent)%")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
+        }
+        .foregroundStyle(colorScheme == .dark ? .white : .black)
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
+    }
+
+    private var batterySymbol: String {
+        guard let level = monitor.snapshot.batteryLevelPercent else {
+            return "bolt.batteryblock"
+        }
+        switch level {
+        case 0..<15: return "battery.0"
+        case 15..<35: return "battery.25"
+        case 35..<60: return "battery.50"
+        case 60..<85: return "battery.75"
+        default: return "battery.100"
+        }
+    }
+}
+
+private struct MenuBarPopupView: View {
+    @ObservedObject var model: MenuBarPopupModel
+    @ObservedObject var monitor: LiveSystemMetricsMonitor
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var showHealthDetails = false
     @State private var showBatteryDetails = false
     @State private var batterySnapshot: BatteryDiagnosticsSnapshot?
     @State private var isBatteryDetailsLoading = false
     @State private var batteryDetailsError: String?
+    @State private var batteryHistoryWindow: BatteryHistoryWindow = .fifteenMinutes
+    @State private var batteryHistoryLevels: [Double] = []
+    @State private var batteryHistoryTimestamps: [Date] = []
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
-    @State private var reliefResultMessage: String?
-    private let batteryService = BatteryDiagnosticsService()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -33,20 +175,15 @@ struct MenuBarPopupView: View {
         .frame(width: 452)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
-        .sheet(isPresented: $showBatteryDetails) {
-            BatteryDetailsSheetView(
-                snapshot: batterySnapshot,
-                isLoading: isBatteryDetailsLoading,
-                errorText: batteryDetailsError,
-                onRefresh: loadBatteryDetails
-            )
+        .onReceive(monitor.$snapshot) { snapshot in
+            appendBatterySample(from: snapshot)
         }
         .confirmationDialog(
             reliefDialogTitle,
             isPresented: $showReliefConfirm,
             titleVisibility: .visible
         ) {
-            Button(reliefActionTitle, role: .destructive) {
+            Button(reliefActionTitle) {
                 executeReliefAction()
             }
             Button("Cancel", role: .cancel) {
@@ -54,12 +191,12 @@ struct MenuBarPopupView: View {
             }
         }
         .alert("Load Reduction", isPresented: Binding(
-            get: { reliefResultMessage != nil },
-            set: { if !$0 { reliefResultMessage = nil } }
+            get: { model.reliefResultMessage != nil },
+            set: { if !$0 { model.reliefResultMessage = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(reliefResultMessage ?? "")
+            Text(model.reliefResultMessage ?? "")
         }
     }
 
@@ -110,9 +247,7 @@ struct MenuBarPopupView: View {
                     value: diskValue + diskUsePercentText,
                     actionTitle: "Free Up",
                     action: {
-                        open(section: .spaceLens) {
-                            model.scanSelected()
-                        }
+                        model.open(section: .spaceLens, action: .runSpaceLensScan)
                     }
                 )
                 metricCard(
@@ -121,9 +256,7 @@ struct MenuBarPopupView: View {
                     value: memoryValue,
                     actionTitle: "Inspect",
                     action: {
-                        open(section: .performance) {
-                            model.runPerformanceScan()
-                        }
+                        model.open(section: .performance, action: .runPerformanceScan)
                     }
                 )
             }
@@ -135,29 +268,7 @@ struct MenuBarPopupView: View {
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))% load",
                     actionTitle: "Diagnose",
                     action: {
-                        open(section: .performance) {
-                            model.runPerformanceScan()
-                        }
-                    }
-                )
-            }
-            HStack(spacing: 10) {
-                metricCard(
-                    title: "Network",
-                    subtitle: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond)) · ↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))",
-                    value: "\(Int(monitor.snapshot.uptimeSeconds / 3600))h uptime",
-                    actionTitle: "Open",
-                    action: { open(section: .smartCare) }
-                )
-                metricCard(
-                    title: "My Clutter",
-                    subtitle: "Duplicate groups",
-                    value: "\(model.duplicateGroups.count)",
-                    actionTitle: "Review",
-                    action: {
-                        open(section: .clutter) {
-                            model.scanDuplicatesInHome()
-                        }
+                        model.open(section: .performance, action: .runPerformanceScan)
                     }
                 )
             }
@@ -183,6 +294,12 @@ struct MenuBarPopupView: View {
                     showReliefConfirm = true
                 }
                 .disabled(memoryReliefCandidates.isEmpty)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+                Button("Restore Priorities") {
+                    model.restorePriorities()
+                }
+                .disabled(!model.canRestorePriorities)
                 .controlSize(.small)
                 .buttonStyle(.bordered)
             }
@@ -240,31 +357,27 @@ struct MenuBarPopupView: View {
     private var footer: some View {
         HStack {
             Button("Smart Scan") {
-                open(section: .smartCare) {
-                    model.runUnifiedScan()
-                }
+                model.open(section: .smartCare, action: .runUnifiedScan)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
             Button("Open DRay") {
-                open(section: .smartCare)
+                model.openMain()
             }
             .controlSize(.small)
 
             Button("Quit Completely", role: .destructive) {
-                AppTerminationCoordinator.shared.terminateCompletely()
+                model.quitCompletely()
+            }
+            .controlSize(.small)
+
+            Button(model.launchAtLoginEnabled ? "Start at Login: On" : "Start at Login: Off") {
+                model.toggleLaunchAtLogin()
             }
             .controlSize(.small)
 
             Spacer()
-
-            if let url = model.lastExportedDiagnosticURL {
-                Button("Reveal Report") {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                }
-                .controlSize(.small)
-            }
         }
     }
 
@@ -291,9 +404,7 @@ struct MenuBarPopupView: View {
             HStack {
                 Spacer()
                 Button("Open Performance") {
-                    open(section: .performance) {
-                        model.runPerformanceScan()
-                    }
+                    model.open(section: .performance, action: .runPerformanceScan)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -350,7 +461,21 @@ struct MenuBarPopupView: View {
                         .foregroundStyle(tintColor)
                 }
                 .buttonStyle(.plain)
-                .help("Open battery details")
+                .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                    BatteryDetailsSheetView(
+                        snapshot: batterySnapshot,
+                        isLoading: isBatteryDetailsLoading,
+                        errorText: batteryDetailsError,
+                        historyLevels: selectedBatteryHistoryLevels,
+                        historyWindow: batteryHistoryWindow,
+                        historySampleCount: selectedBatteryHistorySamples.count,
+                        trendInsight: selectedBatteryHistoryInsight,
+                        onHistoryWindowChange: { batteryHistoryWindow = $0 },
+                        onRefresh: loadBatteryDetails,
+                        onClose: { showBatteryDetails = false }
+                    )
+                    .padding(8)
+                }
             }
             Text(batteryStateText)
                 .font(.caption)
@@ -372,7 +497,7 @@ struct MenuBarPopupView: View {
                 }
                 Spacer()
                 Button("Details") {
-                    open(section: .performance)
+                    model.open(section: .performance, action: .runPerformanceScan)
                 }
                 .controlSize(.small)
                 .buttonStyle(.bordered)
@@ -437,7 +562,6 @@ struct MenuBarPopupView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(borderColor.opacity(0.85), lineWidth: 0.85)
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 8, y: 4)
     }
 
     private var tintColor: Color {
@@ -451,96 +575,42 @@ struct MenuBarPopupView: View {
     private var healthSummaryLine: String {
         let alerts = healthIssues.filter { $0.severity != .info }
         if alerts.isEmpty {
-            return "\(model.selectedTarget.name) · no critical issues"
+            return "Macintosh HD · no critical issues"
         }
-        return "\(model.selectedTarget.name) · \(alerts.count) alert(s)"
+        return "Macintosh HD · \(alerts.count) alert(s)"
     }
 
     private var healthIssues: [HealthIssue] {
         var issues: [HealthIssue] = []
 
         if monitor.snapshot.memoryPressurePercent >= 88 {
-            issues.append(HealthIssue(
-                title: "Memory pressure is high",
-                details: "Current pressure is \(Int(monitor.snapshot.memoryPressurePercent))%. Close heavy apps or run performance diagnostics.",
-                severity: .critical
-            ))
+            issues.append(.init(title: "Memory pressure is high", details: "Current pressure is \(Int(monitor.snapshot.memoryPressurePercent))%.", severity: .critical))
         } else if monitor.snapshot.memoryPressurePercent >= 72 {
-            issues.append(HealthIssue(
-                title: "Memory pressure is elevated",
-                details: "Current pressure is \(Int(monitor.snapshot.memoryPressurePercent))%.",
-                severity: .warning
-            ))
+            issues.append(.init(title: "Memory pressure is elevated", details: "Current pressure is \(Int(monitor.snapshot.memoryPressurePercent))%.", severity: .warning))
         }
 
         if monitor.snapshot.cpuLoadPercent >= 85 {
-            issues.append(HealthIssue(
-                title: "CPU load is very high",
-                details: "Current CPU load is \(Int(monitor.snapshot.cpuLoadPercent))%.",
-                severity: .critical
-            ))
+            issues.append(.init(title: "CPU load is very high", details: "Current CPU load is \(Int(monitor.snapshot.cpuLoadPercent))%.", severity: .critical))
         } else if monitor.snapshot.cpuLoadPercent >= 65 {
-            issues.append(HealthIssue(
-                title: "CPU load is elevated",
-                details: "Current CPU load is \(Int(monitor.snapshot.cpuLoadPercent))%.",
-                severity: .warning
-            ))
+            issues.append(.init(title: "CPU load is elevated", details: "Current CPU load is \(Int(monitor.snapshot.cpuLoadPercent))%.", severity: .warning))
         }
 
         if let battery = monitor.snapshot.batteryLevelPercent, !(monitor.snapshot.batteryIsCharging ?? false) {
             if battery <= 15 {
-                issues.append(HealthIssue(
-                    title: "Battery is low",
-                    details: "Battery level is \(battery)% and Mac is not charging.",
-                    severity: .critical
-                ))
+                issues.append(.init(title: "Battery is low", details: "Battery level is \(battery)% and Mac is not charging.", severity: .critical))
             } else if battery <= 30 {
-                issues.append(HealthIssue(
-                    title: "Battery is moderate",
-                    details: "Battery level is \(battery)% and Mac is not charging.",
-                    severity: .warning
-                ))
+                issues.append(.init(title: "Battery is moderate", details: "Battery level is \(battery)% and Mac is not charging.", severity: .warning))
             }
         }
 
-        let freeRatio = diskFreeRatio
-        if freeRatio > 0, freeRatio < 0.10 {
-            issues.append(HealthIssue(
-                title: "Low free disk space",
-                details: "Only \(Int(freeRatio * 100))% disk space is free.",
-                severity: .critical
-            ))
-        } else if freeRatio > 0, freeRatio < 0.18 {
-            issues.append(HealthIssue(
-                title: "Disk space is getting low",
-                details: "Free disk space is \(Int(freeRatio * 100))%.",
-                severity: .warning
-            ))
-        }
-
-        let startupCount = model.performanceReport?.startupEntries.count ?? 0
-        if startupCount > 24 {
-            issues.append(HealthIssue(
-                title: "Many startup entries",
-                details: "\(startupCount) startup items detected. Consider disabling non-essential ones.",
-                severity: .warning
-            ))
-        }
-
-        if model.duplicateGroups.count > 0 {
-            issues.append(HealthIssue(
-                title: "Duplicate files detected",
-                details: "\(model.duplicateGroups.count) duplicate groups can be reviewed in My Clutter.",
-                severity: .info
-            ))
+        if diskFreeRatio > 0, diskFreeRatio < 0.10 {
+            issues.append(.init(title: "Low free disk space", details: "Only \(Int(diskFreeRatio * 100))% disk space is free.", severity: .critical))
+        } else if diskFreeRatio > 0, diskFreeRatio < 0.18 {
+            issues.append(.init(title: "Disk space is getting low", details: "Free disk space is \(Int(diskFreeRatio * 100))%.", severity: .warning))
         }
 
         if issues.isEmpty {
-            issues.append(HealthIssue(
-                title: "System looks healthy",
-                details: "No major performance or storage alerts right now.",
-                severity: .info
-            ))
+            issues.append(.init(title: "System looks healthy", details: "No major performance or storage alerts right now.", severity: .info))
         }
         return issues
     }
@@ -552,33 +622,19 @@ struct MenuBarPopupView: View {
         if let warning = healthIssues.first(where: { $0.severity == .warning }) {
             return warning.details
         }
-        return "Run Smart Scan to refresh diagnostics and keep cleanup recommendations up to date."
+        return "Run Smart Scan to refresh diagnostics and cleanup opportunities."
     }
 
     private var recommendationActionTitle: String {
-        if healthIssues.contains(where: { $0.severity == .critical || $0.severity == .warning }) {
-            return "Open Performance"
-        }
-        if model.duplicateGroups.count > 0 { return "Review Duplicates" }
-        return "Run Smart Scan"
+        healthIssues.contains(where: { $0.severity == .critical || $0.severity == .warning }) ? "Open Performance" : "Run Smart Scan"
     }
 
     private func recommendationAction() {
         if healthIssues.contains(where: { $0.severity == .critical || $0.severity == .warning }) {
-            open(section: .performance) {
-                model.runPerformanceScan()
-            }
+            model.open(section: .performance, action: .runPerformanceScan)
             return
         }
-        if model.duplicateGroups.count > 0 {
-            open(section: .clutter) {
-                model.scanDuplicatesInHome()
-            }
-            return
-        }
-        open(section: .smartCare) {
-            model.runUnifiedScan()
-        }
+        model.open(section: .smartCare, action: .runUnifiedScan)
     }
 
     private var memoryValue: String {
@@ -618,13 +674,6 @@ struct MenuBarPopupView: View {
         return Double(monitor.snapshot.diskFreeBytes) / Double(total)
     }
 
-    private func networkSpeedText(_ bytesPerSecond: Double) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useKB, .useMB]
-        return "\(formatter.string(fromByteCount: Int64(bytesPerSecond)))/s"
-    }
-
     private var batteryStateText: String {
         guard let percent = monitor.snapshot.batteryLevelPercent else { return "Battery unavailable" }
         let charging = monitor.snapshot.batteryIsCharging ?? false
@@ -646,12 +695,8 @@ struct MenuBarPopupView: View {
     }
 
     private var healthTitle: String {
-        if healthIssues.contains(where: { $0.severity == .critical }) {
-            return "Needs attention"
-        }
-        if healthIssues.contains(where: { $0.severity == .warning }) {
-            return "Fair"
-        }
+        if healthIssues.contains(where: { $0.severity == .critical }) { return "Needs attention" }
+        if healthIssues.contains(where: { $0.severity == .warning }) { return "Fair" }
         return "Good"
     }
 
@@ -702,24 +747,6 @@ struct MenuBarPopupView: View {
                 if rows.count >= 5 { break }
             }
         }
-
-        if rows.count < 5 {
-            for battery in monitor.snapshot.topBatteryConsumers {
-                let key = battery.name.lowercased()
-                guard !seen.contains(key) else { continue }
-                seen.insert(key)
-                rows.append(
-                    ConsumerRow(
-                        id: battery.name,
-                        name: battery.name,
-                        cpuText: "\(Int(battery.cpuPercent))%",
-                        memoryText: "\(Int(battery.memoryMB))MB",
-                        batteryText: String(format: "%.1f", battery.batteryImpactScore)
-                    )
-                )
-                if rows.count >= 5 { break }
-            }
-        }
         return rows
     }
 
@@ -736,9 +763,9 @@ struct MenuBarPopupView: View {
     private var reliefDialogTitle: String {
         switch pendingReliefAction {
         case .cpu:
-            return "Reduce CPU load by closing heavy apps?"
+            return "Reduce CPU load by deprioritizing heavy apps?"
         case .memory:
-            return "Reduce memory load by closing heavy apps?"
+            return "Reduce memory pressure by deprioritizing heavy apps?"
         case .none:
             return "Reduce load?"
         }
@@ -746,34 +773,28 @@ struct MenuBarPopupView: View {
 
     private var reliefActionTitle: String {
         switch pendingReliefAction {
-        case .cpu: return "Close Top CPU Apps"
-        case .memory: return "Close Top Memory Apps"
+        case .cpu: return "Lower Priority for Top CPU Apps"
+        case .memory: return "Lower Priority for Top Memory Apps"
         case .none: return "Run"
         }
     }
 
     private func executeReliefAction() {
         guard let action = pendingReliefAction else { return }
-        let result: LoadReliefResult
+        pendingReliefAction = nil
         switch action {
         case .cpu:
-            result = model.reduceCPULoad(consumers: cpuReliefCandidates, limit: 3)
+            model.reduceCPU(consumers: cpuReliefCandidates, limit: 3)
         case .memory:
-            result = model.reduceMemoryLoad(consumers: memoryReliefCandidates, limit: 3)
+            model.reduceMemory(consumers: memoryReliefCandidates, limit: 3)
         }
-        pendingReliefAction = nil
-        open(section: .performance) {
-            model.runPerformanceScan()
-        }
-
-        let terminatedText = result.terminated.isEmpty ? "0" : "\(result.terminated.count): " + result.terminated.joined(separator: ", ")
-        let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
-        let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
-        reliefResultMessage = "Terminated \(terminatedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+        model.open(section: .performance, action: .runPerformanceScan)
     }
 
     private func openBatteryDetails() {
-        showBatteryDetails = true
+        withAnimation(.easeInOut(duration: 0.16)) {
+            showBatteryDetails = true
+        }
         loadBatteryDetails()
     }
 
@@ -782,7 +803,7 @@ struct MenuBarPopupView: View {
         isBatteryDetailsLoading = true
         batteryDetailsError = nil
         Task(priority: .userInitiated) {
-            let snapshot = batteryService.fetchSnapshot()
+            let snapshot = model.fetchBatteryDetails()
             await MainActor.run {
                 self.batterySnapshot = snapshot
                 self.isBatteryDetailsLoading = false
@@ -793,9 +814,38 @@ struct MenuBarPopupView: View {
         }
     }
 
-    private func open(section: AppSection, action: (() -> Void)? = nil) {
-        action?()
-        model.openSection(section)
+    private func appendBatterySample(from snapshot: LiveSystemSnapshot) {
+        guard let level = snapshot.batteryLevelPercent else { return }
+        if let lastTime = batteryHistoryTimestamps.last,
+           snapshot.updatedAt.timeIntervalSince(lastTime) < 0.5 {
+            return
+        }
+        batteryHistoryTimestamps.append(snapshot.updatedAt)
+        batteryHistoryLevels.append(Double(level))
+        let maxSamples = 60 * 60 * 3
+        if batteryHistoryTimestamps.count > maxSamples {
+            let overflow = batteryHistoryTimestamps.count - maxSamples
+            batteryHistoryTimestamps.removeFirst(overflow)
+            batteryHistoryLevels.removeFirst(overflow)
+        }
+    }
+
+    private var selectedBatteryHistorySamples: [BatteryHistorySample] {
+        let cutoff = Date().addingTimeInterval(-batteryHistoryWindow.seconds)
+        return zip(batteryHistoryTimestamps, batteryHistoryLevels)
+            .filter { $0.0 >= cutoff }
+            .map { BatteryHistorySample(timestamp: $0.0, level: $0.1) }
+    }
+
+    private var selectedBatteryHistoryLevels: [Double] {
+        selectedBatteryHistorySamples.map(\.level)
+    }
+
+    private var selectedBatteryHistoryInsight: BatteryTrendInsight? {
+        BatteryTrendInsight(
+            samples: selectedBatteryHistorySamples,
+            isCharging: monitor.snapshot.batteryIsCharging
+        )
     }
 }
 
@@ -814,9 +864,81 @@ private struct ConsumerRow: Identifiable {
     let batteryText: String
 }
 
+private struct BatteryHistorySample {
+    let timestamp: Date
+    let level: Double
+}
+
+private struct BatteryTrendInsight {
+    let deltaPercent: Double
+    let ratePerHour: Double
+    let projectedMinutes: Int?
+    let isChargingDirection: Bool
+    let duration: TimeInterval
+    let minLevel: Double
+    let maxLevel: Double
+
+    init?(samples: [BatteryHistorySample], isCharging: Bool?) {
+        guard let first = samples.first, let last = samples.last else { return nil }
+        let duration = last.timestamp.timeIntervalSince(first.timestamp)
+        guard duration >= 120 else { return nil }
+
+        let delta = last.level - first.level
+        let ratePerHour = (delta / duration) * 3600.0
+        let chargingDirection = (isCharging ?? false) || ratePerHour > 0.05
+        let projectedMinutes: Int? = {
+            let absRate = abs(ratePerHour)
+            guard absRate >= 0.05 else { return nil }
+            if chargingDirection {
+                let remaining = max(0, 100.0 - last.level)
+                return Int((remaining / absRate) * 60.0)
+            }
+            let remaining = max(0, last.level)
+            return Int((remaining / absRate) * 60.0)
+        }()
+
+        self.deltaPercent = delta
+        self.ratePerHour = ratePerHour
+        self.projectedMinutes = projectedMinutes
+        self.isChargingDirection = chargingDirection
+        self.duration = duration
+        self.minLevel = samples.map(\.level).min() ?? last.level
+        self.maxLevel = samples.map(\.level).max() ?? last.level
+    }
+}
+
 private enum ReliefAction {
     case cpu
     case memory
+}
+
+private enum BatteryHistoryWindow: String, CaseIterable, Identifiable {
+    case fiveMinutes
+    case fifteenMinutes
+    case thirtyMinutes
+    case oneHour
+    case twoHours
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .fiveMinutes: return "5m"
+        case .fifteenMinutes: return "15m"
+        case .thirtyMinutes: return "30m"
+        case .oneHour: return "1h"
+        case .twoHours: return "2h"
+        }
+    }
+
+    var seconds: TimeInterval {
+        switch self {
+        case .fiveMinutes: return 5 * 60
+        case .fifteenMinutes: return 15 * 60
+        case .thirtyMinutes: return 30 * 60
+        case .oneHour: return 60 * 60
+        case .twoHours: return 2 * 60 * 60
+        }
+    }
 }
 
 private enum HealthIssueSeverity {
@@ -845,8 +967,13 @@ private struct BatteryDetailsSheetView: View {
     let snapshot: BatteryDiagnosticsSnapshot?
     let isLoading: Bool
     let errorText: String?
+    let historyLevels: [Double]
+    let historyWindow: BatteryHistoryWindow
+    let historySampleCount: Int
+    let trendInsight: BatteryTrendInsight?
+    let onHistoryWindowChange: (BatteryHistoryWindow) -> Void
     let onRefresh: () -> Void
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -856,7 +983,7 @@ private struct BatteryDetailsSheetView: View {
                 Spacer()
                 Button("Refresh") { onRefresh() }
                     .buttonStyle(.bordered)
-                Button("Close") { dismiss() }
+                Button("Close") { onClose() }
                     .buttonStyle(.bordered)
             }
 
@@ -889,9 +1016,59 @@ private struct BatteryDetailsSheetView: View {
                             tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
                         )
 
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Charge Trend")
+                                    .font(.headline)
+                                Spacer()
+                                Picker("Window", selection: Binding(
+                                    get: { historyWindow },
+                                    set: { onHistoryWindowChange($0) }
+                                )) {
+                                    ForEach(BatteryHistoryWindow.allCases) { window in
+                                        Text(window.title).tag(window)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 160)
+                            }
+                            BatteryHistorySparkline(values: historyLevels)
+                                .frame(height: 52)
+                            if let trendInsight {
+                                HStack(spacing: 12) {
+                                    trendChip(
+                                        title: "Rate",
+                                        value: rateText(trendInsight.ratePerHour),
+                                        tint: trendInsight.isChargingDirection ? .green : .orange
+                                    )
+                                    trendChip(
+                                        title: trendInsight.isChargingDirection ? "To Full" : "To Empty",
+                                        value: projectedTimeText(trendInsight.projectedMinutes),
+                                        tint: .blue
+                                    )
+                                    trendChip(
+                                        title: "Range",
+                                        value: "\(Int(trendInsight.minLevel))% - \(Int(trendInsight.maxLevel))%",
+                                        tint: .secondary
+                                    )
+                                }
+                                Text("Samples \(historySampleCount) · span \(formattedDuration(Int(trendInsight.duration / 60)))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Collecting trend history...")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(12)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
                         VStack(spacing: 8) {
                             detailRow("Full Charge Capacity", formattedMAh(snapshot.fullChargeCapacityMAh))
                             detailRow("Design Capacity", formattedMAh(snapshot.designCapacityMAh))
+                            detailRow("Time until full", formattedDuration(snapshot.minutesToFull))
+                            detailRow("Time until empty", formattedDuration(snapshot.minutesToEmpty))
                             detailRow("Charge Cycles", formattedInt(snapshot.cycleCount))
                             detailRow("Design Cycles", formattedInt(snapshot.designCycleCount))
                             detailRow("Battery Temperature", formattedTemperature(snapshot.temperatureCelsius))
@@ -929,8 +1106,13 @@ private struct BatteryDetailsSheetView: View {
             }
         }
         .padding(16)
-        .frame(width: 460, height: 610)
+        .frame(width: 432, height: 610)
         .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.20), lineWidth: 1)
+        )
     }
 
     private func detailRow(_ title: String, _ value: String) -> some View {
@@ -943,6 +1125,22 @@ private struct BatteryDetailsSheetView: View {
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
         }
+    }
+
+    private func trendChip(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func formattedInt(_ value: Int?) -> String {
@@ -991,6 +1189,23 @@ private struct BatteryDetailsSheetView: View {
         return "\(value)%"
     }
 
+    private func rateText(_ value: Double) -> String {
+        let sign = value >= 0 ? "+" : "-"
+        return "\(sign)\(String(format: "%.1f", abs(value)))%/h"
+    }
+
+    private func projectedTimeText(_ minutes: Int?) -> String {
+        guard let minutes else { return "n/a" }
+        return formattedDuration(minutes)
+    }
+
+    private func formattedDuration(_ minutes: Int?) -> String {
+        guard let minutes, minutes >= 0 else { return "n/a" }
+        let hours = minutes / 60
+        let mins = minutes % 60
+        return "\(hours)h \(mins)m"
+    }
+
     private func normalizedPercent(_ value: Int?) -> Double {
         guard let value else { return 0 }
         return min(1, max(0, Double(value) / 100.0))
@@ -998,12 +1213,12 @@ private struct BatteryDetailsSheetView: View {
 
     private func chargingText(_ snapshot: BatteryDiagnosticsSnapshot) -> String {
         if snapshot.isCharging == true {
-            if let minutes = snapshot.minutesRemaining {
+            if let minutes = snapshot.minutesToFull {
                 return "Charging (\(minutes / 60)h \(minutes % 60)m)"
             }
             return "Charging"
         }
-        if let minutes = snapshot.minutesRemaining {
+        if let minutes = snapshot.minutesToEmpty {
             return "\(minutes / 60)h \(minutes % 60)m remaining"
         }
         return "On battery"
@@ -1051,5 +1266,55 @@ private struct BatteryProgressCard: View {
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct BatteryHistorySparkline: View {
+    let values: [Double]
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.secondary.opacity(0.10))
+                if values.count >= 2 {
+                    let points = normalizedPoints(size: proxy.size)
+                    Path { path in
+                        guard let first = points.first else { return }
+                        path.move(to: first)
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [.cyan, .blue],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+                    )
+                } else {
+                    Text("No trend data")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func normalizedPoints(size: CGSize) -> [CGPoint] {
+        guard values.count >= 2 else { return [] }
+        let minValue = values.min() ?? 0
+        let maxValue = values.max() ?? 100
+        let range = max(0.01, maxValue - minValue)
+        let stepX = size.width / CGFloat(max(values.count - 1, 1))
+
+        return values.enumerated().map { index, value in
+            let x = CGFloat(index) * stepX
+            let normalized = (value - minValue) / range
+            let y = size.height - (CGFloat(normalized) * size.height)
+            return CGPoint(x: x, y: y)
+        }
     }
 }

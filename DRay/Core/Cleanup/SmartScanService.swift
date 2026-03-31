@@ -17,16 +17,47 @@ actor SmartScanService {
         self.analyzers = analyzers
     }
 
-    func runSmartScan(excludedPrefixes: [String]) async -> SmartScanResult {
+    func runSmartScan(excludedPrefixes: [String], excludedAnalyzerKeys: [String] = []) async -> SmartScanResult {
+        let excluded = Set(excludedAnalyzerKeys)
         var categories: [CleanupCategoryResult] = []
+        var telemetry: [CleanupAnalyzerTelemetry] = []
         categories.reserveCapacity(analyzers.count)
+        telemetry.reserveCapacity(analyzers.count)
 
         for analyzer in analyzers {
+            if excluded.contains(analyzer.key) {
+                telemetry.append(
+                    CleanupAnalyzerTelemetry(
+                        key: analyzer.key,
+                        title: analyzer.title,
+                        durationMs: 0,
+                        itemCount: 0,
+                        totalBytes: 0,
+                        skipped: true
+                    )
+                )
+                continue
+            }
+            let started = DispatchTime.now().uptimeNanoseconds
             let result = await analyzer.analyze(excludedPrefixes: excludedPrefixes)
+            let elapsed = DispatchTime.now().uptimeNanoseconds - started
             categories.append(result)
+            telemetry.append(
+                CleanupAnalyzerTelemetry(
+                    key: analyzer.key,
+                    title: analyzer.title,
+                    durationMs: Int(elapsed / 1_000_000),
+                    itemCount: result.items.count,
+                    totalBytes: result.totalBytes,
+                    skipped: false
+                )
+            )
         }
 
-        return SmartScanResult(categories: categories.sorted { $0.totalBytes > $1.totalBytes })
+        return SmartScanResult(
+            categories: categories.sorted { $0.totalBytes > $1.totalBytes },
+            analyzerTelemetry: telemetry.sorted { $0.durationMs > $1.durationMs }
+        )
     }
 
     func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult {

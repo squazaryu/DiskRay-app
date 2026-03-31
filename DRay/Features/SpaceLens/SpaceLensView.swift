@@ -9,17 +9,22 @@ struct SpaceLensView: View {
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
     @State private var nodeIndex: [String: FileNode] = [:]
+    @State private var nodeIndexBuildToken = UUID()
     @State private var bubbleTapMode: BubbleTapMode = .openFolders
 
     var body: some View {
-        HSplitView {
-            sidebar
-                .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
-            detail
-                .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
-                .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 8)
+        VStack(spacing: 10) {
+            header
+            HSplitView {
+                sidebar
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
+                detail
+                    .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 8)
+            }
+            .padding(.horizontal, 8)
         }
-        .padding(8)
+        .padding(.vertical, 8)
         .onAppear {
             selectedPaths.removeAll()
             model.hoveredPath = nil
@@ -28,6 +33,48 @@ struct SpaceLensView: View {
         .onChange(of: model.root?.id) {
             selectedPaths.removeAll()
             rebuildNodeIndex()
+        }
+        .onDisappear {
+            nodeIndexBuildToken = UUID()
+        }
+    }
+
+    private var header: some View {
+        ModuleHeaderCard(
+            title: "Space Lens",
+            subtitle: "Target: \(model.selectedTarget.url.path)"
+        ) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "Selected \(selectedPaths.count)", tint: .blue)
+                if let root = model.root {
+                    GlassPillBadge(title: "Nodes \(root.children.count)", tint: .green)
+                }
+                targetPicker
+
+                Button("Scan") { model.scanSelected() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isLoading)
+
+                Picker("Tap Mode", selection: $bubbleTapMode) {
+                    ForEach(BubbleTapMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 240)
+
+                if model.isLoading {
+                    Button(model.isPaused ? "Resume" : "Pause") { model.togglePauseScan() }
+                        .controlSize(.small)
+                    Button("Cancel") { model.cancelScan() }
+                        .controlSize(.small)
+                }
+
+                Button("Rescan") { model.rescan() }
+                    .controlSize(.small)
+                    .disabled(model.lastScannedTarget == nil || model.isLoading)
+            }
         }
     }
 
@@ -64,8 +111,19 @@ struct SpaceLensView: View {
                 .font(.footnote)
                 .foregroundStyle(model.permissions.hasFolderPermission ? .green : .orange)
 
+            Text(model.permissions.hasFullDiskAccess
+                 ? "Full Disk Access granted."
+                 : "Full Disk Access is not granted.")
+                .font(.footnote)
+                .foregroundStyle(model.permissions.hasFullDiskAccess ? .green : .orange)
+
             if let permissionHint = model.permissions.permissionHint {
                 Text(permissionHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.permissions.firstLaunchNeedsSetup {
+                Text("First launch setup is required before full functionality.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -168,7 +226,6 @@ struct SpaceLensView: View {
                 emptyState
             }
         }
-        .toolbar { toolbarContent }
         .overlay(alignment: .bottomLeading) { bottomPanel }
         .confirmationDialog(
             "Move selected item(s) to Trash?",
@@ -203,7 +260,14 @@ struct SpaceLensView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.8)
+                )
+        )
     }
 
     private var emptyState: some View {
@@ -222,28 +286,6 @@ struct SpaceLensView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isLoading)
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup {
-            targetPicker
-            Button("Scan") { model.scanSelected() }
-                .disabled(model.isLoading)
-            Picker("Tap Mode", selection: $bubbleTapMode) {
-                ForEach(BubbleTapMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 240)
-            if model.isLoading {
-                Button(model.isPaused ? "Resume" : "Pause") { model.togglePauseScan() }
-                Button("Cancel") { model.cancelScan() }
-            }
-            Button("Rescan") { model.rescan() }
-                .disabled(model.lastScannedTarget == nil || model.isLoading)
         }
     }
 
@@ -277,10 +319,18 @@ struct SpaceLensView: View {
                         Button("Clear") { selectedPaths.removeAll() }
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
             .padding(10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.regularMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.primary.opacity(0.10), lineWidth: 0.8)
+                    )
+            )
             .padding()
         }
     }
@@ -294,6 +344,7 @@ struct SpaceLensView: View {
         } label: {
             Label(model.selectedTarget.name, systemImage: "folder")
         }
+        .controlSize(.small)
     }
 
     private var selectedNodes: [FileNode] {
@@ -315,12 +366,27 @@ struct SpaceLensView: View {
             nodeIndex = [:]
             return
         }
-        var map: [String: FileNode] = [:]
-        var stack: [FileNode] = [root]
-        while let node = stack.popLast() {
-            map[node.url.path] = node
-            stack.append(contentsOf: node.children)
+
+        let token = UUID()
+        nodeIndexBuildToken = token
+        let rootSnapshot = root
+
+        DispatchQueue.global(qos: .utility).async {
+            let map = buildNodeIndex(root: rootSnapshot)
+            DispatchQueue.main.async {
+                guard self.nodeIndexBuildToken == token else { return }
+                self.nodeIndex = map
+            }
         }
-        nodeIndex = map
     }
+}
+
+private func buildNodeIndex(root: FileNode) -> [String: FileNode] {
+    var map: [String: FileNode] = [:]
+    var stack: [FileNode] = [root]
+    while let node = stack.popLast() {
+        map[node.url.path] = node
+        stack.append(contentsOf: node.children)
+    }
+    return map
 }

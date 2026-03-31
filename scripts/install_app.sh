@@ -31,6 +31,7 @@ echo "Using icon theme: $ICON_THEME ($ICON_BASENAME)"
 swift build -c release >/dev/null
 BIN_DIR="$(swift build -c release --show-bin-path)"
 EXECUTABLE="${BIN_DIR}/DRay"
+HELPER_EXECUTABLE="${BIN_DIR}/DRayMenuBarHelper"
 
 if [[ ! -x "$EXECUTABLE" ]]; then
   echo "Release executable not found: $EXECUTABLE"
@@ -41,7 +42,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 BUNDLE_ROOT="${TMP_DIR}/${APP_NAME}"
-mkdir -p "${BUNDLE_ROOT}/Contents/MacOS" "${BUNDLE_ROOT}/Contents/Resources"
+mkdir -p "${BUNDLE_ROOT}/Contents/MacOS" "${BUNDLE_ROOT}/Contents/Resources" "${BUNDLE_ROOT}/Contents/Helpers"
 
 cat > "${BUNDLE_ROOT}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -64,12 +65,17 @@ PLIST
 
 cp "$EXECUTABLE" "${BUNDLE_ROOT}/Contents/MacOS/DRay"
 chmod +x "${BUNDLE_ROOT}/Contents/MacOS/DRay"
+if [[ -x "$HELPER_EXECUTABLE" ]]; then
+  cp "$HELPER_EXECUTABLE" "${BUNDLE_ROOT}/Contents/Helpers/DRayMenuBarHelper"
+  chmod +x "${BUNDLE_ROOT}/Contents/Helpers/DRayMenuBarHelper"
+fi
 if [[ -f "$ICON_SOURCE" ]]; then
   cp "$ICON_SOURCE" "${BUNDLE_ROOT}/Contents/Resources/${ICON_BASENAME}.icns"
 fi
 
 codesign --force --deep --sign - "${BUNDLE_ROOT}" >/dev/null 2>&1 || true
 
+pkill -x DRayMenuBarHelper >/dev/null 2>&1 || true
 rm -rf "$APP_PATH"
 cp -R "${BUNDLE_ROOT}" "$APP_PATH"
 

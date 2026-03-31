@@ -64,6 +64,7 @@ struct CleanupCategoryResult: Identifiable, Hashable, Sendable {
 
 struct SmartScanResult: Sendable {
     let categories: [CleanupCategoryResult]
+    let analyzerTelemetry: [CleanupAnalyzerTelemetry]
 
     var totalBytes: Int64 {
         categories.reduce(0) { $0 + $1.totalBytes }
@@ -72,6 +73,16 @@ struct SmartScanResult: Sendable {
     var totalItems: Int {
         categories.reduce(0) { $0 + $1.items.count }
     }
+}
+
+struct CleanupAnalyzerTelemetry: Identifiable, Hashable, Sendable {
+    let id = UUID()
+    let key: String
+    let title: String
+    let durationMs: Int
+    let itemCount: Int
+    let totalBytes: Int64
+    let skipped: Bool
 }
 
 struct CleanupExecutionResult: Sendable {

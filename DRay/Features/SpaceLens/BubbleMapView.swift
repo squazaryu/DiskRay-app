@@ -39,7 +39,10 @@ struct BubbleMapView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-                .onTapGesture { selectedPaths.removeAll() }
+                .onTapGesture {
+                    selectedPaths.removeAll()
+                    hoveredPath = nil
+                }
 
                 Circle()
                     .fill(surfaceColor.opacity(0.94))
@@ -214,7 +217,6 @@ struct BubbleMapView: View {
             if selectedPaths.contains(path) {
                 selectedPaths.remove(path)
             } else {
-                selectedPaths.removeAll()
                 selectedPaths.insert(path)
             }
         }
@@ -319,7 +321,7 @@ struct BubbleMapView: View {
             )
             output.append(BubbleLayoutItem(node: node, center: point, radius: radius))
         }
-        return output
+        return relaxLayout(output, center: center, coreRadius: coreRadius, bounds: bounds)
     }
 
     private func bestBubblePosition(
@@ -373,6 +375,74 @@ struct BubbleMapView: View {
         return overlap
     }
 
+    private func relaxLayout(
+        _ items: [BubbleLayoutItem],
+        center: CGPoint,
+        coreRadius: CGFloat,
+        bounds: CGRect
+    ) -> [BubbleLayoutItem] {
+        guard items.count > 1 else { return items }
+        var relaxed = items
+
+        for _ in 0..<48 {
+            var moved = false
+            for i in relaxed.indices {
+                for j in relaxed.indices where j > i {
+                    let a = relaxed[i]
+                    let b = relaxed[j]
+                    let delta = CGPoint(x: b.center.x - a.center.x, y: b.center.y - a.center.y)
+                    let dist = max(0.001, hypot(delta.x, delta.y))
+                    let minDist = a.radius + b.radius + 8
+                    guard dist < minDist else { continue }
+
+                    let push = (minDist - dist) * 0.52
+                    let nx = delta.x / dist
+                    let ny = delta.y / dist
+                    relaxed[i].center.x -= nx * push
+                    relaxed[i].center.y -= ny * push
+                    relaxed[j].center.x += nx * push
+                    relaxed[j].center.y += ny * push
+                    moved = true
+                }
+            }
+
+            for idx in relaxed.indices {
+                var item = relaxed[idx]
+
+                // Keep bubbles outside center core.
+                let dx = item.center.x - center.x
+                let dy = item.center.y - center.y
+                let dist = max(0.001, hypot(dx, dy))
+                let minCoreDist = coreRadius + item.radius + 10
+                if dist < minCoreDist {
+                    let scale = minCoreDist / dist
+                    item.center.x = center.x + dx * scale
+                    item.center.y = center.y + dy * scale
+                    moved = true
+                }
+
+                // Clamp to viewport bounds.
+                let minX = bounds.minX + item.radius
+                let maxX = bounds.maxX - item.radius
+                let minY = bounds.minY + item.radius
+                let maxY = bounds.maxY - item.radius
+                let clampedX = min(max(item.center.x, minX), maxX)
+                let clampedY = min(max(item.center.y, minY), maxY)
+                if clampedX != item.center.x || clampedY != item.center.y {
+                    item.center.x = clampedX
+                    item.center.y = clampedY
+                    moved = true
+                }
+
+                relaxed[idx] = item
+            }
+
+            if !moved { break }
+        }
+
+        return relaxed
+    }
+
     private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
         hypot(a.x - b.x, a.y - b.y)
     }
@@ -382,7 +452,9 @@ struct BubbleMapView: View {
         let widthChanged = abs(size.width - cachedSize.width) > 24
         let heightChanged = abs(size.height - cachedSize.height) > 24
         guard force || nodeChanged || widthChanged || heightChanged else { return }
-        cachedLayout = packedLayout(for: current, in: size, maxItems: maxVisibleBubbles)
+        withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.85, blendDuration: 0.2)) {
+            cachedLayout = packedLayout(for: current, in: size, maxItems: maxVisibleBubbles)
+        }
         cachedNodeID = current.id
         cachedSize = size
     }
@@ -430,6 +502,6 @@ struct BubbleMapView: View {
 
 private struct BubbleLayoutItem {
     let node: FileNode
-    let center: CGPoint
+    var center: CGPoint
     let radius: CGFloat
 }

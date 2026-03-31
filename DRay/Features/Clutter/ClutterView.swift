@@ -12,7 +12,6 @@ struct ClutterView: View {
     var body: some View {
         VStack(spacing: 10) {
             controls
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
             if model.isDuplicateScanRunning {
                 progressPanel
@@ -72,53 +71,60 @@ struct ClutterView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("My Clutter: Exact Duplicates")
-                    .font(.headline)
-                Text("Groups with identical content (SHA-256) and equal file size.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Groups \(model.duplicateGroups.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Stepper(value: $model.duplicateMinSizeMB, in: 1...2_048, step: 1) {
-                Text("Min \(Int(model.duplicateMinSizeMB)) MB")
-                    .frame(minWidth: 120, alignment: .trailing)
-            }
-            .frame(width: 170)
+        ModuleHeaderCard(
+            title: "My Clutter: Exact Duplicates",
+            subtitle: "Groups with identical content (SHA-256) and equal file size."
+        ) {
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Groups \(model.duplicateGroups.count)", tint: .blue)
+                    GlassPillBadge(
+                        title: "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
+                        tint: .green
+                    )
+                    GlassPillBadge(
+                        title: "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
+                        tint: .orange
+                    )
+                }
 
-            Button("Scan Target") {
-                selectedPaths.removeAll()
-                model.scanDuplicatesInSelectedTarget()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(model.isDuplicateScanRunning)
+                HStack(spacing: 8) {
+                    Stepper(value: $model.duplicateMinSizeMB, in: 1...2_048, step: 1) {
+                        Text("Min \(Int(model.duplicateMinSizeMB)) MB")
+                            .frame(minWidth: 120, alignment: .trailing)
+                    }
+                    .frame(width: 170)
 
-            Button("Scan Home") {
-                selectedPaths.removeAll()
-                model.scanDuplicatesInHome()
-            }
-            .disabled(model.isDuplicateScanRunning)
+                    Button("Scan Target") {
+                        selectedPaths.removeAll()
+                        model.scanDuplicatesInSelectedTarget()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isDuplicateScanRunning)
 
-            if model.isDuplicateScanRunning {
-                Button("Cancel") {
-                    model.cancelDuplicateScan()
+                    Button("Scan Home") {
+                        selectedPaths.removeAll()
+                        model.scanDuplicatesInHome()
+                    }
+                    .controlSize(.small)
+                    .disabled(model.isDuplicateScanRunning)
+
+                    if model.isDuplicateScanRunning {
+                        Button("Cancel") {
+                            model.cancelDuplicateScan()
+                        }
+                        .controlSize(.small)
+                    }
+
+                    Button("Clear") {
+                        selectedPaths.removeAll()
+                        model.clearDuplicateResults()
+                    }
+                    .controlSize(.small)
+                    .disabled(model.duplicateGroups.isEmpty && selectedPaths.isEmpty)
                 }
             }
-
-            Button("Clear") {
-                selectedPaths.removeAll()
-                model.clearDuplicateResults()
-            }
-            .disabled(model.duplicateGroups.isEmpty && selectedPaths.isEmpty)
         }
     }
 
@@ -205,6 +211,11 @@ struct ClutterView: View {
             Text(ByteCountFormatter.string(fromByteCount: file.sizeInBytes, countStyle: .file))
                 .font(.caption.weight(.semibold))
         }
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selectedPaths.contains(path) ? Color.accentColor.opacity(0.10) : Color.clear)
+        )
         .contentShape(Rectangle())
         .contextMenu {
             Button("Open") { NSWorkspace.shared.open(file.url) }
@@ -239,6 +250,7 @@ struct ClutterView: View {
             }
         }
         .buttonStyle(.bordered)
+        .controlSize(.small)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

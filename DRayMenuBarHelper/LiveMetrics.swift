@@ -74,7 +74,9 @@ final class LiveSystemMetricsMonitor: ObservableObject {
                 self?.update()
             }
         }
-        RunLoop.main.add(timer!, forMode: .common)
+        if let timer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
     }
 
     func stop() {
@@ -167,7 +169,6 @@ final class LiveSystemMetricsMonitor: ObservableObject {
                 host_statistics64(mach_host_self(), HOST_VM_INFO64, intPtr, &count)
             }
         }
-
         guard result == KERN_SUCCESS else {
             return (0, total, 0)
         }
@@ -179,26 +180,11 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let inactive = Int64(stats.inactive_count) * pageSize
         let wired = Int64(stats.wire_count) * pageSize
         let compressed = Int64(stats.compressor_page_count) * pageSize
-
-        // Inactive pages are typically reclaimable; counting them fully inflates "pressure".
         let used = active + inactive + wired + compressed
         let workingSet = active + wired + compressed
         var pressure = total > 0 ? (Double(workingSet) / Double(total)) * 100.0 : 0
-
-        // Extra pressure boost when compressed memory is significant.
-        var compressedShare = 0.0
-        if total > 0 {
-            compressedShare = Double(compressed) / Double(total)
-            if compressedShare > 0.12 {
-                pressure += min(18.0, compressedShare * 60.0)
-            }
-        }
         if let systemPressure = systemMemoryPressureLevel() {
-            let kernelMapped = systemPressure * 0.72
-            pressure = max(kernelMapped, pressure * 0.35)
-            if compressedShare > 0.20 {
-                pressure += 6
-            }
+            pressure = max(systemPressure * 0.72, pressure * 0.35)
         }
         pressure = min(100, max(0, pressure))
         return (used, total, pressure)
@@ -255,7 +241,6 @@ final class LiveSystemMetricsMonitor: ObservableObject {
 
             return (percent, isCharging, minutes)
         }
-
         return (nil, nil, nil)
     }
 
@@ -264,7 +249,6 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             return (0, 0)
         }
         defer { previousNetwork = current }
-
         guard let previousNetwork else {
             return (0, 0)
         }
@@ -272,7 +256,6 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let dt = max(now.timeIntervalSince(previousNetwork.timestamp), 0.2)
         let downDiff = max(0, Int64(current.inboundBytes) - Int64(previousNetwork.inboundBytes))
         let upDiff = max(0, Int64(current.outboundBytes) - Int64(previousNetwork.outboundBytes))
-
         return (Double(downDiff) / dt, Double(upDiff) / dt)
     }
 
@@ -302,15 +285,12 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     }
 
     private func processConsumersSample() -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
-        let command = "/bin/ps"
-        let args = ["-A", "-o", "pid=,%cpu=,rss=,comm="]
-        let output = runCommand(command, arguments: args)
+        let output = runCommand("/bin/ps", arguments: ["-A", "-o", "pid=,%cpu=,rss=,comm="])
         guard !output.isEmpty else { return ([], [], []) }
 
         let runningApps = Dictionary(
             uniqueKeysWithValues: NSWorkspace.shared.runningApplications.compactMap { app -> (Int32, String)? in
                 guard app.processIdentifier > 0, let name = app.localizedName, !name.isEmpty else { return nil }
-                // Prioritize user-facing apps; fallback to any app if needed.
                 if app.activationPolicy == .regular || app.activationPolicy == .accessory {
                     return (app.processIdentifier, name)
                 }
@@ -319,7 +299,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         )
 
         var rows: [ProcessConsumer] = []
-        rows.reserveCapacity(64)
+        rows.reserveCapacity(96)
 
         for line in output.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -348,61 +328,45 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             )
         }
 
-        // Deduplicate by displayed app name, keep the most expensive row.
-        var byName: [String: ProcessConsumer] = [:]
-        for row in rows {
-            if let existing = byName[row.name] {
-                if row.cpuPercent + row.memoryMB * 0.01 > existing.cpuPercent + existing.memoryMB * 0.01 {
-                    byName[row.name] = row
-                }
-            } else {
-                byName[row.name] = row
-            }
-        }
-
-        let unique = Array(byName.values)
-        let topCPU = unique
-            .filter { $0.cpuPercent > 0.1 }
+        let topCPU = rows
             .sorted { $0.cpuPercent > $1.cpuPercent }
-            .prefix(5)
-        let topMemory = unique
-            .filter { $0.memoryMB > 200 }
+            .prefix(6)
+        let topMemory = rows
             .sorted { $0.memoryMB > $1.memoryMB }
-            .prefix(5)
-        let topBattery = unique
-            .filter { $0.batteryImpactScore > 0.3 }
+            .prefix(6)
+        let topBattery = rows
             .sorted { $0.batteryImpactScore > $1.batteryImpactScore }
-            .prefix(5)
+            .prefix(6)
 
         return (Array(topCPU), Array(topMemory), Array(topBattery))
     }
 
-    private func normalizedProcessName(_ raw: String) -> String {
-        guard !raw.isEmpty else { return raw }
-        if raw.contains("/") {
-            return URL(fileURLWithPath: raw).lastPathComponent
+    private func normalizedProcessName(_ commandPath: String) -> String {
+        let url = URL(fileURLWithPath: commandPath)
+        var name = url.lastPathComponent
+        if name.isEmpty { return "" }
+        if name.hasSuffix(".app") {
+            name = String(name.dropLast(4))
         }
-        return raw
+        return name
     }
 
     private func runCommand(_ launchPath: String, arguments: [String]) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
+        let output = Pipe()
+        process.standardOutput = output
         process.standardError = Pipe()
-
         do {
             try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return "" }
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            return String(decoding: data, as: UTF8.self)
         } catch {
             return ""
         }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return "" }
-        return String(data: data, encoding: .utf8) ?? ""
     }
 }
 

@@ -109,6 +109,46 @@ extension View {
     }
 }
 
+struct ModuleHeaderCard<Actions: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let actions: Actions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.title2.bold())
+                    Text(subtitle)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                actions
+            }
+        }
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
+    }
+}
+
+struct GlassPillBadge: View {
+    let title: String
+    var tint: Color = .blue
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(tint.opacity(0.14), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(tint.opacity(0.28), lineWidth: 0.8)
+            )
+    }
+}
+
 struct MinimalGlassButtonStyle: ButtonStyle {
     let isActive: Bool
     @Environment(\.colorScheme) private var colorScheme

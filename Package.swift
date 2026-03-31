@@ -7,12 +7,17 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "DRay", targets: ["DRay"])
+        .executable(name: "DRay", targets: ["DRay"]),
+        .executable(name: "DRayMenuBarHelper", targets: ["DRayMenuBarHelper"])
     ],
     targets: [
         .executableTarget(
             name: "DRay",
             path: "DRay"
+        ),
+        .executableTarget(
+            name: "DRayMenuBarHelper",
+            path: "DRayMenuBarHelper"
         )
     ]
 )

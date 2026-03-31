@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin
 
 struct ScanTarget {
     let name: String
@@ -93,9 +94,15 @@ struct TrashOperationResult {
 }
 
 struct LoadReliefResult {
-    let terminated: [String]
+    let adjusted: [String]
     let skipped: [String]
     let failed: [String]
+}
+
+private struct ProcessPriorityAdjustment {
+    let pid: Int32
+    let name: String
+    let baselineNice: Int32
 }
 
 struct RecentlyDeletedItem: Codable, Identifiable {
@@ -119,6 +126,14 @@ struct PrivacyCategoryState: Identifiable {
     let id: String
     let category: PrivacyCategory
     var isSelected: Bool
+}
+
+struct SmartAnalyzerOption: Identifiable, Hashable {
+    let key: String
+    let title: String
+    let description: String
+
+    var id: String { key }
 }
 
 struct UnifiedScanSummary {
@@ -183,11 +198,34 @@ enum AppSection: String, Hashable {
     case smartCare
     case clutter
     case uninstaller
+    case repair
     case spaceLens
     case search
     case performance
     case privacy
     case recovery
+}
+
+enum AppRepairStrategy: String, CaseIterable, Identifiable {
+    case safeReset
+    case deepReset
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .safeReset: return "Safe Reset"
+        case .deepReset: return "Deep Reset"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .safeReset:
+            return "Targets low-risk caches, logs and preferences."
+        case .deepReset:
+            return "Includes startup helpers and system-level remnants."
+        }
+    }
 }
 
 @MainActor
@@ -219,6 +257,8 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var smartScanCategories: [SmartCategoryState] = []
     @Published private(set) var isSmartScanRunning = false
     @Published private(set) var smartExclusions: [String] = []
+    @Published private(set) var smartExcludedAnalyzerKeys: [String] = []
+    @Published private(set) var smartAnalyzerTelemetry: [CleanupAnalyzerTelemetry] = []
     @Published var smartMinCleanSizeMB: Double = 1
     @Published var smartProfile: SmartCleanProfile = .balanced
     @Published private(set) var installedApps: [InstalledApp] = []
@@ -226,6 +266,10 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var isUninstallerLoading = false
     @Published private(set) var uninstallReport: UninstallValidationReport?
     @Published private(set) var uninstallSessions: [UninstallSession] = []
+    @Published private(set) var repairArtifacts: [AppRemnant] = []
+    @Published private(set) var isRepairLoading = false
+    @Published private(set) var repairReport: UninstallValidationReport?
+    @Published private(set) var repairSessions: [UninstallSession] = []
     @Published private(set) var duplicateGroups: [DuplicateGroup] = []
     @Published private(set) var isDuplicateScanRunning = false
     @Published private(set) var duplicateScanProgress = DuplicateScanProgress(
@@ -238,6 +282,7 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var performanceReport: PerformanceReport?
     @Published private(set) var isPerformanceScanRunning = false
     @Published private(set) var startupCleanupReport: StartupCleanupReport?
+    @Published private(set) var activeLoadReliefAdjustments = 0
     @Published private(set) var privacyCategories: [PrivacyCategoryState] = []
     @Published private(set) var isPrivacyScanRunning = false
     @Published private(set) var privacyCleanReport: PrivacyCleanReport?
@@ -245,6 +290,8 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var isUnifiedScanRunning = false
     @Published private(set) var unifiedScanSummary: UnifiedScanSummary?
     @Published private(set) var lastExportedDiagnosticURL: URL?
+    @Published var permissionBlockingMessage: String?
+    @Published private(set) var launchAtLoginEnabled = false
 
     let permissions = AppPermissionService()
     let operationLogs = OperationLogStore()
@@ -257,24 +304,44 @@ final class RootViewModel: ObservableObject {
     private let privacyService = PrivacyService()
     private let queryEngine = QueryEngine()
     private let liveSearchService = LiveSearchService()
+    private let menuBarLoginAgentService = MenuBarLoginAgentService()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
     private let searchPresetsKey = "dray.search.presets"
     private let recentlyDeletedKey = "dray.recently.deleted"
     private let smartExclusionsKey = "dray.smart.exclusions"
+    private let smartAnalyzerExclusionsKey = "dray.smart.analyzer.exclusions"
     private let uninstallSessionsKey = "dray.uninstall.sessions"
+    private let repairSessionsKey = "dray.repair.sessions"
     private var scanTask: Task<Void, Never>?
     private var liveSearchTask: Task<Void, Never>?
     private var duplicateScanTask: Task<Void, Never>?
+    private var priorityAdjustments: [ProcessPriorityAdjustment] = []
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
+    let smartAnalyzerOptions: [SmartAnalyzerOption] = [
+        .init(key: "user_logs", title: "User Logs", description: "Old files in ~/Library/Logs"),
+        .init(key: "user_caches", title: "User Caches", description: "Rebuildable cache files"),
+        .init(key: "old_downloads", title: "Old Downloads", description: "Downloads older than 30 days"),
+        .init(key: "xcode_derived_data", title: "Xcode DerivedData", description: "Build artifacts"),
+        .init(key: "ios_backups", title: "iOS Backups", description: "MobileSync local backups"),
+        .init(key: "mail_downloads", title: "Mail Downloads", description: "Saved mail attachments"),
+        .init(key: "language_files", title: "Language Files", description: ".lproj localized resources"),
+        .init(key: "orphan_preferences", title: "Orphan Preferences", description: "Unused app preference files")
+    ]
 
-    init() {
+    init(initialSection: AppSection? = nil) {
         restoreLastTargetIfPossible()
         loadSearchPresets()
         loadRecentlyDeleted()
         loadSmartExclusions()
+        loadSmartAnalyzerExclusions()
         loadUninstallSessions()
-        permissions.refreshFolderAccess(for: selectedTarget.url)
+        loadRepairSessions()
+        refreshLaunchAtLoginStatus()
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
+        if let initialSection {
+            selectedSection = initialSection
+        }
     }
 
     var searchResults: [FileNode] {
@@ -366,24 +433,94 @@ final class RootViewModel: ObservableObject {
 
     func openSection(_ section: AppSection) {
         selectedSection = section
-        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
-            window.makeKeyAndOrderFront(nil)
+    }
+
+    func refreshPermissions() {
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
+        if permissions.hasFolderPermission && permissions.hasFullDiskAccess {
+            permissions.markOnboardingCompleted()
         }
-        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func refreshLaunchAtLoginStatus() {
+        launchAtLoginEnabled = menuBarLoginAgentService.isEnabled()
+    }
+
+    func toggleLaunchAtLogin() {
+        let target = !launchAtLoginEnabled
+        let success = menuBarLoginAgentService.setEnabled(target)
+        refreshLaunchAtLoginStatus()
+        if success {
+            operationLogs.add(
+                category: "telemetry",
+                message: "Launch-at-login \(launchAtLoginEnabled ? "enabled" : "disabled")"
+            )
+        } else {
+            permissionBlockingMessage = "Failed to update launch-at-login setting."
+            operationLogs.add(category: "telemetry", message: "Failed to change launch-at-login setting")
+        }
+    }
+
+    func clearPermissionBlockingMessage() {
+        permissionBlockingMessage = nil
     }
 
     func reduceCPULoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
-        terminateTopConsumers(consumers.sorted { $0.cpuPercent > $1.cpuPercent }, limit: limit, label: "cpu")
+        adjustTopConsumers(consumers.sorted { $0.cpuPercent > $1.cpuPercent }, limit: limit, label: "cpu")
     }
 
     func reduceMemoryLoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
-        terminateTopConsumers(consumers.sorted { $0.memoryMB > $1.memoryMB }, limit: limit, label: "memory")
+        adjustTopConsumers(consumers.sorted { $0.memoryMB > $1.memoryMB }, limit: limit, label: "memory")
+    }
+
+    func restoreAdjustedProcessPriorities(limit: Int = 5) -> LoadReliefResult {
+        guard !priorityAdjustments.isEmpty else {
+            return LoadReliefResult(adjusted: [], skipped: [], failed: [])
+        }
+
+        var restored: [String] = []
+        var skipped: [String] = []
+        var failed: [String] = []
+
+        let maxCount = max(1, limit)
+        let targets = Array(priorityAdjustments.prefix(maxCount))
+
+        for target in targets {
+            guard canAdjustPriority(forPID: target.pid) else {
+                skipped.append(target.name)
+                priorityAdjustments.removeAll { $0.pid == target.pid }
+                continue
+            }
+
+            let niceValue = String(target.baselineNice)
+            let reniceOK = runCommand(
+                "/usr/bin/renice",
+                arguments: [niceValue, "-p", String(target.pid)]
+            )
+            let policyOK = runCommand(
+                "/usr/bin/taskpolicy",
+                arguments: ["-B", "-p", String(target.pid)]
+            )
+            if reniceOK || policyOK {
+                restored.append(target.name)
+                priorityAdjustments.removeAll { $0.pid == target.pid }
+            } else {
+                failed.append(target.name)
+            }
+        }
+
+        activeLoadReliefAdjustments = priorityAdjustments.count
+        operationLogs.add(
+            category: "relief",
+            message: "Load relief restore: restored \(restored.count), skipped \(skipped.count), failed \(failed.count)"
+        )
+        return LoadReliefResult(adjusted: restored, skipped: skipped, failed: failed)
     }
 
     func selectMacDisk() {
         selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
         clearSavedTargetBookmark()
-        permissions.refreshFolderAccess(for: selectedTarget.url)
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
         triggerLiveSearch()
     }
 
@@ -391,19 +528,22 @@ final class RootViewModel: ObservableObject {
         let url = FileManager.default.homeDirectoryForCurrentUser
         selectedTarget = ScanTarget(name: "Home", url: url)
         clearSavedTargetBookmark()
-        permissions.refreshFolderAccess(for: selectedTarget.url)
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
         triggerLiveSearch()
     }
 
     func selectFolder(_ url: URL) {
         let scopedURL = persistAndResolveBookmark(for: url) ?? url
         selectedTarget = ScanTarget(name: scopedURL.lastPathComponent, url: scopedURL)
-        permissions.markOnboardingCompleted()
-        permissions.refreshFolderAccess(for: selectedTarget.url)
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
+        if permissions.hasFolderPermission && permissions.hasFullDiskAccess {
+            permissions.markOnboardingCompleted()
+        }
         triggerLiveSearch()
     }
 
     func scanSelected() {
+        guard ensureCanScanSelectedTarget() else { return }
         operationLogs.add(category: "scan", message: "User triggered scan for \(selectedTarget.url.path)")
         // Keep root scans full to avoid shallow-size artifacts on top-level system directories.
         if selectedTarget.url.path == "/" {
@@ -420,14 +560,19 @@ final class RootViewModel: ObservableObject {
 
     func runSmartScan() {
         guard !isSmartScanRunning else { return }
+        guard ensureCanRunProtectedModule(actionName: "Smart Scan") else { return }
         isSmartScanRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let result = await smartScanService.runSmartScan(excludedPrefixes: smartExclusions)
+            let result = await smartScanService.runSmartScan(
+                excludedPrefixes: smartExclusions,
+                excludedAnalyzerKeys: smartExcludedAnalyzerKeys
+            )
             await MainActor.run {
                 self.smartScanCategories = result.categories.map {
                     SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
                 }
+                self.smartAnalyzerTelemetry = result.analyzerTelemetry
                 self.selectRecommendedSmartCategories()
                 self.isSmartScanRunning = false
                 self.operationLogs.add(category: "smartcare", message: "Smart scan done: categories \(result.categories.count), bytes \(result.totalBytes)")
@@ -446,6 +591,7 @@ final class RootViewModel: ObservableObject {
             .flatMap { $0.result.items }
 
         guard !items.isEmpty else { return }
+        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
 
         Task { [weak self] in
             guard let self else { return }
@@ -460,6 +606,7 @@ final class RootViewModel: ObservableObject {
 
     func cleanSmartItems(_ items: [CleanupItem]) {
         guard !items.isEmpty else { return }
+        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
         Task { [weak self] in
             guard let self else { return }
             let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
@@ -504,6 +651,16 @@ final class RootViewModel: ObservableObject {
         persistSmartExclusions()
     }
 
+    func toggleSmartExclusion(_ path: String) {
+        let normalized = (path as NSString).expandingTildeInPath
+        guard !normalized.isEmpty else { return }
+        if smartExclusions.contains(normalized) {
+            removeSmartExclusion(normalized)
+        } else {
+            addSmartExclusion(normalized)
+        }
+    }
+
     func loadInstalledApps() {
         isUninstallerLoading = true
         Task { [weak self] in
@@ -530,8 +687,10 @@ final class RootViewModel: ObservableObject {
     }
 
     func uninstall(app: InstalledApp, selectedItems: [UninstallPreviewItem]? = nil) {
+        guard ensureCanRunProtectedModule(actionName: "Uninstall") else { return }
         let preview = uninstallPreview(for: app)
         let items = selectedItems ?? preview
+        guard ensureCanModify(urls: items.map(\.url), actionName: "Uninstall", requiresFullDisk: true) else { return }
         Task { [weak self] in
             guard let self else { return }
             let result = await uninstallerService.uninstall(app: app, previewItems: items)
@@ -544,6 +703,65 @@ final class RootViewModel: ObservableObject {
                 self.loadInstalledApps()
             }
         }
+    }
+
+    func loadRepairArtifacts(for app: InstalledApp) {
+        isRepairLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            let artifacts = await uninstallerService.findRemnants(for: app)
+            await MainActor.run {
+                self.repairArtifacts = artifacts
+                self.repairReport = nil
+                self.isRepairLoading = false
+            }
+        }
+    }
+
+    func runAppRepair(app: InstalledApp, artifacts: [AppRemnant], relaunchAfterRepair: Bool) {
+        guard !artifacts.isEmpty else { return }
+        guard ensureCanRunProtectedModule(actionName: "App Repair") else { return }
+        guard ensureCanModify(urls: artifacts.map(\.url), actionName: "App Repair", requiresFullDisk: true) else { return }
+        isRepairLoading = true
+        let previewItems = artifacts.map {
+            UninstallPreviewItem(
+                url: $0.url,
+                type: .remnant,
+                sizeInBytes: $0.sizeInBytes,
+                risk: .low,
+                reason: "App repair artifact cleanup"
+            )
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await uninstallerService.uninstall(app: app, previewItems: previewItems)
+            await MainActor.run {
+                self.repairReport = report
+                self.isRepairLoading = false
+                self.recordRepairSession(from: report)
+                self.operationLogs.add(
+                    category: "repair",
+                    message: "Repair \(app.name): removed \(report.removedCount), skipped \(report.skippedCount), failed \(report.failedCount)"
+                )
+                self.loadRepairArtifacts(for: app)
+                if relaunchAfterRepair {
+                    self.relaunchApp(app)
+                }
+            }
+        }
+    }
+
+    func recommendedRepairArtifacts(for strategy: AppRepairStrategy) -> [AppRemnant] {
+        switch strategy {
+        case .safeReset:
+            return repairArtifacts.filter { repairRisk(for: $0) == .low }
+        case .deepReset:
+            return repairArtifacts
+        }
+    }
+
+    func repairRisk(for artifact: AppRemnant) -> UninstallRiskLevel {
+        previewItem(for: artifact).risk
     }
 
     func restoreFromUninstallSession(_ session: UninstallSession, item: UninstallRollbackItem? = nil) -> Int {
@@ -574,6 +792,34 @@ final class RootViewModel: ObservableObject {
         return restored
     }
 
+    func restoreFromRepairSession(_ session: UninstallSession, item: UninstallRollbackItem? = nil) -> Int {
+        let targets = item.map { [$0] } ?? session.rollbackItems
+        var restored = 0
+
+        for rollback in targets {
+            let sourceURL = URL(fileURLWithPath: rollback.trashedPath)
+            let originalURL = URL(fileURLWithPath: rollback.originalPath)
+            let destinationURL = uniqueRestoreURL(for: originalURL)
+
+            do {
+                try FileManager.default.createDirectory(
+                    at: destinationURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+                restored += 1
+            } catch {
+                AppLogger.actions.error("Failed repair rollback restore: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        if restored > 0 {
+            operationLogs.add(category: "repair", message: "Repair rollback restored \(restored) item(s) for \(session.appName)")
+            pruneRestoredItemsFromRepairSessions(targets: targets)
+        }
+        return restored
+    }
+
     func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
         let appItem = UninstallPreviewItem(
             url: app.appURL,
@@ -591,6 +837,18 @@ final class RootViewModel: ObservableObject {
     func removeSmartExclusion(_ path: String) {
         smartExclusions.removeAll { $0 == path }
         persistSmartExclusions()
+    }
+
+    func toggleSmartAnalyzerExclusion(_ analyzerKey: String) {
+        if smartExcludedAnalyzerKeys.contains(analyzerKey) {
+            smartExcludedAnalyzerKeys.removeAll { $0 == analyzerKey }
+            operationLogs.add(category: "smartcare", message: "Analyzer enabled: \(analyzerKey)")
+        } else {
+            smartExcludedAnalyzerKeys.append(analyzerKey)
+            smartExcludedAnalyzerKeys.sort()
+            operationLogs.add(category: "smartcare", message: "Analyzer excluded: \(analyzerKey)")
+        }
+        persistSmartAnalyzerExclusions()
     }
 
     func scanDuplicatesInSelectedTarget() {
@@ -620,6 +878,9 @@ final class RootViewModel: ObservableObject {
 
     func moveDuplicatePathsToTrash(_ paths: [String]) -> TrashOperationResult {
         let nodes = paths.compactMap { nodeForPath($0) }
+        guard ensureCanModify(urls: nodes.map(\.url), actionName: "Duplicate Cleanup") else {
+            return TrashOperationResult(moved: 0, skippedProtected: paths, failed: [])
+        }
         let result = moveToTrash(nodes: nodes)
         let attempted = Set(paths)
         let skipped = Set(result.skippedProtected)
@@ -645,6 +906,7 @@ final class RootViewModel: ObservableObject {
 
     func runPerformanceScan() {
         guard !isPerformanceScanRunning else { return }
+        guard ensureCanRunProtectedModule(actionName: "Performance Diagnostics") else { return }
         isPerformanceScanRunning = true
         Task { [weak self] in
             guard let self else { return }
@@ -718,6 +980,7 @@ final class RootViewModel: ObservableObject {
 
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
         guard !entries.isEmpty else { return }
+        guard ensureCanModify(urls: entries.map(\.url), actionName: "Startup Cleanup", requiresFullDisk: true) else { return }
         Task { [weak self] in
             guard let self else { return }
             let report = await performanceService.cleanupStartupEntries(entries)
@@ -731,6 +994,7 @@ final class RootViewModel: ObservableObject {
 
     func runPrivacyScan() {
         guard !isPrivacyScanRunning else { return }
+        guard ensureCanRunProtectedModule(actionName: "Privacy Scan") else { return }
         isPrivacyScanRunning = true
         Task { [weak self] in
             guard let self else { return }
@@ -748,12 +1012,16 @@ final class RootViewModel: ObservableObject {
 
     func runUnifiedScan() {
         guard !isUnifiedScanRunning else { return }
+        guard ensureCanRunProtectedModule(actionName: "Unified Scan") else { return }
         isUnifiedScanRunning = true
         operationLogs.add(category: "scan", message: "Unified scan started")
 
         Task { [weak self] in
             guard let self else { return }
-            async let smartResult = smartScanService.runSmartScan(excludedPrefixes: smartExclusions)
+            async let smartResult = smartScanService.runSmartScan(
+                excludedPrefixes: smartExclusions,
+                excludedAnalyzerKeys: smartExcludedAnalyzerKeys
+            )
             async let privacyResult = privacyService.runScan()
             async let performanceResult = performanceService.buildReport()
 
@@ -763,6 +1031,7 @@ final class RootViewModel: ObservableObject {
                 self.smartScanCategories = smart.categories.map {
                     SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
                 }
+                self.smartAnalyzerTelemetry = smart.analyzerTelemetry
                 self.selectRecommendedSmartCategories()
 
                 self.privacyCategories = privacy.categories.map {
@@ -801,6 +1070,7 @@ final class RootViewModel: ObservableObject {
             .filter(\.isSelected)
             .flatMap(\.category.artifacts)
         guard !artifacts.isEmpty else { return }
+        guard ensureCanModify(urls: artifacts.map(\.url), actionName: "Privacy Cleanup", requiresFullDisk: true) else { return }
 
         Task { [weak self] in
             guard let self else { return }
@@ -811,6 +1081,47 @@ final class RootViewModel: ObservableObject {
                 self.runPrivacyScan()
             }
         }
+    }
+
+    private func ensureCanScanSelectedTarget() -> Bool {
+        if permissions.canRunScan(target: selectedTarget.url) {
+            permissionBlockingMessage = nil
+            return true
+        }
+        presentPermissionBlock(
+            permissions.permissionHint
+                ?? "Additional permissions are required for scan."
+        )
+        return false
+    }
+
+    private func ensureCanRunProtectedModule(actionName: String) -> Bool {
+        if permissions.canRunProtectedModule(actionName: actionName) {
+            permissionBlockingMessage = nil
+            return true
+        }
+        presentPermissionBlock(
+            permissions.permissionHint
+                ?? "Full Disk Access is required for \(actionName)."
+        )
+        return false
+    }
+
+    private func ensureCanModify(urls: [URL], actionName: String, requiresFullDisk: Bool = false) -> Bool {
+        if permissions.canModify(urls: urls, actionName: actionName, requiresFullDisk: requiresFullDisk) {
+            permissionBlockingMessage = nil
+            return true
+        }
+        presentPermissionBlock(
+            permissions.permissionHint
+                ?? "Additional permissions are required for \(actionName)."
+        )
+        return false
+    }
+
+    private func presentPermissionBlock(_ message: String) {
+        permissionBlockingMessage = message
+        operationLogs.add(category: "permissions", message: "Blocked operation: \(message)")
     }
 
     @discardableResult
@@ -867,6 +1178,15 @@ final class RootViewModel: ObservableObject {
             operationLogs.add(category: "telemetry", message: "Failed to save diagnostic report")
             return nil
         }
+    }
+
+    func revealCrashTelemetry() {
+        guard let url = CrashTelemetryService.shared.crashEventsURL() else {
+            operationLogs.add(category: "telemetry", message: "Crash telemetry log is empty")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        operationLogs.add(category: "telemetry", message: "Revealed crash telemetry log: \(url.path)")
     }
 
     private func scan(at url: URL, maxDepth: Int) {
@@ -974,7 +1294,7 @@ final class RootViewModel: ObservableObject {
     func restorePermissions() {
         clearSavedTargetBookmark()
         permissions.restorePermissions()
-        permissions.refreshFolderAccess(for: selectedTarget.url)
+        permissions.refreshPermissionStatus(for: selectedTarget.url)
     }
 
     func togglePauseScan() {
@@ -1003,6 +1323,9 @@ final class RootViewModel: ObservableObject {
     }
 
     func moveToTrash(nodes: [FileNode]) -> TrashOperationResult {
+        guard ensureCanModify(urls: nodes.map(\.url), actionName: "Move to Trash") else {
+            return TrashOperationResult(moved: 0, skippedProtected: nodes.map(\.url.path), failed: [])
+        }
         var moved = 0
         var skippedProtected: [String] = []
         var failed: [String] = []
@@ -1147,6 +1470,12 @@ final class RootViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: selectedTargetBookmarkKey)
     }
 
+    private func relaunchApp(_ app: InstalledApp) {
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
+        running.forEach { $0.terminate() }
+        _ = NSWorkspace.shared.open(app.appURL)
+    }
+
     private func loadSearchPresets() {
         guard let data = UserDefaults.standard.data(forKey: searchPresetsKey),
               let presets = try? JSONDecoder().decode([SearchPreset].self, from: data) else { return }
@@ -1190,52 +1519,117 @@ final class RootViewModel: ObservableObject {
         persistUninstallSessions()
     }
 
-    private func terminateTopConsumers(_ consumers: [ProcessConsumer], limit: Int, label: String) -> LoadReliefResult {
-        var terminated: [String] = []
+    private func adjustTopConsumers(_ consumers: [ProcessConsumer], limit: Int, label: String) -> LoadReliefResult {
+        var adjusted: [String] = []
         var skipped: [String] = []
         var failed: [String] = []
         var processed = 0
 
         for consumer in consumers {
             if processed >= limit { break }
-            guard let app = NSRunningApplication(processIdentifier: consumer.pid) else {
-                skipped.append(consumer.name)
-                continue
-            }
-            guard canTerminate(app: app) else {
+            guard canAdjustPriority(forPID: consumer.pid) else {
                 skipped.append(consumer.name)
                 continue
             }
 
             processed += 1
-            let name = app.localizedName ?? consumer.name
-            if app.terminate() || app.forceTerminate() {
-                terminated.append(name)
+            let name = displayName(for: consumer)
+            let baselineNice = baselineNiceValue(forPID: consumer.pid)
+            let reniceOK = runCommand(
+                "/usr/bin/renice",
+                arguments: ["+10", "-p", String(consumer.pid)]
+            )
+            let backgroundOK = runCommand(
+                "/usr/bin/taskpolicy",
+                arguments: ["-b", "-p", String(consumer.pid)]
+            )
+
+            if reniceOK || backgroundOK {
+                adjusted.append(name)
+                let baseline = baselineNice ?? 0
+                if let existing = priorityAdjustments.firstIndex(where: { $0.pid == consumer.pid }) {
+                    priorityAdjustments[existing] = ProcessPriorityAdjustment(
+                        pid: consumer.pid,
+                        name: name,
+                        baselineNice: priorityAdjustments[existing].baselineNice
+                    )
+                } else {
+                    priorityAdjustments.append(
+                        ProcessPriorityAdjustment(
+                            pid: consumer.pid,
+                            name: name,
+                            baselineNice: baseline
+                        )
+                    )
+                }
             } else {
                 failed.append(name)
             }
         }
 
+        activeLoadReliefAdjustments = priorityAdjustments.count
         operationLogs.add(
             category: "relief",
-            message: "Load relief (\(label)): terminated \(terminated.count), skipped \(skipped.count), failed \(failed.count)"
+            message: "Load relief (\(label)): adjusted \(adjusted.count), skipped \(skipped.count), failed \(failed.count)"
         )
-        return LoadReliefResult(terminated: terminated, skipped: skipped, failed: failed)
+        return LoadReliefResult(adjusted: adjusted, skipped: skipped, failed: failed)
     }
 
-    private func canTerminate(app: NSRunningApplication) -> Bool {
-        guard app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
-        guard !app.isTerminated else { return false }
-        switch app.activationPolicy {
-        case .regular, .accessory:
-            break
-        default:
+    private func canAdjustPriority(forPID pid: Int32) -> Bool {
+        guard pid > 1 else { return false }
+        guard pid != ProcessInfo.processInfo.processIdentifier else { return false }
+
+        if kill(pid, 0) != 0 {
+            switch errno {
+            case ESRCH, EPERM:
+                return false
+            default:
+                break
+            }
+        }
+
+        if let app = NSRunningApplication(processIdentifier: pid),
+           let bundleID = app.bundleIdentifier,
+           bundleID.hasPrefix("com.apple.") {
             return false
         }
-        if let bundleID = app.bundleIdentifier, bundleID.hasPrefix("com.apple.") {
-            return false
-        }
+
         return true
+    }
+
+    private func displayName(for consumer: ProcessConsumer) -> String {
+        if let app = NSRunningApplication(processIdentifier: consumer.pid),
+           let localized = app.localizedName,
+           !localized.isEmpty {
+            return localized
+        }
+        return consumer.name
+    }
+
+    private func baselineNiceValue(forPID pid: Int32) -> Int32? {
+        errno = 0
+        let value = getpriority(PRIO_PROCESS, UInt32(pid))
+        if errno != 0 {
+            return nil
+        }
+        return value
+    }
+
+    private func runCommand(_ launchPath: String, arguments: [String]) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return false
+        }
+
+        process.waitUntilExit()
+        return process.terminationStatus == 0
     }
 
     private func loadRecentlyDeleted() {
@@ -1257,6 +1651,14 @@ final class RootViewModel: ObservableObject {
         UserDefaults.standard.set(smartExclusions, forKey: smartExclusionsKey)
     }
 
+    private func loadSmartAnalyzerExclusions() {
+        smartExcludedAnalyzerKeys = UserDefaults.standard.stringArray(forKey: smartAnalyzerExclusionsKey) ?? []
+    }
+
+    private func persistSmartAnalyzerExclusions() {
+        UserDefaults.standard.set(smartExcludedAnalyzerKeys, forKey: smartAnalyzerExclusionsKey)
+    }
+
     private func loadUninstallSessions() {
         guard let data = UserDefaults.standard.data(forKey: uninstallSessionsKey),
               let sessions = try? JSONDecoder().decode([UninstallSession].self, from: data) else { return }
@@ -1268,6 +1670,17 @@ final class RootViewModel: ObservableObject {
         UserDefaults.standard.set(data, forKey: uninstallSessionsKey)
     }
 
+    private func loadRepairSessions() {
+        guard let data = UserDefaults.standard.data(forKey: repairSessionsKey),
+              let sessions = try? JSONDecoder().decode([UninstallSession].self, from: data) else { return }
+        repairSessions = sessions
+    }
+
+    private func persistRepairSessions() {
+        guard let data = try? JSONEncoder().encode(repairSessions) else { return }
+        UserDefaults.standard.set(data, forKey: repairSessionsKey)
+    }
+
     private func pruneRestoredItemsFromSessions(targets: [UninstallRollbackItem]) {
         let restoredSet = Set(targets.map { $0.trashedPath })
         uninstallSessions = uninstallSessions.compactMap { session in
@@ -1276,6 +1689,16 @@ final class RootViewModel: ObservableObject {
             return UninstallSession(appName: session.appName, createdAt: session.createdAt, rollbackItems: remaining)
         }
         persistUninstallSessions()
+    }
+
+    private func pruneRestoredItemsFromRepairSessions(targets: [UninstallRollbackItem]) {
+        let restoredSet = Set(targets.map { $0.trashedPath })
+        repairSessions = repairSessions.compactMap { session in
+            let remaining = session.rollbackItems.filter { !restoredSet.contains($0.trashedPath) }
+            guard !remaining.isEmpty else { return nil }
+            return UninstallSession(appName: session.appName, createdAt: session.createdAt, rollbackItems: remaining)
+        }
+        persistRepairSessions()
     }
 
     private func uniqueRestoreURL(for desiredURL: URL) -> URL {
@@ -1329,5 +1752,23 @@ final class RootViewModel: ObservableObject {
             risk: .low,
             reason: "Regular app support/caches/logs"
         )
+    }
+
+    private func recordRepairSession(from report: UninstallValidationReport) {
+        let rollbackItems = report.results.compactMap { result -> UninstallRollbackItem? in
+            guard result.status == .removed, let trashedPath = result.trashedPath else { return nil }
+            return UninstallRollbackItem(
+                originalPath: result.url.path,
+                trashedPath: trashedPath,
+                type: result.type
+            )
+        }
+        guard !rollbackItems.isEmpty else { return }
+        let session = UninstallSession(appName: report.appName, createdAt: report.createdAt, rollbackItems: rollbackItems)
+        repairSessions.insert(session, at: 0)
+        if repairSessions.count > 50 {
+            repairSessions = Array(repairSessions.prefix(50))
+        }
+        persistRepairSessions()
     }
 }
