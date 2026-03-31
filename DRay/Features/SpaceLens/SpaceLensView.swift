@@ -41,37 +41,37 @@ struct SpaceLensView: View {
 
     private var header: some View {
         ModuleHeaderCard(
-            title: "Space Lens",
-            subtitle: "Target: \(model.selectedTarget.url.path)"
+            title: model.localized(.navSpaceLens),
+            subtitle: "\(model.localized(.spaceLensTarget)): \(model.selectedTarget.url.path)"
         ) {
             HStack(spacing: 8) {
-                GlassPillBadge(title: "Selected \(selectedPaths.count)", tint: .blue)
+                GlassPillBadge(title: "\(model.localized(.spaceLensSelected)) \(selectedPaths.count)", tint: .blue)
                 if let root = model.root {
-                    GlassPillBadge(title: "Nodes \(root.children.count)", tint: .green)
+                    GlassPillBadge(title: "\(model.localized(.spaceLensNodes)) \(root.children.count)", tint: .green)
                 }
                 targetPicker
 
-                Button("Scan") { model.scanSelected() }
+                Button(model.localized(.spaceLensScan)) { model.scanSelected() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(model.isLoading)
 
-                Picker("Tap Mode", selection: $bubbleTapMode) {
+                Picker(model.localized(.spaceLensTapMode), selection: $bubbleTapMode) {
                     ForEach(BubbleTapMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                        Text(bubbleTapModeTitle(mode)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 240)
 
                 if model.isLoading {
-                    Button(model.isPaused ? "Resume" : "Pause") { model.togglePauseScan() }
+                    Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
                         .controlSize(.small)
-                    Button("Cancel") { model.cancelScan() }
+                    Button(model.localized(.spaceLensCancel)) { model.cancelScan() }
                         .controlSize(.small)
                 }
 
-                Button("Rescan") { model.rescan() }
+                Button(model.localized(.spaceLensRescan)) { model.rescan() }
                     .controlSize(.small)
                     .disabled(model.lastScannedTarget == nil || model.isLoading)
             }
@@ -81,14 +81,14 @@ struct SpaceLensView: View {
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                sectionCard(title: "Permissions") {
+                sectionCard(title: model.localized(.spaceLensPermissions)) {
                     permissionsSection
                 }
-                sectionCard(title: "Scan Target") {
+                sectionCard(title: model.localized(.spaceLensScanTarget)) {
                     scanTargetSection
                 }
                 if let root = model.root {
-                    sectionCard(title: "Largest") {
+                    sectionCard(title: model.localized(.spaceLensLargest)) {
                         largestSection(root: root)
                     }
                 }
@@ -106,14 +106,14 @@ struct SpaceLensView: View {
     private var permissionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.permissions.hasFolderPermission
-                 ? "Folder access granted for selected target."
-                 : "Folder access is not granted for current target.")
+                 ? model.localized(.spaceLensFolderGranted)
+                 : model.localized(.spaceLensFolderDenied))
                 .font(.footnote)
                 .foregroundStyle(model.permissions.hasFolderPermission ? .green : .orange)
 
             Text(model.permissions.hasFullDiskAccess
-                 ? "Full Disk Access granted."
-                 : "Full Disk Access is not granted.")
+                 ? model.localized(.spaceLensFullDiskGranted)
+                 : model.localized(.spaceLensFullDiskDenied))
                 .font(.footnote)
                 .foregroundStyle(model.permissions.hasFullDiskAccess ? .green : .orange)
 
@@ -123,15 +123,15 @@ struct SpaceLensView: View {
                     .foregroundStyle(.secondary)
             }
             if model.permissions.firstLaunchNeedsSetup {
-                Text("First launch setup is required before full functionality.")
+                Text(model.localized(.spaceLensFirstLaunchRequired))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Button("Grant Folder Access") { onChooseFolder() }
+            Button(model.localized(.settingsGrantFolder)) { onChooseFolder() }
                 .buttonStyle(.bordered)
-            Button("Open Full Disk Access") { model.permissions.openFullDiskAccessSettings() }
+            Button(model.localized(.settingsOpenFullDisk)) { model.permissions.openFullDiskAccessSettings() }
                 .buttonStyle(.bordered)
-            Button("Restore") { model.restorePermissions() }
+            Button(model.localized(.settingsRestore)) { model.restorePermissions() }
                 .buttonStyle(.bordered)
         }
     }
@@ -200,13 +200,13 @@ struct SpaceLensView: View {
             }
         }
         .contextMenu {
-            Button("Open") { model.openItem(node) }
+            Button(model.localized(.spaceLensOpen)) { model.openItem(node) }
             Button("Reveal in Finder") { model.revealInFinder(node) }
             Button(selectedPaths.contains(node.url.path) ? "Remove from Selection" : "Add to Selection") {
                 toggleSelection(node.url.path)
             }
             Divider()
-            Button("Move to Trash", role: .destructive) {
+            Button(model.localized(.spaceLensMoveToTrash), role: .destructive) {
                 pendingTrashNodes = [node]
                 showTrashConfirm = true
             }
@@ -220,7 +220,8 @@ struct SpaceLensView: View {
                     root: root,
                     hoveredPath: $model.hoveredPath,
                     selectedPaths: $selectedPaths,
-                    tapMode: $bubbleTapMode
+                    tapMode: $bubbleTapMode,
+                    language: model.appLanguage
                 )
             } else {
                 emptyState
@@ -228,24 +229,24 @@ struct SpaceLensView: View {
         }
         .overlay(alignment: .bottomLeading) { bottomPanel }
         .confirmationDialog(
-            "Move selected item(s) to Trash?",
+            model.localized(.spaceLensTrashDialogTitle),
             isPresented: $showTrashConfirm,
             titleVisibility: .visible
         ) {
-            Button("Move to Trash", role: .destructive) {
+            Button(model.localized(.spaceLensTrashDialogAction), role: .destructive) {
                 guard !pendingTrashNodes.isEmpty else { return }
                 let result = model.moveToTrash(nodes: pendingTrashNodes)
                 trashResultMessage = "Moved: \(result.moved), Skipped protected: \(result.skippedProtected.count), Failed: \(result.failed.count)"
                 pendingTrashNodes = []
                 selectedPaths.removeAll()
             }
-            Button("Cancel", role: .cancel) { pendingTrashNodes = [] }
+            Button(model.localized(.commonCancel), role: .cancel) { pendingTrashNodes = [] }
         }
-        .alert("Trash Result", isPresented: Binding(
+        .alert(model.localized(.spaceLensTrashResultTitle), isPresented: Binding(
             get: { trashResultMessage != nil },
             set: { if !$0 { trashResultMessage = nil } }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(model.localized(.commonOK), role: .cancel) {}
         } message: {
             Text(trashResultMessage ?? "")
         }
@@ -273,16 +274,16 @@ struct SpaceLensView: View {
     private var emptyState: some View {
         VStack(spacing: 20) {
             ContentUnavailableView(
-                "Space Lens",
+                model.localized(.navSpaceLens),
                 systemImage: "externaldrive",
                 description: Text(model.permissions.firstLaunchNeedsSetup
-                                  ? "Grant access and choose folder for first scan."
-                                  : "Choose a target and start scan.")
+                                  ? model.localized(.spaceLensEmptyNeedSetup)
+                                  : model.localized(.spaceLensEmptyNeedScan))
             )
 
             HStack(spacing: 12) {
                 targetPicker
-                Button("Scan") { model.scanSelected() }
+                Button(model.localized(.spaceLensScan)) { model.scanSelected() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isLoading)
             }
@@ -294,7 +295,7 @@ struct SpaceLensView: View {
         if model.isLoading || !selectedPaths.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 if model.isLoading {
-                    Text("Scanning: \(model.progress.visitedItems) items")
+                    Text("\(model.localized(.spaceLensScanning)): \(model.progress.visitedItems) items")
                     Text(model.progress.currentPath)
                         .lineLimit(1)
                         .font(.caption)
@@ -303,20 +304,20 @@ struct SpaceLensView: View {
                 if !selectedPaths.isEmpty {
                     Divider()
                     HStack(spacing: 8) {
-                        Text("Selected: \(selectedNodes.count)")
-                        Button("Open") {
+                        Text("\(model.localized(.spaceLensSelectedCount)): \(selectedNodes.count)")
+                        Button(model.localized(.spaceLensOpen)) {
                             guard let first = selectedNodes.first else { return }
                             model.openItem(first)
                         }
-                        Button("Reveal") {
+                        Button(model.localized(.spaceLensReveal)) {
                             guard let first = selectedNodes.first else { return }
                             model.revealInFinder(first)
                         }
-                        Button("Move to Trash", role: .destructive) {
+                        Button(model.localized(.spaceLensMoveToTrash), role: .destructive) {
                             pendingTrashNodes = selectedNodes
                             showTrashConfirm = true
                         }
-                        Button("Clear") { selectedPaths.removeAll() }
+                        Button(model.localized(.spaceLensClear)) { selectedPaths.removeAll() }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -337,14 +338,23 @@ struct SpaceLensView: View {
 
     private var targetPicker: some View {
         Menu {
-            Button("Macintosh HD") { model.selectMacDisk() }
-            Button("Home") { model.selectHome() }
+            Button(model.localized(.spaceLensMacintoshHD)) { model.selectMacDisk() }
+            Button(model.localized(.spaceLensHome)) { model.selectHome() }
             Divider()
-            Button("Choose folder...") { onChooseFolder() }
+            Button(model.localized(.spaceLensChooseFolder)) { onChooseFolder() }
         } label: {
             Label(model.selectedTarget.name, systemImage: "folder")
         }
         .controlSize(.small)
+    }
+
+    private func bubbleTapModeTitle(_ mode: BubbleTapMode) -> String {
+        switch mode {
+        case .select:
+            return model.localized(.bubbleTapModeSelect)
+        case .openFolders:
+            return model.localized(.bubbleTapModeOpenFolders)
+        }
     }
 
     private var selectedNodes: [FileNode] {

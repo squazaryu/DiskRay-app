@@ -204,6 +204,7 @@ enum AppSection: String, Hashable {
     case performance
     case privacy
     case recovery
+    case settings
 }
 
 enum AppRepairStrategy: String, CaseIterable, Identifiable {
@@ -292,6 +293,11 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var lastExportedDiagnosticURL: URL?
     @Published var permissionBlockingMessage: String?
     @Published private(set) var launchAtLoginEnabled = false
+    @Published var appLanguage: AppLanguage = .system {
+        didSet {
+            UserDefaults.standard.set(appLanguage.rawValue, forKey: appLanguageKey)
+        }
+    }
 
     let permissions = AppPermissionService()
     let operationLogs = OperationLogStore()
@@ -307,6 +313,7 @@ final class RootViewModel: ObservableObject {
     private let menuBarLoginAgentService = MenuBarLoginAgentService()
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
+    private let appLanguageKey = "dray.ui.language"
     private let searchPresetsKey = "dray.search.presets"
     private let recentlyDeletedKey = "dray.recently.deleted"
     private let smartExclusionsKey = "dray.smart.exclusions"
@@ -330,6 +337,10 @@ final class RootViewModel: ObservableObject {
     ]
 
     init(initialSection: AppSection? = nil) {
+        if let storedLanguage = UserDefaults.standard.string(forKey: appLanguageKey),
+           let language = AppLanguage(rawValue: storedLanguage) {
+            appLanguage = language
+        }
         restoreLastTargetIfPossible()
         loadSearchPresets()
         loadRecentlyDeleted()
@@ -366,6 +377,14 @@ final class RootViewModel: ObservableObject {
             modifiedWithinDays: searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil,
             nodeType: searchNodeType
         )
+    }
+
+    func localized(_ key: AppL10nKey) -> String {
+        AppL10n.text(key, language: appLanguage)
+    }
+
+    func localizedSectionTitle(for section: AppSection) -> String {
+        AppL10n.sectionTitle(section, language: appLanguage)
     }
 
     func triggerLiveSearch() {

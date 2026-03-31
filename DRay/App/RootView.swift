@@ -7,15 +7,16 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private let sections: [RootSectionItem] = [
-        .init(id: .smartCare, title: "Smart Care", icon: "sparkles"),
-        .init(id: .clutter, title: "My Clutter", icon: "square.on.square"),
-        .init(id: .uninstaller, title: "Uninstaller", icon: "trash"),
-        .init(id: .repair, title: "App Repair", icon: "wrench.and.screwdriver"),
-        .init(id: .spaceLens, title: "Space Lens", icon: "circle.grid.3x3.fill"),
-        .init(id: .search, title: "Search", icon: "magnifyingglass"),
-        .init(id: .performance, title: "Performance", icon: "gauge.with.dots.needle.67percent"),
-        .init(id: .privacy, title: "Privacy", icon: "lock.shield"),
-        .init(id: .recovery, title: "Recovery", icon: "arrow.uturn.backward.circle")
+        .init(id: .smartCare, icon: "sparkles"),
+        .init(id: .clutter, icon: "square.on.square"),
+        .init(id: .uninstaller, icon: "trash"),
+        .init(id: .repair, icon: "wrench.and.screwdriver"),
+        .init(id: .spaceLens, icon: "circle.grid.3x3.fill"),
+        .init(id: .search, icon: "magnifyingglass"),
+        .init(id: .performance, icon: "gauge.with.dots.needle.67percent"),
+        .init(id: .privacy, icon: "lock.shield"),
+        .init(id: .recovery, icon: "arrow.uturn.backward.circle"),
+        .init(id: .settings, icon: "gearshape")
     ]
 
     var body: some View {
@@ -82,7 +83,7 @@ struct RootView: View {
                             model.selectedSection = item.id
                         }
                     } label: {
-                        Label(item.title, systemImage: item.icon)
+                        Label(model.localizedSectionTitle(for: item.id), systemImage: item.icon)
                             .font(.system(size: 14, weight: .semibold))
                             .labelStyle(.titleOnly)
                     }
@@ -213,12 +214,16 @@ struct RootView: View {
             PrivacyView(model: model)
         case .recovery:
             RecoveryView(model: model)
+        case .settings:
+            SettingsView(
+                model: model,
+                onChooseFolder: { isFolderPickerPresented = true }
+            )
         }
     }
 }
 
 private struct RootSectionItem: Identifiable {
     let id: AppSection
-    let title: String
     let icon: String
 }

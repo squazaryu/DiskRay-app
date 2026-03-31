@@ -18,19 +18,23 @@ struct BubbleMapView: View {
     @Binding var hoveredPath: String?
     @Binding var selectedPaths: Set<String>
     @Binding var tapMode: BubbleTapMode
+    let language: AppLanguage
     @Environment(\.colorScheme) private var colorScheme
     @State private var navigation: [FileNode] = []
     @State private var didInitialReset = false
     @State private var cachedLayout: [BubbleLayoutItem] = []
     @State private var cachedNodeID: FileNode.ID?
     @State private var cachedSize: CGSize = .zero
-    private let maxVisibleBubbles = 20
+    @State private var cachedVisibleLimit: Int = 0
+    @State private var overlayAvoidRect: CGRect = .zero
+    @State private var cachedOverlayRect: CGRect = .zero
 
     var body: some View {
         GeometryReader { geo in
             let current = navigation.last ?? root
+            let visibleLimit = visibleBubblesLimit(for: geo.size)
             let coreRadius = centerCoreRadius(for: geo.size)
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let center = coreCenter(for: geo.size, coreRadius: coreRadius, overlayRect: overlayAvoidRect)
 
             ZStack {
                 LinearGradient(
@@ -74,7 +78,7 @@ struct BubbleMapView: View {
                         Button {
                             resetToRoot()
                         } label: {
-                            Label("Root", systemImage: "house")
+                            Label(t(.bubbleRoot), systemImage: "house")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(accentColor)
@@ -82,7 +86,7 @@ struct BubbleMapView: View {
                         Button {
                             goUp()
                         } label: {
-                            Label("Back", systemImage: "chevron.left")
+                            Label(t(.bubbleBack), systemImage: "chevron.left")
                         }
                         .buttonStyle(.bordered)
                         .disabled(navigation.isEmpty)
@@ -94,7 +98,7 @@ struct BubbleMapView: View {
                                 Button {
                                     jumpTo(node)
                                 } label: {
-                                    Text(node.name == "/" ? "Root" : node.name)
+                                    Text(node.name == "/" ? t(.bubbleRootName) : node.name)
                                         .font(.caption.weight(.semibold))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
@@ -108,22 +112,32 @@ struct BubbleMapView: View {
                         .font(.caption2)
                         .foregroundStyle(secondaryTextColor)
                         .lineLimit(1)
-                    Text(tapMode == .select ? "Tap bubble: select item" : "Tap folder bubble: open level")
+                    Text(tapMode == .select ? t(.bubbleHintSelect) : t(.bubbleHintOpen))
                         .font(.caption2)
                         .foregroundStyle(secondaryTextColor.opacity(0.9))
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(
+                                key: BubbleOverlayRectPreferenceKey.self,
+                                value: proxy.frame(in: .named("bubble-map-space"))
+                            )
+                    }
+                )
                 .padding(10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .coordinateSpace(name: "bubble-map-space")
             .onChange(of: root.id) {
                 navigation = []
                 selectedPaths.removeAll()
                 hoveredPath = nil
                 cachedLayout = []
                 cachedNodeID = nil
-                recalcLayoutIfNeeded(current: root, size: geo.size, force: true)
+                recalcLayoutIfNeeded(current: root, size: geo.size, visibleLimit: visibleLimit, force: true)
             }
             .onAppear {
                 if !didInitialReset {
@@ -131,18 +145,26 @@ struct BubbleMapView: View {
                     hoveredPath = nil
                     didInitialReset = true
                 }
-                sanitizeSelection(for: current)
-                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
+                sanitizeSelection(for: current, visibleLimit: visibleLimit)
+                recalcLayoutIfNeeded(current: current, size: geo.size, visibleLimit: visibleLimit, force: true)
             }
             .onChange(of: current.id) {
-                sanitizeSelection(for: current)
-                recalcLayoutIfNeeded(current: current, size: geo.size, force: true)
+                sanitizeSelection(for: current, visibleLimit: visibleLimit)
+                recalcLayoutIfNeeded(current: current, size: geo.size, visibleLimit: visibleLimit, force: true)
             }
             .onChange(of: geo.size.width) {
-                recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
+                sanitizeSelection(for: current, visibleLimit: visibleLimit)
+                recalcLayoutIfNeeded(current: current, size: geo.size, visibleLimit: visibleLimit, force: false)
             }
             .onChange(of: geo.size.height) {
-                recalcLayoutIfNeeded(current: current, size: geo.size, force: false)
+                sanitizeSelection(for: current, visibleLimit: visibleLimit)
+                recalcLayoutIfNeeded(current: current, size: geo.size, visibleLimit: visibleLimit, force: false)
+            }
+            .onPreferenceChange(BubbleOverlayRectPreferenceKey.self) { rect in
+                if rectDistance(rect, overlayAvoidRect) > 1 {
+                    overlayAvoidRect = rect
+                    recalcLayoutIfNeeded(current: current, size: geo.size, visibleLimit: visibleLimit, force: true)
+                }
             }
         }
     }
@@ -288,40 +310,54 @@ struct BubbleMapView: View {
         }
     }
 
-    private func packedLayout(for node: FileNode, in size: CGSize, maxItems: Int) -> [BubbleLayoutItem] {
+    private func packedLayout(
+        for node: FileNode,
+        in size: CGSize,
+        maxItems: Int,
+        overlayRect: CGRect
+    ) -> [BubbleLayoutItem] {
         let items = Array(node.largestChildren.prefix(maxItems))
         guard !items.isEmpty else { return [] }
 
-        let width = max(size.width, 520)
-        let height = max(size.height, 360)
-        let center = CGPoint(x: width / 2, y: height / 2)
+        let width = max(size.width, 320)
+        let height = max(size.height, 260)
         let coreRadius = centerCoreRadius(for: size)
         let minCanvas = min(width, height)
-        let bounds = CGRect(x: 12, y: 12, width: width - 24, height: height - 24)
+        let bounds = CGRect(x: 12, y: 12, width: max(1, width - 24), height: max(1, height - 24))
+        let avoidRect = normalizedAvoidRect(overlayRect: overlayRect, bounds: bounds)
+        let center = coreCenter(for: size, coreRadius: coreRadius, overlayRect: avoidRect)
 
         let maxSize = Double(max(items.first?.sizeInBytes ?? 1, 1))
-        let minR = max(26.0, minCanvas * 0.055)
-        let maxR = min(100.0, minCanvas * 0.18)
-        let baseRadii: [CGFloat] = items.map { child in
+        let minR = max(20.0, minCanvas * (items.count > 14 ? 0.045 : 0.055))
+        let maxR = min(120.0, minCanvas * 0.19)
+        let initialRadii: [CGFloat] = items.map { child in
             let factor = sqrt(Double(max(child.sizeInBytes, 1)) / maxSize)
             return CGFloat(minR + (maxR - minR) * factor)
         }
+        let scale = areaScaleFactor(
+            for: initialRadii,
+            coreRadius: coreRadius,
+            bounds: bounds,
+            itemCount: items.count
+        )
+        let radii = initialRadii.map { max(18, $0 * scale) }
 
         var output: [BubbleLayoutItem] = []
         output.reserveCapacity(items.count)
         for (index, node) in items.enumerated() {
-            let radius = baseRadii[index]
+            let radius = radii[index]
             let point = bestBubblePosition(
                 radius: radius,
                 index: index,
                 center: center,
                 coreRadius: coreRadius,
                 bounds: bounds,
+                avoidRect: avoidRect,
                 placed: output
             )
             output.append(BubbleLayoutItem(node: node, center: point, radius: radius))
         }
-        return relaxLayout(output, center: center, coreRadius: coreRadius, bounds: bounds)
+        return relaxLayout(output, center: center, coreRadius: coreRadius, bounds: bounds, avoidRect: avoidRect)
     }
 
     private func bestBubblePosition(
@@ -330,6 +366,7 @@ struct BubbleMapView: View {
         center: CGPoint,
         coreRadius: CGFloat,
         bounds: CGRect,
+        avoidRect: CGRect,
         placed: [BubbleLayoutItem]
     ) -> CGPoint {
         let goldenAngle = Double.pi * (3 - sqrt(5))
@@ -349,14 +386,15 @@ struct BubbleMapView: View {
 
             let overlapPenalty = overlapAmount(for: candidate, radius: radius, placed: placed)
             let corePenalty = max(0, (coreRadius + radius + 12) - distance(candidate, center))
-            let centerPenalty = distance(candidate, center) * 0.01
-            let penalty = overlapPenalty * 30 + corePenalty * 40 + centerPenalty
+            let avoidPenalty = avoidRectPenalty(for: candidate, radius: radius, avoidRect: avoidRect)
+            let centerPenalty = distance(candidate, center) * 0.008
+            let penalty = overlapPenalty * 30 + corePenalty * 40 + avoidPenalty * 55 + centerPenalty
 
             if penalty < bestPenalty {
                 bestPenalty = penalty
                 bestPoint = candidate
             }
-            if overlapPenalty <= 0.1 && corePenalty <= 0.1 {
+            if overlapPenalty <= 0.1 && corePenalty <= 0.1 && avoidPenalty <= 0.1 {
                 break
             }
         }
@@ -379,12 +417,13 @@ struct BubbleMapView: View {
         _ items: [BubbleLayoutItem],
         center: CGPoint,
         coreRadius: CGFloat,
-        bounds: CGRect
+        bounds: CGRect,
+        avoidRect: CGRect
     ) -> [BubbleLayoutItem] {
         guard items.count > 1 else { return items }
         var relaxed = items
 
-        for _ in 0..<48 {
+        for _ in 0..<64 {
             var moved = false
             for i in relaxed.indices {
                 for j in relaxed.indices where j > i {
@@ -421,6 +460,17 @@ struct BubbleMapView: View {
                     moved = true
                 }
 
+                let avoidPenalty = avoidRectPenalty(for: item.center, radius: item.radius, avoidRect: avoidRect)
+                if avoidPenalty > 0.01 {
+                    item.center = projectedOutsideAvoidRect(
+                        point: item.center,
+                        radius: item.radius,
+                        avoidRect: avoidRect,
+                        bounds: bounds
+                    )
+                    moved = true
+                }
+
                 // Clamp to viewport bounds.
                 let minX = bounds.minX + item.radius
                 let maxX = bounds.maxX - item.radius
@@ -447,20 +497,29 @@ struct BubbleMapView: View {
         hypot(a.x - b.x, a.y - b.y)
     }
 
-    private func recalcLayoutIfNeeded(current: FileNode, size: CGSize, force: Bool) {
+    private func recalcLayoutIfNeeded(current: FileNode, size: CGSize, visibleLimit: Int, force: Bool) {
         let nodeChanged = cachedNodeID != current.id
         let widthChanged = abs(size.width - cachedSize.width) > 24
         let heightChanged = abs(size.height - cachedSize.height) > 24
-        guard force || nodeChanged || widthChanged || heightChanged else { return }
+        let limitChanged = cachedVisibleLimit != visibleLimit
+        let overlayChanged = rectDistance(overlayAvoidRect, cachedOverlayRect) > 6
+        guard force || nodeChanged || widthChanged || heightChanged || limitChanged || overlayChanged else { return }
         withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.85, blendDuration: 0.2)) {
-            cachedLayout = packedLayout(for: current, in: size, maxItems: maxVisibleBubbles)
+            cachedLayout = packedLayout(
+                for: current,
+                in: size,
+                maxItems: visibleLimit,
+                overlayRect: overlayAvoidRect
+            )
         }
         cachedNodeID = current.id
         cachedSize = size
+        cachedVisibleLimit = visibleLimit
+        cachedOverlayRect = overlayAvoidRect
     }
 
-    private func sanitizeSelection(for node: FileNode) {
-        let visible = Set(node.largestChildren.prefix(maxVisibleBubbles).map { $0.url.path })
+    private func sanitizeSelection(for node: FileNode, visibleLimit: Int) {
+        let visible = Set(node.largestChildren.prefix(visibleLimit).map { $0.url.path })
         selectedPaths = selectedPaths.filter { visible.contains($0) }
         if let hoveredPath, !visible.contains(hoveredPath) {
             self.hoveredPath = nil
@@ -468,8 +527,113 @@ struct BubbleMapView: View {
     }
 
     private func centerCoreRadius(for size: CGSize) -> CGFloat {
-        let minSide = min(max(size.width, 400), max(size.height, 320))
-        return min(118, max(84, minSide * 0.15))
+        let minSide = min(max(size.width, 320), max(size.height, 260))
+        return min(122, max(72, minSide * 0.14))
+    }
+
+    private func visibleBubblesLimit(for size: CGSize) -> Int {
+        let area = size.width * size.height
+        if area < 190_000 { return 8 }
+        if area < 300_000 { return 12 }
+        if area < 430_000 { return 16 }
+        return 20
+    }
+
+    private func coreCenter(for size: CGSize, coreRadius: CGFloat, overlayRect: CGRect) -> CGPoint {
+        let width = max(size.width, 320)
+        let height = max(size.height, 260)
+        var center = CGPoint(x: width / 2, y: height / 2)
+        guard !overlayRect.isEmpty else { return center }
+
+        let minY = overlayRect.maxY + coreRadius + 16
+        if center.y < minY {
+            center.y = min(max(minY, coreRadius + 16), height - coreRadius - 16)
+        }
+        return center
+    }
+
+    private func normalizedAvoidRect(overlayRect: CGRect, bounds: CGRect) -> CGRect {
+        guard !overlayRect.isEmpty else { return .zero }
+        let expanded = overlayRect.insetBy(dx: -8, dy: -8)
+        let clipped = bounds.intersection(expanded)
+        return clipped.isNull ? .zero : clipped
+    }
+
+    private func areaScaleFactor(
+        for radii: [CGFloat],
+        coreRadius: CGFloat,
+        bounds: CGRect,
+        itemCount: Int
+    ) -> CGFloat {
+        let bubbleArea = radii.reduce(0.0) { partial, radius in
+            partial + (.pi * radius * radius)
+        }
+        guard bubbleArea > 0 else { return 1.0 }
+
+        let coreArea = .pi * (coreRadius + 10) * (coreRadius + 10)
+        let fillRatio: CGFloat = itemCount > 14 ? 0.54 : 0.62
+        let targetArea = max(1, (bounds.width * bounds.height * fillRatio) - coreArea)
+        let rawScale = sqrt(targetArea / bubbleArea)
+        return min(1.0, max(0.55, rawScale))
+    }
+
+    private func avoidRectPenalty(for point: CGPoint, radius: CGFloat, avoidRect: CGRect) -> CGFloat {
+        guard !avoidRect.isEmpty else { return 0 }
+        if avoidRect.contains(point) {
+            return radius + min(avoidRect.width, avoidRect.height)
+        }
+        let closestX = min(max(point.x, avoidRect.minX), avoidRect.maxX)
+        let closestY = min(max(point.y, avoidRect.minY), avoidRect.maxY)
+        let dx = point.x - closestX
+        let dy = point.y - closestY
+        let distanceToRect = hypot(dx, dy)
+        let minDistance = radius + 10
+        if distanceToRect < minDistance {
+            return minDistance - distanceToRect
+        }
+        return 0
+    }
+
+    private func projectedOutsideAvoidRect(
+        point: CGPoint,
+        radius: CGFloat,
+        avoidRect: CGRect,
+        bounds: CGRect
+    ) -> CGPoint {
+        guard !avoidRect.isEmpty else { return point }
+        let pad = radius + 12
+        let candidates = [
+            CGPoint(x: avoidRect.minX - pad, y: point.y),
+            CGPoint(x: avoidRect.maxX + pad, y: point.y),
+            CGPoint(x: point.x, y: avoidRect.minY - pad),
+            CGPoint(x: point.x, y: avoidRect.maxY + pad)
+        ]
+        var best = point
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for candidate in candidates {
+            let clamped = CGPoint(
+                x: min(max(candidate.x, bounds.minX + radius), bounds.maxX - radius),
+                y: min(max(candidate.y, bounds.minY + radius), bounds.maxY - radius)
+            )
+            let d = distance(point, clamped)
+            if d < bestDistance {
+                bestDistance = d
+                best = clamped
+            }
+        }
+        return best
+    }
+
+    private func rectDistance(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
+        let dx = lhs.origin.x - rhs.origin.x
+        let dy = lhs.origin.y - rhs.origin.y
+        let dw = lhs.size.width - rhs.size.width
+        let dh = lhs.size.height - rhs.size.height
+        return abs(dx) + abs(dy) + abs(dw) + abs(dh)
+    }
+
+    private func t(_ key: AppL10nKey) -> String {
+        AppL10n.text(key, language: language)
     }
 
     private var backgroundColors: [Color] {
@@ -504,4 +668,15 @@ private struct BubbleLayoutItem {
     let node: FileNode
     var center: CGPoint
     let radius: CGFloat
+}
+
+private struct BubbleOverlayRectPreferenceKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isEmpty {
+            value = next
+        }
+    }
 }
