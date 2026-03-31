@@ -340,10 +340,12 @@ private enum ProcessConsumerSampler {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
             let parts = trimmed.split(maxSplits: 3, omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+            let cpuText = localizedDecimalString(parts.count > 1 ? String(parts[1]) : "")
+            let rssText = localizedDecimalString(parts.count > 2 ? String(parts[2]) : "")
             guard parts.count >= 4,
                   let pid = Int32(parts[0]),
-                  let cpu = Double(parts[1]),
-                  let rssKB = Double(parts[2]),
+                  let cpu = Double(cpuText),
+                  let rssKB = Double(rssText),
                   cpu >= 0 else { continue }
 
             let processName = String(parts[3])
@@ -379,6 +381,12 @@ private enum ProcessConsumerSampler {
         return name
     }
 
+    private static func localizedDecimalString(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+    }
+
     private static func runCommand(_ launchPath: String, arguments: [String], timeout: TimeInterval) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)
@@ -386,6 +394,15 @@ private enum ProcessConsumerSampler {
         let output = Pipe()
         process.standardOutput = output
         process.standardError = Pipe()
+        let buffer = OutputBuffer()
+        output.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                return
+            }
+            buffer.append(chunk)
+        }
         do {
             try process.run()
             let deadline = Date().addingTimeInterval(timeout)
@@ -394,13 +411,35 @@ private enum ProcessConsumerSampler {
             }
             if process.isRunning {
                 process.terminate()
-                return ""
+            }
+            process.waitUntilExit()
+            output.fileHandleForReading.readabilityHandler = nil
+            let tail = output.fileHandleForReading.readDataToEndOfFile()
+            if !tail.isEmpty {
+                buffer.append(tail)
             }
             guard process.terminationStatus == 0 else { return "" }
-            let data = output.fileHandleForReading.readDataToEndOfFile()
-            return String(decoding: data, as: UTF8.self)
+            return String(decoding: buffer.data, as: UTF8.self)
         } catch {
+            output.fileHandleForReading.readabilityHandler = nil
             return ""
         }
+    }
+}
+
+private final class OutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = Data()
+
+    var data: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        storage.append(chunk)
+        lock.unlock()
     }
 }

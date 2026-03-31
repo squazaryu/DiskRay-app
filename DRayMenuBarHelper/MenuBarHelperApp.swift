@@ -146,9 +146,6 @@ private struct MenuBarPopupView: View {
     @State private var batterySnapshot: BatteryDiagnosticsSnapshot?
     @State private var isBatteryDetailsLoading = false
     @State private var batteryDetailsError: String?
-    @State private var batteryHistoryWindow: BatteryHistoryWindow = .fifteenMinutes
-    @State private var batteryHistoryLevels: [Double] = []
-    @State private var batteryHistoryTimestamps: [Date] = []
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
 
@@ -170,9 +167,6 @@ private struct MenuBarPopupView: View {
         .frame(width: 452)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
-        .onReceive(monitor.$snapshot) { snapshot in
-            appendBatterySample(from: snapshot)
-        }
         .confirmationDialog(
             reliefDialogTitle,
             isPresented: $showReliefConfirm,
@@ -298,7 +292,7 @@ private struct MenuBarPopupView: View {
                 .controlSize(.small)
                 .buttonStyle(.bordered)
             }
-            if monitor.snapshot.topCPUConsumers.isEmpty && monitor.snapshot.topBatteryConsumers.isEmpty {
+            if consumerRows.isEmpty {
                 Text("Collecting process telemetry...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -461,11 +455,6 @@ private struct MenuBarPopupView: View {
                         snapshot: batterySnapshot,
                         isLoading: isBatteryDetailsLoading,
                         errorText: batteryDetailsError,
-                        historyLevels: selectedBatteryHistoryLevels,
-                        historyWindow: batteryHistoryWindow,
-                        historySampleCount: selectedBatteryHistorySamples.count,
-                        trendInsight: selectedBatteryHistoryInsight,
-                        onHistoryWindowChange: { batteryHistoryWindow = $0 },
                         onRefresh: loadBatteryDetails,
                         onClose: { showBatteryDetails = false }
                     )
@@ -808,40 +797,6 @@ private struct MenuBarPopupView: View {
             }
         }
     }
-
-    private func appendBatterySample(from snapshot: LiveSystemSnapshot) {
-        guard let level = snapshot.batteryLevelPercent else { return }
-        if let lastTime = batteryHistoryTimestamps.last,
-           snapshot.updatedAt.timeIntervalSince(lastTime) < 0.5 {
-            return
-        }
-        batteryHistoryTimestamps.append(snapshot.updatedAt)
-        batteryHistoryLevels.append(Double(level))
-        let maxSamples = 60 * 60 * 3
-        if batteryHistoryTimestamps.count > maxSamples {
-            let overflow = batteryHistoryTimestamps.count - maxSamples
-            batteryHistoryTimestamps.removeFirst(overflow)
-            batteryHistoryLevels.removeFirst(overflow)
-        }
-    }
-
-    private var selectedBatteryHistorySamples: [BatteryHistorySample] {
-        let cutoff = Date().addingTimeInterval(-batteryHistoryWindow.seconds)
-        return zip(batteryHistoryTimestamps, batteryHistoryLevels)
-            .filter { $0.0 >= cutoff }
-            .map { BatteryHistorySample(timestamp: $0.0, level: $0.1) }
-    }
-
-    private var selectedBatteryHistoryLevels: [Double] {
-        selectedBatteryHistorySamples.map(\.level)
-    }
-
-    private var selectedBatteryHistoryInsight: BatteryTrendInsight? {
-        BatteryTrendInsight(
-            samples: selectedBatteryHistorySamples,
-            isCharging: monitor.snapshot.batteryIsCharging
-        )
-    }
 }
 
 private struct HealthIssue: Identifiable {
@@ -859,81 +814,9 @@ private struct ConsumerRow: Identifiable {
     let batteryText: String
 }
 
-private struct BatteryHistorySample {
-    let timestamp: Date
-    let level: Double
-}
-
-private struct BatteryTrendInsight {
-    let deltaPercent: Double
-    let ratePerHour: Double
-    let projectedMinutes: Int?
-    let isChargingDirection: Bool
-    let duration: TimeInterval
-    let minLevel: Double
-    let maxLevel: Double
-
-    init?(samples: [BatteryHistorySample], isCharging: Bool?) {
-        guard let first = samples.first, let last = samples.last else { return nil }
-        let duration = last.timestamp.timeIntervalSince(first.timestamp)
-        guard duration >= 120 else { return nil }
-
-        let delta = last.level - first.level
-        let ratePerHour = (delta / duration) * 3600.0
-        let chargingDirection = (isCharging ?? false) || ratePerHour > 0.05
-        let projectedMinutes: Int? = {
-            let absRate = abs(ratePerHour)
-            guard absRate >= 0.05 else { return nil }
-            if chargingDirection {
-                let remaining = max(0, 100.0 - last.level)
-                return Int((remaining / absRate) * 60.0)
-            }
-            let remaining = max(0, last.level)
-            return Int((remaining / absRate) * 60.0)
-        }()
-
-        self.deltaPercent = delta
-        self.ratePerHour = ratePerHour
-        self.projectedMinutes = projectedMinutes
-        self.isChargingDirection = chargingDirection
-        self.duration = duration
-        self.minLevel = samples.map(\.level).min() ?? last.level
-        self.maxLevel = samples.map(\.level).max() ?? last.level
-    }
-}
-
 private enum ReliefAction {
     case cpu
     case memory
-}
-
-private enum BatteryHistoryWindow: String, CaseIterable, Identifiable {
-    case fiveMinutes
-    case fifteenMinutes
-    case thirtyMinutes
-    case oneHour
-    case twoHours
-
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .fiveMinutes: return "5m"
-        case .fifteenMinutes: return "15m"
-        case .thirtyMinutes: return "30m"
-        case .oneHour: return "1h"
-        case .twoHours: return "2h"
-        }
-    }
-
-    var seconds: TimeInterval {
-        switch self {
-        case .fiveMinutes: return 5 * 60
-        case .fifteenMinutes: return 15 * 60
-        case .thirtyMinutes: return 30 * 60
-        case .oneHour: return 60 * 60
-        case .twoHours: return 2 * 60 * 60
-        }
-    }
 }
 
 private enum HealthIssueSeverity {
@@ -962,11 +845,6 @@ private struct BatteryDetailsSheetView: View {
     let snapshot: BatteryDiagnosticsSnapshot?
     let isLoading: Bool
     let errorText: String?
-    let historyLevels: [Double]
-    let historyWindow: BatteryHistoryWindow
-    let historySampleCount: Int
-    let trendInsight: BatteryTrendInsight?
-    let onHistoryWindowChange: (BatteryHistoryWindow) -> Void
     let onRefresh: () -> Void
     let onClose: () -> Void
 
@@ -1010,54 +888,6 @@ private struct BatteryDetailsSheetView: View {
                             percentValue: normalizedPercent(snapshot.healthPercent),
                             tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
                         )
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Charge Trend")
-                                    .font(.headline)
-                                Spacer()
-                                Picker("Window", selection: Binding(
-                                    get: { historyWindow },
-                                    set: { onHistoryWindowChange($0) }
-                                )) {
-                                    ForEach(BatteryHistoryWindow.allCases) { window in
-                                        Text(window.title).tag(window)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .frame(width: 160)
-                            }
-                            BatteryHistorySparkline(values: historyLevels)
-                                .frame(height: 52)
-                            if let trendInsight {
-                                HStack(spacing: 12) {
-                                    trendChip(
-                                        title: "Rate",
-                                        value: rateText(trendInsight.ratePerHour),
-                                        tint: trendInsight.isChargingDirection ? .green : .orange
-                                    )
-                                    trendChip(
-                                        title: trendInsight.isChargingDirection ? "To Full" : "To Empty",
-                                        value: projectedTimeText(trendInsight.projectedMinutes),
-                                        tint: .blue
-                                    )
-                                    trendChip(
-                                        title: "Range",
-                                        value: "\(Int(trendInsight.minLevel))% - \(Int(trendInsight.maxLevel))%",
-                                        tint: .secondary
-                                    )
-                                }
-                                Text("Samples \(historySampleCount) · span \(formattedDuration(Int(trendInsight.duration / 60)))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("Collecting trend history...")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                         VStack(spacing: 8) {
                             detailRow("Full Charge Capacity", formattedMAh(snapshot.fullChargeCapacityMAh))
@@ -1122,22 +952,6 @@ private struct BatteryDetailsSheetView: View {
         }
     }
 
-    private func trendChip(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
     private func formattedInt(_ value: Int?) -> String {
         guard let value else { return "n/a" }
         return "\(value)"
@@ -1182,16 +996,6 @@ private struct BatteryDetailsSheetView: View {
     private func percentString(_ value: Int?) -> String {
         guard let value else { return "n/a" }
         return "\(value)%"
-    }
-
-    private func rateText(_ value: Double) -> String {
-        let sign = value >= 0 ? "+" : "-"
-        return "\(sign)\(String(format: "%.1f", abs(value)))%/h"
-    }
-
-    private func projectedTimeText(_ minutes: Int?) -> String {
-        guard let minutes else { return "n/a" }
-        return formattedDuration(minutes)
     }
 
     private func formattedDuration(_ minutes: Int?) -> String {
@@ -1261,55 +1065,5 @@ private struct BatteryProgressCard: View {
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct BatteryHistorySparkline: View {
-    let values: [Double]
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.secondary.opacity(0.10))
-                if values.count >= 2 {
-                    let points = normalizedPoints(size: proxy.size)
-                    Path { path in
-                        guard let first = points.first else { return }
-                        path.move(to: first)
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                    }
-                    .stroke(
-                        LinearGradient(
-                            colors: [.cyan, .blue],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
-                    )
-                } else {
-                    Text("No trend data")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private func normalizedPoints(size: CGSize) -> [CGPoint] {
-        guard values.count >= 2 else { return [] }
-        let minValue = values.min() ?? 0
-        let maxValue = values.max() ?? 100
-        let range = max(0.01, maxValue - minValue)
-        let stepX = size.width / CGFloat(max(values.count - 1, 1))
-
-        return values.enumerated().map { index, value in
-            let x = CGFloat(index) * stepX
-            let normalized = (value - minValue) / range
-            let y = size.height - (CGFloat(normalized) * size.height)
-            return CGPoint(x: x, y: y)
-        }
     }
 }
