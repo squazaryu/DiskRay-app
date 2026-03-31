@@ -2,9 +2,9 @@
 
 ## Local Release
 
-1. Build, package, tag, and push:
+1. Build + smoke + package artifacts (`zip` + `dmg`):
 ```bash
-./scripts/release.sh v0.0.4-alpha
+./scripts/package_release.sh 1.0.0-alpha
 ```
 
 2. Optional signed + notarized release:
@@ -15,13 +15,19 @@ export NOTARY_PROFILE="dray-notary"
 ```
 - run release:
 ```bash
-./scripts/release.sh v0.0.4-alpha
+./scripts/package_release.sh 1.0.0-alpha
 ```
 
-Result artifact:
-- `dist/DRay-v0.0.4-alpha.zip`
+Result artifacts:
+- `dist/DRay-1.0.0-alpha.zip`
+- `dist/DRay-1.0.0-alpha.dmg`
 
-## CI Release
+3. Optional tag push (without implicit commit):
+```bash
+AUTO_TAG_PUSH=1 ./scripts/release.sh 1.0.0-alpha
+```
+
+## CI Pre-release
 
 Use GitHub Actions workflow:
 - `.github/workflows/release.yml`
@@ -30,7 +36,7 @@ Manual run inputs:
 - `version`: required tag string
 - `build_number`: optional
 
-The workflow builds `/Applications/DRay.app`, zips it, and uploads artifact.
+The workflow runs smoke checks, builds `/Applications/DRay.app`, packages `zip` + `dmg`, and uploads both artifacts.
 
 ## Notarization Setup
 
@@ -44,5 +50,5 @@ xcrun notarytool store-credentials "dray-notary" \
 
 Standalone notarization command:
 ```bash
-./scripts/notarize.sh dist/DRay-v0.0.4-alpha.zip /Applications/DRay.app
+./scripts/notarize.sh dist/DRay-1.0.0-alpha.zip /Applications/DRay.app
 ```

@@ -21,16 +21,13 @@ jobs:
 
       - name: Build app bundle
         run: |
-          chmod +x scripts/install_app.sh scripts/release.sh scripts/notarize.sh
-          ./scripts/install_app.sh "${{ inputs.version }}" "${{ inputs.build_number || '1' }}"
-
-      - name: Archive app
-        run: |
-          mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent /Applications/DRay.app "dist/DRay-${{ inputs.version }}.zip"
+          chmod +x scripts/install_app.sh scripts/release.sh scripts/notarize.sh scripts/package_release.sh scripts/ui_smoke.sh
+          ./scripts/package_release.sh "${{ inputs.version }}" "${{ inputs.build_number || '1' }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DRay-${{ inputs.version }}
-          path: dist/DRay-${{ inputs.version }}.zip
+          path: |
+            dist/DRay-${{ inputs.version }}.zip
+            dist/DRay-${{ inputs.version }}.dmg
