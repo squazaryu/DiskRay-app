@@ -8,10 +8,34 @@ struct StartupEntry: Identifiable, Sendable {
     let sizeInBytes: Int64
 }
 
+enum PerformanceRecommendationAction: String, Sendable {
+    case selectAllStartup
+    case selectHeavyStartup
+    case openSmartCare
+    case runDiagnostics
+    case none
+}
+
 struct PerformanceRecommendation: Identifiable, Sendable {
     let id = UUID()
     let title: String
     let details: String
+    let action: PerformanceRecommendationAction
+
+    var actionTitle: String? {
+        switch action {
+        case .selectAllStartup:
+            return "Select Startup Entries"
+        case .selectHeavyStartup:
+            return "Select Heavy Entries"
+        case .openSmartCare:
+            return "Open Smart Care"
+        case .runDiagnostics:
+            return "Re-run Diagnostics"
+        case .none:
+            return nil
+        }
+    }
 }
 
 struct PerformanceReport: Sendable {

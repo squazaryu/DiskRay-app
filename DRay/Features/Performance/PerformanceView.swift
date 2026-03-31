@@ -31,8 +31,20 @@ struct PerformanceView: View {
                             Section("Recommendations") {
                                 ForEach(report.recommendations) { rec in
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(rec.title).font(.headline)
-                                        Text(rec.details).font(.caption).foregroundStyle(.secondary)
+                                        HStack(alignment: .top, spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(rec.title).font(.headline)
+                                                Text(rec.details).font(.caption).foregroundStyle(.secondary)
+                                            }
+                                            Spacer(minLength: 8)
+                                            if let actionTitle = rec.actionTitle {
+                                                Button(actionTitle) {
+                                                    handleRecommendationAction(rec.action)
+                                                }
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.small)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -519,6 +531,27 @@ struct PerformanceView: View {
         let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
         let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
         reliefResultMessage = "Adjusted \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+    }
+
+    private func handleRecommendationAction(_ action: PerformanceRecommendationAction) {
+        switch action {
+        case .selectAllStartup:
+            guard let report = model.performanceReport else { return }
+            selectedPaths = Set(report.startupEntries.map { $0.url.path })
+        case .selectHeavyStartup:
+            guard let report = model.performanceReport else { return }
+            let heavy = report.startupEntries
+                .filter { $0.sizeInBytes >= 100 * 1_048_576 }
+                .map { $0.url.path }
+            selectedPaths = Set(heavy)
+        case .openSmartCare:
+            model.openSection(.smartCare)
+            model.runSmartScan()
+        case .runDiagnostics:
+            model.runPerformanceScan()
+        case .none:
+            break
+        }
     }
 }
 

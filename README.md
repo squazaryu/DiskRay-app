@@ -35,6 +35,9 @@ DRay is a macOS disk explorer that combines:
 - App Repair strategy presets (`Safe Reset` / `Deep Reset`) with risk labels
 - Performance live load panel includes in-app process de-prioritization and priority rollback
 - Performance live trends with 5m/15m averages and sparkline history
+- Performance recommendations with one-click actions (select heavy startup items, open Smart Care, rerun diagnostics)
+- Privacy quick actions (`Select Low Risk`, `Select Recommended`, `Quick Clean Safe`, `Quick Clean Recommended`)
+- Smart Care quick action (`Quick Clean Recommended`)
 - Space Lens node index build off main thread to reduce UI stalls on large scans
 - Space Lens bubble overlap relaxation and smoother relayout animation
 - Space Lens hover/selection sync hardening (including multi-select behavior in bubble view)
@@ -113,6 +116,11 @@ Checks: `standard startup`, `open-section launch`, `helper startup`, `helper -> 
 - [x] Full visual parity pass across all primary modules
 - [x] `1.0.0-alpha` local pre-release packaging (`dmg` + `zip`) with smoke/regression pass
 - [x] `1.0.0-alpha` GitHub pre-release publication (upload `dmg` + `zip`)
+- [x] Performance recommendation CTAs with direct actions
+- [x] Privacy quick-clean workflows with risk-based selection
+- [x] Smart Care quick-clean recommended flow
+- [ ] Post-action delta report for quick-action flows (`before/after` reclaim)
+- [ ] `1.0.1-alpha` pre-release (`dmg` + `zip`)
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

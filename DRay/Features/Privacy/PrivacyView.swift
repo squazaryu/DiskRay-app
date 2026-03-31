@@ -1,91 +1,175 @@
 import SwiftUI
 
+private enum PrivacyCleanMode {
+    case selected
+    case safeLowRisk
+    case recommended
+}
+
 struct PrivacyView: View {
     @ObservedObject var model: RootViewModel
     @State private var expanded = Set<String>()
     @State private var showConfirm = false
+    @State private var pendingCleanMode: PrivacyCleanMode = .selected
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Privacy")
-                        .font(.title2.bold())
-                    Text("Review local traces and clean only explicitly selected categories.")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Scan Privacy Traces") {
-                    model.runPrivacyScan()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.isPrivacyScanRunning)
-
-                Button("Clean Selected") {
-                    showConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .disabled(selectedCount == 0)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            header
 
             if model.isPrivacyScanRunning {
                 ProgressView("Scanning privacy artifacts...")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
             }
 
             if let cleanReport = model.privacyCleanReport {
-                Text("Last cleanup: moved \(cleanReport.moved), failed \(cleanReport.failed), skipped \(cleanReport.skippedProtected), reclaimed \(ByteCountFormatter.string(fromByteCount: cleanReport.cleanedBytes, countStyle: .file))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Moved \(cleanReport.moved)", tint: .green)
+                    GlassPillBadge(title: "Failed \(cleanReport.failed)", tint: .red)
+                    GlassPillBadge(title: "Skipped \(cleanReport.skippedProtected)", tint: .orange)
+                    GlassPillBadge(
+                        title: "Reclaimed \(ByteCountFormatter.string(fromByteCount: cleanReport.cleanedBytes, countStyle: .file))",
+                        tint: .blue
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
             }
 
-            if model.privacyCategories.isEmpty, !model.isPrivacyScanRunning {
-                ContentUnavailableView(
-                    "No Privacy Scan Results",
-                    systemImage: "lock.shield",
-                    description: Text("Run scan to review browser and local privacy traces.")
-                )
-            } else {
-                List {
-                    Section("Transparency Report") {
-                        Text("Selected categories: \(selectedCount)")
-                        Text("Items to clean: \(selectedArtifactsCount)")
-                        Text("Estimated reclaim: \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))")
-                    }
+            Group {
+                if model.privacyCategories.isEmpty, !model.isPrivacyScanRunning {
+                    ContentUnavailableView(
+                        "No Privacy Scan Results",
+                        systemImage: "lock.shield",
+                        description: Text("Run scan to review browser and local privacy traces.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    categoriesList
+                }
+            }
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+        }
+        .padding(12)
+        .confirmationDialog(
+            confirmTitle,
+            isPresented: $showConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                executePendingClean()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(confirmMessage)
+        }
+    }
 
-                    ForEach(model.privacyCategories) { row in
-                        Section {
-                            categoryRow(row)
-                            if expanded.contains(row.id) {
-                                ForEach(row.category.artifacts.prefix(50)) { item in
-                                    HStack {
-                                        Text(item.url.path)
-                                            .font(.caption)
-                                            .lineLimit(1)
-                                        Spacer()
-                                        Text(ByteCountFormatter.string(fromByteCount: item.sizeInBytes, countStyle: .file))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
+    private var header: some View {
+        ModuleHeaderCard(
+            title: "Privacy",
+            subtitle: "Review local traces and clean selected categories with explicit control."
+        ) {
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Categories \(model.privacyCategories.count)", tint: .blue)
+                    GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
+                    GlassPillBadge(
+                        title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
+                        tint: .orange
+                    )
+                }
+
+                HStack(spacing: 8) {
+                    Button("Scan Privacy Traces") {
+                        model.runPrivacyScan()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isPrivacyScanRunning)
+
+                    Button("Select Low Risk") {
+                        model.selectRecommendedPrivacyCategories(includeMediumRisk: false)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.privacyCategories.isEmpty)
+
+                    Button("Select Recommended") {
+                        model.selectRecommendedPrivacyCategories(includeMediumRisk: true)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.privacyCategories.isEmpty)
+
+                    Button("Clear") {
+                        model.clearPrivacySelection()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(selectedCount == 0)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Clean Selected") {
+                        pendingCleanMode = .selected
+                        showConfirm = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(selectedCount == 0)
+
+                    Button("Quick Clean Safe") {
+                        pendingCleanMode = .safeLowRisk
+                        showConfirm = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.privacyCategories.isEmpty)
+
+                    Button("Quick Clean Recommended") {
+                        pendingCleanMode = .recommended
+                        showConfirm = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.privacyCategories.isEmpty)
+                }
+            }
+        }
+    }
+
+    private var categoriesList: some View {
+        List {
+            Section("Transparency Report") {
+                Text("Selected categories: \(selectedCount)")
+                Text("Items to clean: \(selectedArtifactsCount)")
+                Text("Estimated reclaim: \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))")
+            }
+
+            ForEach(model.privacyCategories) { row in
+                Section {
+                    categoryRow(row)
+                    if expanded.contains(row.id) {
+                        ForEach(row.category.artifacts.prefix(50)) { item in
+                            HStack {
+                                Text(item.url.path)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(ByteCountFormatter.string(fromByteCount: item.sizeInBytes, countStyle: .file))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                             }
+                            .padding(.vertical, 1)
                         }
                     }
                 }
             }
         }
-        .padding()
-        .confirmationDialog(
-            "Clean selected privacy categories?",
-            isPresented: $showConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Move to Trash", role: .destructive) {
-                model.cleanSelectedPrivacyCategories()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Selected artifacts will be moved to Trash. You can restore them from Trash if needed.")
-        }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
     }
 
     private func categoryRow(_ row: PrivacyCategoryState) -> some View {
@@ -116,6 +200,41 @@ struct PrivacyView: View {
                 if expanded.contains(row.id) { expanded.remove(row.id) } else { expanded.insert(row.id) }
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var confirmTitle: String {
+        switch pendingCleanMode {
+        case .selected:
+            return "Clean selected privacy categories?"
+        case .safeLowRisk:
+            return "Quick clean low-risk privacy traces?"
+        case .recommended:
+            return "Quick clean recommended privacy traces?"
+        }
+    }
+
+    private var confirmMessage: String {
+        switch pendingCleanMode {
+        case .selected:
+            return "Selected artifacts will be moved to Trash. You can restore them from Trash if needed."
+        case .safeLowRisk:
+            return "Only low-risk categories will be selected and moved to Trash."
+        case .recommended:
+            return "Low and medium risk categories will be selected and moved to Trash. High-risk categories stay untouched."
+        }
+    }
+
+    private func executePendingClean() {
+        switch pendingCleanMode {
+        case .selected:
+            model.cleanSelectedPrivacyCategories()
+        case .safeLowRisk:
+            model.cleanRecommendedPrivacyCategories(includeMediumRisk: false)
+        case .recommended:
+            model.cleanRecommendedPrivacyCategories(includeMediumRisk: true)
         }
     }
 

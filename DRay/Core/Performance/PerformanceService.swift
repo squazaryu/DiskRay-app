@@ -85,7 +85,8 @@ actor PerformanceService {
         if startupEntries.count > 20 {
             recommendations.append(PerformanceRecommendation(
                 title: "Too many startup items",
-                details: "Detected \(startupEntries.count) startup entries. Review non-essential launch agents/daemons."
+                details: "Detected \(startupEntries.count) startup entries. Review non-essential launch agents/daemons.",
+                action: .selectAllStartup
             ))
         }
 
@@ -94,7 +95,8 @@ actor PerformanceService {
             if ratio < 0.12 {
                 recommendations.append(PerformanceRecommendation(
                     title: "Low free disk space",
-                    details: "Free space is below 12%. Run Smart Care and remove large startup-related leftovers."
+                    details: "Free space is below 12%. Run Smart Care and remove large startup-related leftovers.",
+                    action: .openSmartCare
                 ))
             }
         }
@@ -103,14 +105,16 @@ actor PerformanceService {
         if !heavyEntries.isEmpty {
             recommendations.append(PerformanceRecommendation(
                 title: "Heavy startup components",
-                details: "\(heavyEntries.count) startup components exceed 100 MB. Check if they are still needed."
+                details: "\(heavyEntries.count) startup components exceed 100 MB. Check if they are still needed.",
+                action: .selectHeavyStartup
             ))
         }
 
         if recommendations.isEmpty {
             recommendations.append(PerformanceRecommendation(
                 title: "Startup state looks healthy",
-                details: "No critical startup issues were detected in current baseline checks."
+                details: "No critical startup issues were detected in current baseline checks.",
+                action: .runDiagnostics
             ))
         }
 

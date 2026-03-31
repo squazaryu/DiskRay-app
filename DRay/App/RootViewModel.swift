@@ -604,6 +604,11 @@ final class RootViewModel: ObservableObject {
         }
     }
 
+    func cleanRecommendedSmartCategories() {
+        selectRecommendedSmartCategories()
+        cleanSelectedSmartCategories()
+    }
+
     func cleanSmartItems(_ items: [CleanupItem]) {
         guard !items.isEmpty else { return }
         guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
@@ -1063,6 +1068,31 @@ final class RootViewModel: ObservableObject {
     func togglePrivacyCategory(_ id: String) {
         guard let idx = privacyCategories.firstIndex(where: { $0.id == id }) else { return }
         privacyCategories[idx].isSelected.toggle()
+    }
+
+    func clearPrivacySelection() {
+        for index in privacyCategories.indices {
+            privacyCategories[index].isSelected = false
+        }
+    }
+
+    func selectRecommendedPrivacyCategories(includeMediumRisk: Bool) {
+        for index in privacyCategories.indices {
+            let risk = privacyCategories[index].category.risk
+            switch risk {
+            case .low:
+                privacyCategories[index].isSelected = true
+            case .medium:
+                privacyCategories[index].isSelected = includeMediumRisk
+            case .high:
+                privacyCategories[index].isSelected = false
+            }
+        }
+    }
+
+    func cleanRecommendedPrivacyCategories(includeMediumRisk: Bool) {
+        selectRecommendedPrivacyCategories(includeMediumRisk: includeMediumRisk)
+        cleanSelectedPrivacyCategories()
     }
 
     func cleanSelectedPrivacyCategories() {

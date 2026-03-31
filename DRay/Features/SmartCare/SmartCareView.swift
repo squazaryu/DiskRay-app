@@ -70,6 +70,14 @@ struct SmartCareView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+
+                    Button("Quick Clean Recommended") {
+                        selectedItemPaths.removeAll()
+                        model.cleanRecommendedSmartCategories()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.isSmartScanRunning || model.smartScanCategories.isEmpty)
                 }
 
                 HStack(spacing: 8) {

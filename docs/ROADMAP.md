@@ -89,6 +89,14 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Pre-release stabilization for `1.0.0-alpha` (`dmg` + `zip`, release notes, final regression pass).
 - [x] Publish GitHub pre-release for `1.0.0-alpha` with attached `dmg`/`zip` artifacts.
 
+## Milestone M11: Functional One-Click Flows (in progress)
+- [x] Performance recommendations now include actionable CTA buttons (select startup entries / open Smart Care / rerun diagnostics).
+- [x] Privacy module quick actions: `Select Low Risk`, `Select Recommended`, `Quick Clean Safe`, `Quick Clean Recommended`.
+- [x] Smart Care quick action: `Quick Clean Recommended`.
+- [ ] Add post-action delta report (before/after bytes + item counts) for Performance/Privacy quick actions.
+- [ ] Add rollback snapshot for quick-clean batches (outside Trash) with session metadata in Recovery.
+- [ ] Prepare `1.0.1-alpha` pre-release (`dmg` + `zip`) with focused notes on one-click automation.
+
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.
 - Review/clean UX with safe defaults and confirmations.
