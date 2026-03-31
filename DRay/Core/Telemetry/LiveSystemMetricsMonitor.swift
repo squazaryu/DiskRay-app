@@ -233,11 +233,11 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
                 continue
             }
-            let current = desc[kIOPSCurrentCapacityKey as String] as? Int
-            let max = desc[kIOPSMaxCapacityKey as String] as? Int
-            let isCharging = desc[kIOPSIsChargingKey as String] as? Bool
-            let timeToEmpty = desc[kIOPSTimeToEmptyKey as String] as? Int
-            let timeToFull = desc[kIOPSTimeToFullChargeKey as String] as? Int
+            let current = intValue(desc[kIOPSCurrentCapacityKey as String])
+            let max = intValue(desc[kIOPSMaxCapacityKey as String])
+            let isCharging = boolValue(desc[kIOPSIsChargingKey as String])
+            let timeToEmpty = intValue(desc[kIOPSTimeToEmptyKey as String])
+            let timeToFull = intValue(desc[kIOPSTimeToFullChargeKey as String])
 
             let percent: Int?
             if let current, let max, max > 0 {
@@ -257,6 +257,29 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         }
 
         return (nil, nil, nil)
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let number = value as? NSNumber { return number.intValue }
+        if let text = value as? String { return Int(text) }
+        return nil
+    }
+
+    private func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let number = value as? NSNumber { return number.boolValue }
+        if let text = value as? String {
+            switch text.lowercased() {
+            case "true", "yes", "1":
+                return true
+            case "false", "no", "0":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
     }
 
     private func networkSample(at now: Date) -> (downPerSecond: Double, upPerSecond: Double) {

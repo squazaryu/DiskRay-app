@@ -113,31 +113,26 @@ private struct MenuBarStatusIcon: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: batterySymbol)
-                .symbolRenderingMode(.monochrome)
+        HStack(spacing: 3) {
             if let percent = monitor.snapshot.batteryLevelPercent {
                 Text("\(percent)%")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+            } else {
+                Text("BAT")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+            }
+            if monitor.snapshot.batteryIsCharging == true {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 9, weight: .bold))
             }
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
         .foregroundStyle(colorScheme == .dark ? .white : .black)
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
-    }
-
-    private var batterySymbol: String {
-        guard let level = monitor.snapshot.batteryLevelPercent else {
-            return "bolt.batteryblock"
-        }
-        switch level {
-        case 0..<15: return "battery.0"
-        case 15..<35: return "battery.25"
-        case 35..<60: return "battery.50"
-        case 60..<85: return "battery.75"
-        default: return "battery.100"
-        }
     }
 }
 
