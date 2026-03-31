@@ -112,7 +112,7 @@ Checks: `standard startup`, `open-section launch`, `helper startup`, `helper -> 
 - [x] `App Repair` strategy safety UX (Deep Reset confirmation + risk/size preview)
 - [x] Full visual parity pass across all primary modules
 - [x] `1.0.0-alpha` local pre-release packaging (`dmg` + `zip`) with smoke/regression pass
-- [ ] `1.0.0-alpha` GitHub pre-release publication (upload `dmg` + `zip`)
+- [x] `1.0.0-alpha` GitHub pre-release publication (upload `dmg` + `zip`)
 
 ## Done (Recent)
 - [x] Added Smart Care advanced cleanup flow (scan/review/clean) — commit `f267cda`

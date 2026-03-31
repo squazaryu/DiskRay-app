@@ -87,7 +87,7 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Battery insights expansion in popup: richer history intervals and diagnostics drill-down UX.
 - [x] App Repair advanced presets: "Safe/Deep" UX polish + safer preview/explainability.
 - [x] Pre-release stabilization for `1.0.0-alpha` (`dmg` + `zip`, release notes, final regression pass).
-- [ ] Publish GitHub pre-release for `1.0.0-alpha` with attached `dmg`/`zip` artifacts.
+- [x] Publish GitHub pre-release for `1.0.0-alpha` with attached `dmg`/`zip` artifacts.
 
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.
