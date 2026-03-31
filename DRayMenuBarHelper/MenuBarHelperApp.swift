@@ -861,55 +861,49 @@ private struct BatteryDetailsSheetView: View {
             }
 
             if let snapshot {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(snapshot.deviceName)
-                                .font(.headline)
-                            Text("Identifier: \(snapshot.machineIdentifier)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        BatteryProgressCard(
-                            title: "Battery Charge",
-                            valueText: formattedMAh(snapshot.currentCapacityMAh),
-                            percentText: percentString(snapshot.chargePercent),
-                            percentValue: normalizedPercent(snapshot.chargePercent),
-                            tint: .green
-                        )
-
-                        BatteryProgressCard(
-                            title: "Battery Health",
-                            valueText: formattedMAh(snapshot.fullChargeCapacityMAh),
-                            percentText: percentString(snapshot.healthPercent),
-                            percentValue: normalizedPercent(snapshot.healthPercent),
-                            tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
-                        )
-
-                        VStack(spacing: 8) {
-                            detailRow("Full Charge Capacity", formattedMAh(snapshot.fullChargeCapacityMAh))
-                            detailRow("Design Capacity", formattedMAh(snapshot.designCapacityMAh))
-                            detailRow("Time until full", formattedDuration(snapshot.minutesToFull))
-                            detailRow("Time until empty", formattedDuration(snapshot.minutesToEmpty))
-                            detailRow("Charge Cycles", formattedInt(snapshot.cycleCount))
-                            detailRow("Design Cycles", formattedInt(snapshot.designCycleCount))
-                            detailRow("Battery Temperature", formattedTemperature(snapshot.temperatureCelsius))
-                            detailRow("Voltage", formattedVoltage(snapshot.voltageVolts))
-                            detailRow("Amperage", formattedAmperage(snapshot.amperageAmps))
-                            detailRow("Power", formattedPower(snapshot.powerWatts))
-                            detailRow("Adapter", formattedAdapter(snapshot.adapterWatts))
-                            detailRow("Status", chargingText(snapshot))
-                            detailRow("Low Power Mode", snapshot.lowPowerModeEnabled ? "Enabled" : "Disabled")
-                            detailRow("Manufacture Date", snapshot.manufactureDate ?? "n/a")
-                            detailRow("Updated", snapshot.updatedAt.formatted(date: .abbreviated, time: .standard))
-                        }
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(snapshot.deviceName)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text("Identifier: \(snapshot.machineIdentifier)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    .padding(.vertical, 2)
+                    .padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    BatteryProgressCard(
+                        title: "Battery Charge",
+                        valueText: formattedMAh(snapshot.currentCapacityMAh),
+                        percentText: percentString(snapshot.chargePercent),
+                        percentValue: normalizedPercent(snapshot.chargePercent),
+                        tint: .green
+                    )
+
+                    BatteryProgressCard(
+                        title: "Battery Health",
+                        valueText: formattedMAh(snapshot.fullChargeCapacityMAh),
+                        percentText: percentString(snapshot.healthPercent),
+                        percentValue: normalizedPercent(snapshot.healthPercent),
+                        tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
+                    )
+
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 10, alignment: .leading),
+                            GridItem(.flexible(), spacing: 10, alignment: .leading)
+                        ],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(summaryDetails(snapshot), id: \.0) { row in
+                            detailMetricCell(title: row.0, value: row.1)
+                        }
+                    }
+                    .padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             } else if isLoading {
                 VStack(spacing: 10) {
@@ -931,7 +925,7 @@ private struct BatteryDetailsSheetView: View {
             }
         }
         .padding(16)
-        .frame(width: 432, height: 610)
+        .frame(width: 408, height: 540)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -940,16 +934,32 @@ private struct BatteryDetailsSheetView: View {
         )
     }
 
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+    private func detailMetricCell(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
         }
+    }
+
+    private func summaryDetails(_ snapshot: BatteryDiagnosticsSnapshot) -> [(String, String)] {
+        [
+            ("Time to Full", formattedDuration(snapshot.minutesToFull)),
+            ("Time to Empty", formattedDuration(snapshot.minutesToEmpty)),
+            ("Power", formattedPower(snapshot.powerWatts)),
+            ("Temperature", formattedTemperature(snapshot.temperatureCelsius)),
+            ("Charge Cycles", formattedInt(snapshot.cycleCount)),
+            ("Design Cycles", formattedInt(snapshot.designCycleCount)),
+            ("Voltage", formattedVoltage(snapshot.voltageVolts)),
+            ("Amperage", formattedAmperage(snapshot.amperageAmps)),
+            ("Low Power Mode", snapshot.lowPowerModeEnabled ? "Enabled" : "Disabled"),
+            ("Updated", snapshot.updatedAt.formatted(date: .omitted, time: .shortened))
+        ]
     }
 
     private func formattedInt(_ value: Int?) -> String {
@@ -988,11 +998,6 @@ private struct BatteryDetailsSheetView: View {
         return "0 W"
     }
 
-    private func formattedAdapter(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.0f W", value)
-    }
-
     private func percentString(_ value: Int?) -> String {
         guard let value else { return "n/a" }
         return "\(value)%"
@@ -1010,18 +1015,6 @@ private struct BatteryDetailsSheetView: View {
         return min(1, max(0, Double(value) / 100.0))
     }
 
-    private func chargingText(_ snapshot: BatteryDiagnosticsSnapshot) -> String {
-        if snapshot.isCharging == true {
-            if let minutes = snapshot.minutesToFull {
-                return "Charging (\(minutes / 60)h \(minutes % 60)m)"
-            }
-            return "Charging"
-        }
-        if let minutes = snapshot.minutesToEmpty {
-            return "\(minutes / 60)h \(minutes % 60)m remaining"
-        }
-        return "On battery"
-    }
 }
 
 private struct BatteryProgressCard: View {
