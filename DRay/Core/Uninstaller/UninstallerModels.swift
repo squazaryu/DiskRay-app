@@ -102,3 +102,27 @@ struct UninstallSession: Identifiable, Codable, Sendable {
         case appName, createdAt, rollbackItems
     }
 }
+
+struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
+    let id = UUID()
+    let url: URL
+    let sizeInBytes: Int64
+    let reason: String
+    let risk: UninstallRiskLevel
+
+    var name: String {
+        url.lastPathComponent
+    }
+}
+
+struct UninstallVerifyReport: Sendable {
+    let appName: String
+    let createdAt: Date
+    let attemptedItems: Int
+    let removedItems: Int
+    let remaining: [UninstallVerifyIssue]
+
+    var remainingCount: Int {
+        remaining.count
+    }
+}

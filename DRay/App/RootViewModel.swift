@@ -28,7 +28,7 @@ struct SearchPreset: Codable, Identifiable {
     }
 
     var searchMode: SearchExecutionMode {
-        SearchExecutionMode(rawValue: searchModeRaw) ?? .indexed
+        SearchExecutionMode(rawValue: searchModeRaw) ?? .live
     }
 
     init(
@@ -83,7 +83,7 @@ struct SearchPreset: Codable, Identifiable {
         depthMax = try c.decodeIfPresent(Int.self, forKey: .depthMax) ?? 128
         modifiedWithinDays = try c.decodeIfPresent(Int.self, forKey: .modifiedWithinDays)
         nodeTypeRaw = try c.decodeIfPresent(String.self, forKey: .nodeTypeRaw) ?? QueryEngine.SearchNodeType.any.rawValue
-        searchModeRaw = try c.decodeIfPresent(String.self, forKey: .searchModeRaw) ?? SearchExecutionMode.indexed.rawValue
+        searchModeRaw = try c.decodeIfPresent(String.self, forKey: .searchModeRaw) ?? SearchExecutionMode.live.rawValue
     }
 }
 
@@ -167,16 +167,10 @@ struct UnifiedScanSnapshot: Codable {
 }
 
 enum SearchExecutionMode: String, CaseIterable, Identifiable {
-    case indexed
     case live
 
     var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .indexed: return "Indexed"
-        case .live: return "Live"
-        }
-    }
+    var title: String { "Live" }
 }
 
 enum SmartCleanProfile: String, CaseIterable, Identifiable {
@@ -249,7 +243,7 @@ final class RootViewModel: ObservableObject {
     @Published var searchDepthMax = 12
     @Published var searchModifiedWithinDays = 0
     @Published var searchNodeType: QueryEngine.SearchNodeType = .any
-    @Published var searchMode: SearchExecutionMode = .indexed
+    @Published var searchMode: SearchExecutionMode = .live
     @Published private(set) var isLiveSearchRunning = false
     @Published private(set) var liveSearchResults: [FileNode] = []
     @Published private(set) var searchPresets: [SearchPreset] = []
@@ -266,6 +260,8 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var uninstallerRemnants: [AppRemnant] = []
     @Published private(set) var isUninstallerLoading = false
     @Published private(set) var uninstallReport: UninstallValidationReport?
+    @Published private(set) var uninstallVerifyReport: UninstallVerifyReport?
+    @Published private(set) var isUninstallVerifyRunning = false
     @Published private(set) var uninstallSessions: [UninstallSession] = []
     @Published private(set) var repairArtifacts: [AppRemnant] = []
     @Published private(set) var isRepairLoading = false
@@ -298,6 +294,11 @@ final class RootViewModel: ObservableObject {
             UserDefaults.standard.set(appLanguage.rawValue, forKey: appLanguageKey)
         }
     }
+    @Published var appAppearance: AppAppearance = .system {
+        didSet {
+            UserDefaults.standard.set(appAppearance.rawValue, forKey: appAppearanceKey)
+        }
+    }
 
     let permissions = AppPermissionService()
     let operationLogs = OperationLogStore()
@@ -314,6 +315,7 @@ final class RootViewModel: ObservableObject {
     private let indexStore = SQLiteIndexStore()
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
     private let appLanguageKey = "dray.ui.language"
+    private let appAppearanceKey = "dray.ui.appearance"
     private let searchPresetsKey = "dray.search.presets"
     private let recentlyDeletedKey = "dray.recently.deleted"
     private let smartExclusionsKey = "dray.smart.exclusions"
@@ -324,7 +326,17 @@ final class RootViewModel: ObservableObject {
     private var liveSearchTask: Task<Void, Never>?
     private var duplicateScanTask: Task<Void, Never>?
     private var priorityAdjustments: [ProcessPriorityAdjustment] = []
-    private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
+    private let protectedPathPrefixes = [
+        "/System",
+        "/bin",
+        "/sbin",
+        "/usr/bin",
+        "/usr/sbin",
+        "/usr/lib",
+        "/usr/libexec",
+        "/usr/share",
+        "/private/etc"
+    ]
     let smartAnalyzerOptions: [SmartAnalyzerOption] = [
         .init(key: "user_logs", title: "User Logs", description: "Old files in ~/Library/Logs"),
         .init(key: "user_caches", title: "User Caches", description: "Rebuildable cache files"),
@@ -340,6 +352,10 @@ final class RootViewModel: ObservableObject {
         if let storedLanguage = UserDefaults.standard.string(forKey: appLanguageKey),
            let language = AppLanguage(rawValue: storedLanguage) {
             appLanguage = language
+        }
+        if let storedAppearance = UserDefaults.standard.string(forKey: appAppearanceKey),
+           let appearance = AppAppearance(rawValue: storedAppearance) {
+            appAppearance = appearance
         }
         restoreLastTargetIfPossible()
         loadSearchPresets()
@@ -359,24 +375,7 @@ final class RootViewModel: ObservableObject {
         guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
-        if searchMode == .live {
-            return liveSearchResults
-        }
-        guard let root else { return [] }
-        return queryEngine.search(
-            in: root,
-            query: searchQuery,
-            minSizeBytes: Int64(minSizeMB * 1_048_576),
-            pathContains: pathContains,
-            ownerContains: ownerContains,
-            onlyDirectories: onlyDirectories,
-            onlyFiles: onlyFiles,
-            useRegex: searchUseRegex,
-            depthMin: searchDepthMin,
-            depthMax: max(searchDepthMin, searchDepthMax),
-            modifiedWithinDays: searchModifiedWithinDays > 0 ? searchModifiedWithinDays : nil,
-            nodeType: searchNodeType
-        )
+        return liveSearchResults
     }
 
     func localized(_ key: AppL10nKey) -> String {
@@ -388,7 +387,6 @@ final class RootViewModel: ObservableObject {
     }
 
     func triggerLiveSearch() {
-        guard searchMode == .live else { return }
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             liveSearchTask?.cancel()
@@ -705,6 +703,7 @@ final class RootViewModel: ObservableObject {
             await MainActor.run {
                 self.uninstallerRemnants = remnants
                 self.uninstallReport = nil
+                self.uninstallVerifyReport = nil
                 self.isUninstallerLoading = false
             }
         }
@@ -715,16 +714,45 @@ final class RootViewModel: ObservableObject {
         let preview = uninstallPreview(for: app)
         let items = selectedItems ?? preview
         guard ensureCanModify(urls: items.map(\.url), actionName: "Uninstall", requiresFullDisk: true) else { return }
+        isUninstallVerifyRunning = true
         Task { [weak self] in
             guard let self else { return }
             let result = await uninstallerService.uninstall(app: app, previewItems: items)
+            let verifyRemnants = await uninstallerService.findRemnants(for: app)
             await MainActor.run {
                 AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
                 self.operationLogs.add(category: "uninstaller", message: "Uninstall \(app.name): removed \(result.removedCount), skipped \(result.skippedCount), failed \(result.failedCount)")
                 self.uninstallReport = result
+                self.uninstallVerifyReport = self.buildUninstallVerifyReport(
+                    app: app,
+                    previewItems: items,
+                    validation: result,
+                    remaining: verifyRemnants
+                )
+                self.isUninstallVerifyRunning = false
                 self.recordUninstallSession(from: result)
-                self.uninstallerRemnants = []
+                self.uninstallerRemnants = verifyRemnants
                 self.loadInstalledApps()
+            }
+        }
+    }
+
+    func runUninstallVerifyPass(for app: InstalledApp) {
+        let preview = uninstallPreview(for: app)
+        let validation = uninstallReport
+        isUninstallVerifyRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            let remnants = await uninstallerService.findRemnants(for: app)
+            await MainActor.run {
+                self.uninstallerRemnants = remnants
+                self.uninstallVerifyReport = self.buildUninstallVerifyReport(
+                    app: app,
+                    previewItems: preview,
+                    validation: validation,
+                    remaining: remnants
+                )
+                self.isUninstallVerifyRunning = false
             }
         }
     }
@@ -901,11 +929,27 @@ final class RootViewModel: ObservableObject {
     }
 
     func moveDuplicatePathsToTrash(_ paths: [String]) -> TrashOperationResult {
-        let nodes = paths.compactMap { nodeForPath($0) }
-        guard ensureCanModify(urls: nodes.map(\.url), actionName: "Duplicate Cleanup") else {
-            return TrashOperationResult(moved: 0, skippedProtected: paths, failed: [])
+        var nodes: [FileNode] = []
+        var missingPaths: [String] = []
+        for path in paths {
+            if let node = nodeForPath(path) {
+                nodes.append(node)
+            } else {
+                missingPaths.append(path)
+            }
         }
-        let result = moveToTrash(nodes: nodes)
+
+        let baseResult = moveToTrash(nodes: nodes)
+        let result: TrashOperationResult
+        if missingPaths.isEmpty {
+            result = baseResult
+        } else {
+            result = TrashOperationResult(
+                moved: baseResult.moved,
+                skippedProtected: baseResult.skippedProtected,
+                failed: baseResult.failed + missingPaths
+            )
+        }
         let attempted = Set(paths)
         let skipped = Set(result.skippedProtected)
         let failed = Set(result.failed)
@@ -1372,16 +1416,31 @@ final class RootViewModel: ObservableObject {
     }
 
     func moveToTrash(nodes: [FileNode]) -> TrashOperationResult {
-        guard ensureCanModify(urls: nodes.map(\.url), actionName: "Move to Trash") else {
-            return TrashOperationResult(moved: 0, skippedProtected: nodes.map(\.url.path), failed: [])
-        }
         var moved = 0
         var skippedProtected: [String] = []
         var failed: [String] = []
+        var blockedPermissionHint: String?
 
         for node in nodes {
             if isProtectedPath(node.url.path) {
                 skippedProtected.append(node.url.path)
+                operationLogs.add(
+                    category: "permissions",
+                    message: "Skipped system-protected path (SIP): \(node.url.path)"
+                )
+                continue
+            }
+            if !permissions.canModify(urls: [node.url], actionName: "Move to Trash") {
+                failed.append(node.url.path)
+                let hint = permissions.permissionHint ?? "Unknown permissions block"
+                if blockedPermissionHint == nil {
+                    blockedPermissionHint = hint
+                }
+                operationLogs.add(
+                    category: "permissions",
+                    message: "Blocked trash item: \(node.url.path) — \(hint)"
+                )
+                AppLogger.permissions.error("Blocked trash item by permissions: \(node.url.path, privacy: .public)")
                 continue
             }
             do {
@@ -1394,8 +1453,16 @@ final class RootViewModel: ObservableObject {
                 }
             } catch {
                 failed.append(node.url.path)
+                operationLogs.add(
+                    category: "actions",
+                    message: "Failed to move to Trash: \(node.url.path) — \(error.localizedDescription)"
+                )
                 AppLogger.actions.error("Failed to trash item: \(error.localizedDescription, privacy: .public)")
             }
+        }
+
+        if moved == 0, !failed.isEmpty, let blockedPermissionHint, !blockedPermissionHint.isEmpty {
+            presentPermissionBlock(blockedPermissionHint)
         }
 
         if moved > 0, let lastScannedTarget {
@@ -1404,6 +1471,50 @@ final class RootViewModel: ObservableObject {
         }
 
         return TrashOperationResult(moved: moved, skippedProtected: skippedProtected, failed: failed)
+    }
+
+    func trashResultMessage(_ result: TrashOperationResult) -> String {
+        let isRussian = appLanguage.localeCode.lowercased().hasPrefix("ru")
+        func t(_ ru: String, _ en: String) -> String { isRussian ? ru : en }
+
+        var parts: [String] = [t("Перемещено: \(result.moved)", "Moved: \(result.moved)")]
+        if !result.skippedProtected.isEmpty {
+            parts.append(t(
+                "Пропущено (защищено macOS): \(result.skippedProtected.count)",
+                "Skipped (macOS protected): \(result.skippedProtected.count)"
+            ))
+        }
+        if !result.failed.isEmpty {
+            parts.append(t("Ошибок: \(result.failed.count)", "Failed: \(result.failed.count)"))
+        }
+
+        var message = parts.joined(separator: ", ")
+
+        if !result.skippedProtected.isEmpty {
+            message += "\n" + t(
+                "Системно-защищённые файлы (SIP/TCC) нельзя удалить обычным приложением, даже при Full Disk Access.",
+                "System-protected files (SIP/TCC) cannot be deleted by a regular app, even with Full Disk Access."
+            )
+            let sampleNames = result.skippedProtected
+                .prefix(3)
+                .map { URL(fileURLWithPath: $0).lastPathComponent }
+                .joined(separator: ", ")
+            if !sampleNames.isEmpty {
+                message += "\n" + t("Примеры: \(sampleNames)", "Examples: \(sampleNames)")
+            }
+        }
+
+        if !result.failed.isEmpty {
+            let sampleNames = result.failed
+                .prefix(3)
+                .map { URL(fileURLWithPath: $0).lastPathComponent }
+                .joined(separator: ", ")
+            if !sampleNames.isEmpty {
+                message += "\n" + t("Не удалось удалить: \(sampleNames)", "Could not remove: \(sampleNames)")
+            }
+        }
+
+        return message
     }
 
     func restoreDeletedItem(_ item: RecentlyDeletedItem) -> Bool {
@@ -1468,8 +1579,12 @@ final class RootViewModel: ObservableObject {
         searchDepthMax = preset.depthMax
         searchModifiedWithinDays = preset.modifiedWithinDays ?? 0
         searchNodeType = preset.nodeType
-        searchMode = preset.searchMode
+        searchMode = .live
         triggerLiveSearch()
+    }
+
+    func isPathProtectedForManualCleanup(_ path: String) -> Bool {
+        isProtectedPath(path)
     }
 
     func deletePreset(_ preset: SearchPreset) {
@@ -1800,6 +1915,67 @@ final class RootViewModel: ObservableObject {
             sizeInBytes: remnant.sizeInBytes,
             risk: .low,
             reason: "Regular app support/caches/logs"
+        )
+    }
+
+    private func buildUninstallVerifyReport(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        validation: UninstallValidationReport?,
+        remaining: [AppRemnant]
+    ) -> UninstallVerifyReport {
+        let attemptedPaths = Set(previewItems.map { $0.url.path })
+        let actionByPath = Dictionary(uniqueKeysWithValues: (validation?.results ?? []).map { ($0.url.path, $0) })
+        let appIsRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
+
+        let issues = remaining.map { remnant in
+            let path = remnant.url.path
+            let risk = previewItem(for: remnant).risk
+            let reason: String
+
+            if let action = actionByPath[path] {
+                switch action.status {
+                case .skippedProtected:
+                    reason = "Skipped: system-protected path (SIP/TCC)."
+                case .failed:
+                    if let details = action.details, !details.isEmpty {
+                        reason = "Failed to remove: \(details)"
+                    } else {
+                        reason = "Failed to remove: unknown filesystem error."
+                    }
+                case .missing:
+                    reason = "Path changed during uninstall and was not removed."
+                case .removed:
+                    reason = appIsRunning
+                    ? "Recreated after removal by a running process/helper."
+                    : "Still present after remove call (possibly recreated by system helper)."
+                }
+            } else if isProtectedPath(path) {
+                reason = "System-protected path (SIP/TCC)."
+            } else if !attemptedPaths.contains(path) {
+                reason = "Not selected for removal in uninstall scope."
+            } else if !FileManager.default.isDeletableFile(atPath: path) {
+                reason = "No delete permission for this item."
+            } else if appIsRunning {
+                reason = "Application is still running and may recreate this file."
+            } else {
+                reason = "Unknown: item remained after verification pass."
+            }
+
+            return UninstallVerifyIssue(
+                url: remnant.url,
+                sizeInBytes: remnant.sizeInBytes,
+                reason: reason,
+                risk: risk
+            )
+        }
+
+        return UninstallVerifyReport(
+            appName: app.name,
+            createdAt: Date(),
+            attemptedItems: attemptedPaths.count,
+            removedItems: validation?.removedCount ?? 0,
+            remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes }
         )
     }
 

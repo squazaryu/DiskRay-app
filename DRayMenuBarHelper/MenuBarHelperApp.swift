@@ -73,11 +73,45 @@ final class MenuBarPopupModel: ObservableObject {
 
 @MainActor
 final class MenuBarHelperAppDelegate: NSObject, NSApplicationDelegate {
+    private var workspaceActivationObserver: NSObjectProtocol?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = NSApp.setActivationPolicy(.accessory)
         guard HelperSingleInstanceLock.acquire() else {
             NSApp.terminate(nil)
             return
+        }
+
+        workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            guard let frontmost = NSWorkspace.shared.frontmostApplication else { return }
+            let helperBundleID = Bundle.main.bundleIdentifier
+            if frontmost.bundleIdentifier != helperBundleID {
+                Task { @MainActor in
+                    self.dismissTransientUI()
+                }
+            }
+        }
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        dismissTransientUI()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let observer = workspaceActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            workspaceActivationObserver = nil
+        }
+    }
+
+    private func dismissTransientUI() {
+        NotificationCenter.default.post(name: .helperDismissTransientUI, object: nil)
+        for window in NSApp.windows where window.isVisible {
+            window.orderOut(nil)
         }
     }
 }
@@ -87,11 +121,14 @@ struct DRayMenuBarHelperApp: App {
     @NSApplicationDelegateAdaptor(MenuBarHelperAppDelegate.self) private var appDelegate
     private let config = HelperConfig(arguments: CommandLine.arguments)
     @StateObject private var model: MenuBarPopupModel
-    @StateObject private var monitor = LiveSystemMetricsMonitor()
+    @StateObject private var monitor: LiveSystemMetricsMonitor
 
     init() {
         let config = HelperConfig(arguments: CommandLine.arguments)
+        let liveMonitor = LiveSystemMetricsMonitor(updateInterval: 0.5, heavySamplePeriod: 4.0)
         _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
+        _monitor = StateObject(wrappedValue: liveMonitor)
+        liveMonitor.start()
         if let startupSection = config.startupSection {
             let bridge = DRayMainBridge(appPath: config.appPath)
             bridge.open(section: startupSection, action: nil)
@@ -131,8 +168,6 @@ private struct MenuBarStatusIcon: View {
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .foregroundStyle(colorScheme == .dark ? .white : .black)
-        .onAppear { monitor.start() }
-        .onDisappear { monitor.stop() }
     }
 }
 
@@ -148,6 +183,7 @@ private struct MenuBarPopupView: View {
     @State private var batteryDetailsError: String?
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
+    private let batteryRefreshTimer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -165,8 +201,28 @@ private struct MenuBarPopupView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .frame(width: 452)
-        .onAppear { monitor.start() }
-        .onDisappear { monitor.stop() }
+        .onReceive(NotificationCenter.default.publisher(for: .helperDismissTransientUI)) { _ in
+            showHealthDetails = false
+            showBatteryDetails = false
+            showReliefConfirm = false
+            pendingReliefAction = nil
+        }
+        .onReceive(batteryRefreshTimer) { _ in
+            guard showBatteryDetails else { return }
+            loadBatteryDetails()
+        }
+        .onChange(of: monitor.snapshot.batteryLevelPercent) {
+            guard showBatteryDetails else { return }
+            loadBatteryDetails()
+        }
+        .onChange(of: monitor.snapshot.batteryIsCharging) {
+            guard showBatteryDetails else { return }
+            loadBatteryDetails()
+        }
+        .onChange(of: monitor.snapshot.batteryMinutesRemaining) {
+            guard showBatteryDetails else { return }
+            loadBatteryDetails()
+        }
         .confirmationDialog(
             reliefDialogTitle,
             isPresented: $showReliefConfirm,
@@ -508,6 +564,14 @@ private struct MenuBarPopupView: View {
                         endPoint: .bottomTrailing
                     )
                 )
+            if colorScheme == .light {
+                RadialGradient(
+                    colors: [Color.cyan.opacity(0.10), .clear],
+                    center: .bottomLeading,
+                    startRadius: 24,
+                    endRadius: 280
+                )
+            }
             LinearGradient(
                 colors: [
                     tintColor.opacity(colorScheme == .dark ? 0.24 : 0.15),
@@ -544,8 +608,10 @@ private struct MenuBarPopupView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(borderColor.opacity(0.85), lineWidth: 0.85)
+                    .stroke(borderColor.opacity(colorScheme == .dark ? 0.78 : 0.45), lineWidth: 0.65)
             )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.16 : 0.08), radius: 10, y: 5)
+            .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.26), radius: 5, x: -1, y: -1)
     }
 
     private var tintColor: Color {
@@ -553,7 +619,7 @@ private struct MenuBarPopupView: View {
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.black.opacity(0.10)
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.72)
     }
 
     private var healthSummaryLine: String {
@@ -799,6 +865,10 @@ private struct MenuBarPopupView: View {
     }
 }
 
+extension Notification.Name {
+    static let helperDismissTransientUI = Notification.Name("dray.helper.dismiss.transient.ui")
+}
+
 private struct HealthIssue: Identifiable {
     let id = UUID()
     let title: String
@@ -890,6 +960,8 @@ private struct BatteryDetailsSheetView: View {
                         tint: (snapshot.healthPercent ?? 0) >= 80 ? .green : .orange
                     )
 
+                    primaryDurationCard(snapshot)
+
                     LazyVGrid(
                         columns: [
                             GridItem(.flexible(), spacing: 10, alignment: .leading),
@@ -898,7 +970,7 @@ private struct BatteryDetailsSheetView: View {
                         alignment: .leading,
                         spacing: 8
                     ) {
-                        ForEach(summaryDetails(snapshot), id: \.0) { row in
+                        ForEach(secondaryDetails(snapshot), id: \.0) { row in
                             detailMetricCell(title: row.0, value: row.1)
                         }
                     }
@@ -947,10 +1019,23 @@ private struct BatteryDetailsSheetView: View {
         }
     }
 
-    private func summaryDetails(_ snapshot: BatteryDiagnosticsSnapshot) -> [(String, String)] {
+    private func primaryDurationCard(_ snapshot: BatteryDiagnosticsSnapshot) -> some View {
+        let row = primaryDurationRow(snapshot)
+        return VStack(spacing: 4) {
+            Text(row.0)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(row.1)
+                .font(.title3.weight(.bold))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func secondaryDetails(_ snapshot: BatteryDiagnosticsSnapshot) -> [(String, String)] {
         [
-            ("Time to Full", formattedDuration(snapshot.minutesToFull)),
-            ("Time to Empty", formattedDuration(snapshot.minutesToEmpty)),
             ("Power", formattedPower(snapshot.powerWatts)),
             ("Temperature", formattedTemperature(snapshot.temperatureCelsius)),
             ("Charge Cycles", formattedInt(snapshot.cycleCount)),
@@ -960,6 +1045,22 @@ private struct BatteryDetailsSheetView: View {
             ("Low Power Mode", snapshot.lowPowerModeEnabled ? "Enabled" : "Disabled"),
             ("Updated", snapshot.updatedAt.formatted(date: .omitted, time: .shortened))
         ]
+    }
+
+    private func primaryDurationRow(_ snapshot: BatteryDiagnosticsSnapshot) -> (String, String) {
+        if snapshot.isCharging == true {
+            return ("Time to Full", formattedDuration(snapshot.minutesToFull))
+        }
+        if snapshot.isCharging == false {
+            return ("Time to Empty", formattedDuration(snapshot.minutesToEmpty))
+        }
+        if snapshot.minutesToFull != nil {
+            return ("Time to Full", formattedDuration(snapshot.minutesToFull))
+        }
+        if snapshot.minutesToEmpty != nil {
+            return ("Time to Empty", formattedDuration(snapshot.minutesToEmpty))
+        }
+        return ("Time", "n/a")
     }
 
     private func formattedInt(_ value: Int?) -> String {

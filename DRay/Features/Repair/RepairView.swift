@@ -60,159 +60,116 @@ struct RepairView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             header
 
-            HSplitView {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Filter applications", text: $appSearchQuery)
-                        .textFieldStyle(.plain)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                List(filteredApps, selection: $selectedAppPath) { app in
-                    HStack(spacing: 10) {
-                        Image(nsImage: iconCache.icon(for: app.appURL.path))
-                            .resizable()
-                            .frame(width: 20, height: 20)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.name)
-                                .font(.headline)
-                                .lineLimit(1)
-                            Text(app.bundleID)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+            HStack(alignment: .top, spacing: 12) {
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Filter applications", text: $appSearchQuery)
+                            .textFieldStyle(.plain)
                     }
-                    .padding(.vertical, 4)
-                    .tag(app.appURL.path)
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectedAppPath = app.appURL.path }
-                    .listRowBackground(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(
-                                selectedAppPath == app.appURL.path
-                                ? Color.accentColor.opacity(0.15)
-                                : Color.clear
-                            )
-                    )
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-            }
-            .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
-            .padding(10)
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 0)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 12) {
-                if let selectedApp {
-                    HStack {
-                        Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
-                            .resizable()
-                            .frame(width: 34, height: 34)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("App Repair")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(selectedApp.name)
-                                .font(.title3.bold())
-                            Text(selectedApp.appURL.path)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button("Rescan Artifacts") {
-                            model.loadRepairArtifacts(for: selectedApp)
-                        }
-                        .buttonStyle(.bordered)
-                        Button("Repair") {
-                            model.runAppRepair(
-                                app: selectedApp,
-                                artifacts: selectedArtifacts.isEmpty ? model.repairArtifacts : selectedArtifacts,
-                                relaunchAfterRepair: relaunchAfterRepair
-                            )
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.repairArtifacts.isEmpty || model.isRepairLoading)
-                    }
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 12)
-
-                    HStack {
-                        Toggle("Relaunch app after repair", isOn: $relaunchAfterRepair)
-                            .toggleStyle(.switch)
-                        Spacer()
-                        Picker("Strategy", selection: $repairStrategy) {
-                            ForEach(AppRepairStrategy.allCases) { strategy in
-                                Text(strategy.title).tag(strategy)
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
+                            ForEach(filteredApps) { app in
+                                repairSidebarRow(app)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .frame(width: 140)
-                        Button("Apply Strategy") {
-                            applySelectedStrategy()
-                        }
-                        .buttonStyle(.bordered)
-                        Text("Selected: \(selectedArtifacts.count)")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Reclaimable: \(reclaimedSizeText)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        .padding(6)
                     }
-                    .glassSurface(cornerRadius: 12, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 10)
+                }
+                .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+                .padding(10)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
 
-                    HStack(spacing: 8) {
-                        Text(repairStrategy.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        Spacer()
-                        Text("Preview \(strategyPreviewArtifacts.count) · \(strategyPreviewSizeText)")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        riskBadge("Low \(strategyRiskCounts.low)", color: .green)
-                        riskBadge("Med \(strategyRiskCounts.medium)", color: .orange)
-                        riskBadge("High \(strategyRiskCounts.high)", color: .red)
-                    }
-                    .glassSurface(cornerRadius: 12, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 10)
-
-                    List(model.repairArtifacts, selection: $selectedArtifactPaths) { artifact in
+                VStack(alignment: .leading, spacing: 12) {
+                    if let selectedApp {
                         HStack {
+                            Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
+                                .resizable()
+                                .frame(width: 34, height: 34)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(artifact.name)
-                                        .font(.subheadline.weight(.semibold))
-                                    let risk = model.repairRisk(for: artifact)
-                                    Text(riskLabel(risk))
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(riskColor(risk).opacity(0.15), in: Capsule())
-                                }
-                                Text(artifact.url.path)
+                                Text("App Repair")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(selectedApp.name)
+                                    .font(.title3.bold())
+                                Text(selectedApp.appURL.path)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                             Spacer()
-                            Text(ByteCountFormatter.string(fromByteCount: artifact.sizeInBytes, countStyle: .file))
-                                .font(.caption)
+                            Button("Rescan Artifacts") {
+                                model.loadRepairArtifacts(for: selectedApp)
+                            }
+                            .buttonStyle(.bordered)
+                            Button("Repair") {
+                                model.runAppRepair(
+                                    app: selectedApp,
+                                    artifacts: selectedArtifacts.isEmpty ? model.repairArtifacts : selectedArtifacts,
+                                    relaunchAfterRepair: relaunchAfterRepair
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.repairArtifacts.isEmpty || model.isRepairLoading)
+                        }
+                        .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
+
+                        HStack {
+                            Toggle("Relaunch app after repair", isOn: $relaunchAfterRepair)
+                                .toggleStyle(.switch)
+                            Spacer()
+                            Picker("Strategy", selection: $repairStrategy) {
+                                ForEach(AppRepairStrategy.allCases) { strategy in
+                                    Text(strategy.title).tag(strategy)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 140)
+                            Button("Apply Strategy") {
+                                applySelectedStrategy()
+                            }
+                            .buttonStyle(.bordered)
+                            Text("Selected: \(selectedArtifacts.count)")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Reclaimable: \(reclaimedSizeText)")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        .tag(artifact.url.path)
+                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+
+                        HStack(spacing: 8) {
+                            Text(repairStrategy.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            Spacer()
+                            Text("Preview \(strategyPreviewArtifacts.count) · \(strategyPreviewSizeText)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            riskBadge("Low \(strategyRiskCounts.low)", color: .green)
+                            riskBadge("Med \(strategyRiskCounts.medium)", color: .orange)
+                            riskBadge("High \(strategyRiskCounts.high)", color: .red)
+                        }
+                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
+                            ForEach(model.repairArtifacts) { artifact in
+                                repairArtifactRow(artifact)
+                            }
+                        }
+                        .padding(8)
                     }
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 0)
+                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 0)
                     .overlay {
                         if model.isRepairLoading {
                             ProgressView("Repair scan in progress...")
@@ -230,51 +187,24 @@ struct RepairView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 10)
+                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
                     }
 
                     if !model.repairSessions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Repair rollback sessions")
                                 .font(.headline)
-                            List(model.repairSessions.prefix(10)) { session in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(session.appName)
-                                            .font(.subheadline.bold())
-                                        Spacer()
-                                        Text(session.createdAt, style: .relative)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Button("Restore All") {
-                                            let restored = model.restoreFromRepairSession(session)
-                                            if restored > 0 {
-                                                model.loadRepairArtifacts(for: selectedApp)
-                                            }
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                    ForEach(session.rollbackItems.prefix(8)) { item in
-                                        HStack {
-                                            Text(item.name)
-                                                .font(.caption)
-                                                .lineLimit(1)
-                                            Spacer()
-                                            Button("Restore") {
-                                                let restored = model.restoreFromRepairSession(session, item: item)
-                                                if restored > 0 {
-                                                    model.loadRepairArtifacts(for: selectedApp)
-                                                }
-                                            }
-                                            .buttonStyle(.borderless)
-                                        }
+                            ScrollView {
+                                LazyVStack(spacing: 8) {
+                                    ForEach(Array(model.repairSessions.prefix(10))) { session in
+                                        repairRollbackSessionCard(session)
                                     }
                                 }
-                                .padding(.vertical, 2)
+                                .padding(8)
                             }
                             .frame(minHeight: 170)
                         }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.1, shadowOpacity: 0.05, padding: 10)
+                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
                     }
                 } else {
                     ContentUnavailableView(
@@ -283,12 +213,12 @@ struct RepairView: View {
                         description: Text("Select application to scan and clean corrupted leftovers without reinstalling.")
                     )
                 }
+                }
+                .padding(12)
+                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(12)
-            .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
         }
-        }
-        .padding(.vertical, 8)
+        .padding(12)
         .onAppear {
             if model.installedApps.isEmpty {
                 model.loadInstalledApps()
@@ -332,16 +262,143 @@ struct RepairView: View {
             title: "App Repair",
             subtitle: "Reset problematic app data safely without reinstalling."
         ) {
-            HStack(spacing: 8) {
-                GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                GlassPillBadge(title: "\(model.repairArtifacts.count) artifacts", tint: .orange)
-                GlassPillBadge(title: "Selected \(selectedArtifacts.count)", tint: .green)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
+                    GlassPillBadge(title: "\(model.repairArtifacts.count) artifacts", tint: .orange)
+                    GlassPillBadge(title: "Selected \(selectedArtifacts.count)", tint: .green)
 
-                Button("Rescan Apps") {
-                    model.loadInstalledApps()
+                    Button("Rescan Apps") {
+                        model.loadInstalledApps()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private func repairSidebarRow(_ app: InstalledApp) -> some View {
+        let selected = selectedAppPath == app.appURL.path
+        return Button {
+            selectedAppPath = app.appURL.path
+        } label: {
+            HStack(spacing: 10) {
+                Image(nsImage: iconCache.icon(for: app.appURL.path))
+                    .resizable()
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(app.bundleID)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? Color.accentColor.opacity(0.16) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func repairArtifactRow(_ artifact: AppRemnant) -> some View {
+        let isSelected = selectedArtifactPaths.contains(artifact.url.path)
+        let risk = model.repairRisk(for: artifact)
+        return Button {
+            toggleArtifactSelection(artifact.url.path)
+        } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.45))
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(artifact.name)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Text(riskLabel(risk))
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(riskColor(risk).opacity(0.15), in: Capsule())
+                    }
+                    Text(artifact.url.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text(ByteCountFormatter.string(fromByteCount: artifact.sizeInBytes, countStyle: .file))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func repairRollbackSessionCard(_ session: UninstallSession) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(session.appName)
+                    .font(.subheadline.bold())
+                Spacer()
+                Text(session.createdAt, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Restore All") {
+                    let restored = model.restoreFromRepairSession(session)
+                    if restored > 0 {
+                        if let selectedApp {
+                            model.loadRepairArtifacts(for: selectedApp)
+                        }
+                    }
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
+            ForEach(session.rollbackItems.prefix(8)) { item in
+                HStack {
+                    Text(item.name)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Restore") {
+                        let restored = model.restoreFromRepairSession(session, item: item)
+                        if restored > 0 {
+                            if let selectedApp {
+                                model.loadRepairArtifacts(for: selectedApp)
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func toggleArtifactSelection(_ path: String) {
+        if selectedArtifactPaths.contains(path) {
+            selectedArtifactPaths.remove(path)
+        } else {
+            selectedArtifactPaths.insert(path)
         }
     }
 

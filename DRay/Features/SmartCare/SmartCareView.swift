@@ -14,9 +14,7 @@ struct SmartCareView: View {
 
             Group {
                 if model.isSmartScanRunning {
-                    ProgressView("Analyzing cleanup categories...")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
+                    scanProgressBanner
                 }
 
                 if model.smartScanCategories.isEmpty, !model.isSmartScanRunning {
@@ -33,6 +31,26 @@ struct SmartCareView: View {
             .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
         }
         .padding(12)
+    }
+
+    private var scanProgressBanner: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .frame(width: 14, height: 14)
+            Text("Analyzing cleanup categories...")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.thinMaterial)
+        )
     }
 
     private var header: some View {

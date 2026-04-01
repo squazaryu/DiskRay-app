@@ -13,6 +13,8 @@ struct PerformanceView: View {
     @State private var memoryTrend: [Double] = []
     @State private var batteryTrend: [Double] = []
     @State private var trendTimestamps: [Date] = []
+    @State private var showStartupEntries = false
+    @State private var showLiveSummary = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,96 +23,46 @@ struct PerformanceView: View {
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
             if model.isPerformanceScanRunning {
-                ProgressView("Analyzing startup configuration...")
+                ProgressView(t("Анализ конфигурации автозапуска...", "Analyzing startup configuration..."))
             }
 
-            Group {
-                if let report = model.performanceReport {
-                    VStack(spacing: 10) {
-                        List {
-                            Section("Recommendations") {
-                                ForEach(report.recommendations) { rec in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(alignment: .top, spacing: 8) {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(rec.title).font(.headline)
-                                                Text(rec.details).font(.caption).foregroundStyle(.secondary)
-                                            }
-                                            Spacer(minLength: 8)
-                                            if let actionTitle = rec.actionTitle {
-                                                Button(actionTitle) {
-                                                    handleRecommendationAction(rec.action)
-                                                }
-                                                .buttonStyle(.bordered)
-                                                .controlSize(.small)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Section("Startup Entries") {
-                                ForEach(report.startupEntries) { entry in
-                                    HStack {
-                                        Toggle(
-                                            "",
-                                            isOn: Binding(
-                                                get: { selectedPaths.contains(entry.url.path) },
-                                                set: { isOn in
-                                                    if isOn { selectedPaths.insert(entry.url.path) }
-                                                    else { selectedPaths.remove(entry.url.path) }
-                                                }
-                                            )
-                                        )
-                                        .labelsHidden()
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.name)
-                                            Text("\(entry.source) · \(entry.url.path)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        Text(ByteCountFormatter.string(fromByteCount: entry.sizeInBytes, countStyle: .file))
-                                            .font(.caption)
-                                        Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([entry.url]) }
-                                            .buttonStyle(.borderless)
-                                    }
-                                }
-                            }
-                        }
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                    }
-                    if let cleanup = model.startupCleanupReport {
-                        Text("Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if !model.isPerformanceScanRunning {
-                    ContentUnavailableView(
-                        "No Diagnostics Yet",
-                        systemImage: "speedometer",
-                        description: Text("Run diagnostics to inspect startup pressure and maintenance opportunities.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+            if model.performanceReport == nil && !model.isPerformanceScanRunning {
+                ContentUnavailableView(
+                    t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
+                    systemImage: "speedometer",
+                    description: Text(t(
+                        "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
+                        "Run diagnostics to inspect startup pressure and maintenance opportunities."
+                    ))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
+            } else if let cleanup = model.startupCleanupReport {
+                Text(t(
+                    "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
+                    "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
+                ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
             }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
         }
         .padding(12)
         .confirmationDialog(
-            "Disable selected startup entries?",
+            t("Отключить выбранные элементы автозапуска?", "Disable selected startup entries?"),
             isPresented: $showCleanupConfirm,
             titleVisibility: .visible
         ) {
-            Button("Move to Trash", role: .destructive) {
+            Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
                 model.cleanupStartupEntries(selectedEntries)
                 selectedPaths.removeAll()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(t("Отмена", "Cancel"), role: .cancel) {}
         } message: {
-            Text("Selected startup entries will be moved to Trash.")
+            Text(t(
+                "Выбранные элементы автозапуска будут перемещены в корзину.",
+                "Selected startup entries will be moved to Trash."
+            ))
         }
         .confirmationDialog(
             reliefDialogTitle,
@@ -120,15 +72,15 @@ struct PerformanceView: View {
             Button(reliefActionTitle) {
                 executeReliefAction()
             }
-            Button("Cancel", role: .cancel) {
+            Button(t("Отмена", "Cancel"), role: .cancel) {
                 pendingReliefAction = nil
             }
         }
-        .alert("Live Load Adjustment", isPresented: Binding(
+        .alert(t("Изменение нагрузки", "Live Load Adjustment"), isPresented: Binding(
             get: { reliefResultMessage != nil },
             set: { if !$0 { reliefResultMessage = nil } }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(t("ОК", "OK"), role: .cancel) {}
         } message: {
             Text(reliefResultMessage ?? "")
         }
@@ -148,31 +100,36 @@ struct PerformanceView: View {
 
     private var header: some View {
         ModuleHeaderCard(
-            title: "Performance",
-            subtitle: "Startup diagnostics and maintenance recommendations."
+            title: t("Производительность", "Performance"),
+            subtitle: t(
+                "Диагностика автозапуска и рекомендации по обслуживанию.",
+                "Startup diagnostics and maintenance recommendations."
+            )
         ) {
-            HStack(spacing: 8) {
-                Button("Run Diagnostics") { model.runPerformanceScan() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isPerformanceScanRunning)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button(t("Запустить диагностику", "Run Diagnostics")) { model.runPerformanceScan() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isPerformanceScanRunning)
 
-                Button("Disable Selected") {
-                    showCleanupConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .disabled(selectedEntries.isEmpty)
-
-                Button("Export Ops Log") {
-                    if let url = model.exportOperationLogReport() {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    Button(t("Отключить выбранные", "Disable Selected")) {
+                        showCleanupConfirm = true
                     }
-                }
-                .buttonStyle(.bordered)
+                    .buttonStyle(.bordered)
+                    .disabled(selectedEntries.isEmpty)
 
-                Button("Reveal Crash Log") {
-                    model.revealCrashTelemetry()
+                    Button(t("Экспорт лога", "Export Ops Log")) {
+                        if let url = model.exportOperationLogReport() {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(t("Показать crash log", "Reveal Crash Log")) {
+                        model.revealCrashTelemetry()
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             }
         }
     }
@@ -180,10 +137,10 @@ struct PerformanceView: View {
     private var loadPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Live Load")
+                Text(t("Текущая нагрузка", "Live Load"))
                     .font(.headline)
                 Spacer()
-                Button("Reduce CPU") {
+                Button(t("Снизить CPU", "Reduce CPU")) {
                     pendingReliefAction = .cpu
                     showReliefConfirm = true
                 }
@@ -191,7 +148,7 @@ struct PerformanceView: View {
                 .controlSize(.small)
                 .disabled(cpuReliefCandidates.isEmpty)
 
-                Button("Reduce Memory") {
+                Button(t("Снизить память", "Reduce Memory")) {
                     pendingReliefAction = .memory
                     showReliefConfirm = true
                 }
@@ -199,12 +156,15 @@ struct PerformanceView: View {
                 .controlSize(.small)
                 .disabled(memoryReliefCandidates.isEmpty)
 
-                Button("Restore Priorities") {
+                Button(t("Вернуть приоритеты", "Restore Priorities")) {
                     let result = model.restoreAdjustedProcessPriorities(limit: 8)
                     let adjustedText = result.adjusted.isEmpty ? "0" : "\(result.adjusted.count): " + result.adjusted.joined(separator: ", ")
                     let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
                     let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
-                    reliefResultMessage = "Restored \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+                    reliefResultMessage = t(
+                        "Восстановлено \(adjustedText)\nОшибки \(failedText)\nПропущено \(skippedText)",
+                        "Restored \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+                    )
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -215,50 +175,37 @@ struct PerformanceView: View {
                 loadCard(
                     title: "CPU",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
-                    subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%"
+                    subtitle: t(
+                        "Пользователь \(Int(monitor.snapshot.cpuUserPercent))% · Система \(Int(monitor.snapshot.cpuSystemPercent))%",
+                        "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%"
+                    )
                 )
                 loadCard(
-                    title: "Memory",
+                    title: t("Память", "Memory"),
                     value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
                     subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) of \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
                 )
                 loadCard(
-                    title: "Network",
+                    title: t("Сеть", "Network"),
                     value: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond))",
                     subtitle: "↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))"
                 )
                 loadCard(
-                    title: "Battery",
+                    title: t("Батарея", "Battery"),
                     value: batteryPrimaryText,
                     subtitle: batterySecondaryText
                 )
             }
 
             if let report = model.performanceReport {
-                HStack(spacing: 10) {
-                    loadCard(
-                        title: "Startup entries",
-                        value: "\(report.startupEntries.count)",
-                        subtitle: ByteCountFormatter.string(fromByteCount: report.startupTotalBytes, countStyle: .file)
-                    )
-                    loadCard(
-                        title: "Disk free",
-                        value: report.diskFreeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "n/a",
-                        subtitle: report.diskTotalBytes.map { "of " + ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? ""
-                    )
-                    loadCard(
-                        title: "Priority tweaks",
-                        value: "\(model.activeLoadReliefAdjustments)",
-                        subtitle: model.activeLoadReliefAdjustments == 0 ? "No active adjustments" : "Restore available"
-                    )
-                }
+                diagnosticsSummary(report)
             }
 
             trendPanel
 
             if !monitor.snapshot.topCPUConsumers.isEmpty || !monitor.snapshot.topMemoryConsumers.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Top Consumers")
+                    Text(t("Топ потребителей", "Top Consumers"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ForEach(Array(consumerRows.prefix(4))) { consumer in
@@ -268,9 +215,9 @@ struct PerformanceView: View {
                             Spacer()
                             Text("CPU \(Int(consumer.cpuPercent))%")
                                 .foregroundStyle(.secondary)
-                            Text("MEM \(Int(consumer.memoryMB)) MB")
+                            Text(t("ПАМ \(Int(consumer.memoryMB)) MB", "MEM \(Int(consumer.memoryMB)) MB"))
                                 .foregroundStyle(.secondary)
-                            Text("BAT \(String(format: "%.1f", consumer.batteryImpactScore))")
+                            Text(t("БАТ \(String(format: "%.1f", consumer.batteryImpactScore))", "BAT \(String(format: "%.1f", consumer.batteryImpactScore))"))
                                 .foregroundStyle(.orange)
                                 .fontWeight(.semibold)
                         }
@@ -363,9 +310,173 @@ struct PerformanceView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
+    private func summaryBadge(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func diagnosticsSummary(_ report: PerformanceReport) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    showLiveSummary.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showLiveSummary ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(t("Сводка диагностики", "Diagnostics Summary"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 6)
+                }
+            }
+            .buttonStyle(.plain)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    summaryBadge(
+                        title: t("Автозапуск", "Startup"),
+                        value: "\(report.startupEntries.count)"
+                    )
+                    summaryBadge(
+                        title: t("Размер", "Size"),
+                        value: ByteCountFormatter.string(fromByteCount: report.startupTotalBytes, countStyle: .file)
+                    )
+                    summaryBadge(
+                        title: t("Свободно", "Free"),
+                        value: report.diskFreeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "n/a"
+                    )
+                    summaryBadge(
+                        title: t("Изменено", "Tweaks"),
+                        value: "\(model.activeLoadReliefAdjustments)"
+                    )
+                }
+            }
+
+            if showLiveSummary {
+                if !report.recommendations.isEmpty {
+                    Divider()
+                    Text(t("Рекомендации автозапуска", "Startup Recommendations"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(report.recommendations) { rec in
+                        recommendationRow(rec)
+                    }
+                }
+
+                Divider()
+                HStack {
+                    Text(t("Элементы автозапуска", "Startup Entries"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(showStartupEntries ? t("Скрыть", "Hide") : t("Показать", "Show")) {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            showStartupEntries.toggle()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if showStartupEntries {
+                    VStack(spacing: 6) {
+                        ForEach(report.startupEntries.prefix(12)) { entry in
+                            startupEntryRow(entry)
+                        }
+                        if report.startupEntries.count > 12 {
+                            Text(t(
+                                "Показаны первые \(min(12, report.startupEntries.count)) из \(report.startupEntries.count)",
+                                "Showing first \(min(12, report.startupEntries.count)) of \(report.startupEntries.count)"
+                            ))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func recommendationRow(_ rec: PerformanceRecommendation) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rec.title)
+                    .font(.subheadline.weight(.semibold))
+                Text(rec.details)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if let actionTitle = rec.actionTitle {
+                Button(actionTitle) {
+                    handleRecommendationAction(rec.action)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func startupEntryRow(_ entry: StartupEntry) -> some View {
+        HStack(spacing: 8) {
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { selectedPaths.contains(entry.url.path) },
+                    set: { isOn in
+                        if isOn { selectedPaths.insert(entry.url.path) }
+                        else { selectedPaths.remove(entry.url.path) }
+                    }
+                )
+            )
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text("\(entry.source) · \(entry.url.path)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text(ByteCountFormatter.string(fromByteCount: entry.sizeInBytes, countStyle: .file))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button(t("Показать", "Reveal")) {
+                NSWorkspace.shared.activateFileViewerSelecting([entry.url])
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
     private var trendPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Load Trends")
+            Text(t("Тренды нагрузки", "Load Trends"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -378,14 +489,14 @@ struct PerformanceView: View {
                     avg15m: averageForWindow(cpuTrend, seconds: 15 * 60)
                 )
                 trendCard(
-                    title: "Memory",
+                    title: t("Память", "Memory"),
                     color: .purple,
                     values: memoryTrend,
                     avg5m: averageForWindow(memoryTrend, seconds: 5 * 60),
                     avg15m: averageForWindow(memoryTrend, seconds: 15 * 60)
                 )
                 trendCard(
-                    title: "Battery",
+                    title: t("Батарея", "Battery"),
                     color: .green,
                     values: batteryTrend,
                     avg5m: averageForWindow(batteryTrend, seconds: 5 * 60),
@@ -416,7 +527,7 @@ struct PerformanceView: View {
                     .foregroundStyle(.secondary)
             }
             MiniSparkline(values: values, color: color)
-                .frame(height: 34)
+                .frame(height: 72)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -441,18 +552,24 @@ struct PerformanceView: View {
     }
 
     private var batterySecondaryText: String {
-        guard let percent = monitor.snapshot.batteryLevelPercent else { return "No battery data" }
+        guard let percent = monitor.snapshot.batteryLevelPercent else { return t("Нет данных батареи", "No battery data") }
         let charging = monitor.snapshot.batteryIsCharging ?? false
         let minutes = monitor.snapshot.batteryMinutesRemaining
         if let minutes {
             let hours = minutes / 60
             let mins = minutes % 60
             if charging {
-                return "\(percent)% · charging (\(hours)h \(mins)m)"
+                return t(
+                    "\(percent)% · зарядка (\(hours)ч \(mins)м)",
+                    "\(percent)% · charging (\(hours)h \(mins)m)"
+                )
             }
-            return "\(percent)% · \(hours)h \(mins)m left"
+            return t(
+                "\(percent)% · осталось \(hours)ч \(mins)м",
+                "\(percent)% · \(hours)h \(mins)m left"
+            )
         }
-        return charging ? "\(percent)% · charging" : "\(percent)%"
+        return charging ? t("\(percent)% · зарядка", "\(percent)% · charging") : "\(percent)%"
     }
 
     private func appendTrendSample(_ snapshot: LiveSystemSnapshot) {
@@ -499,19 +616,19 @@ struct PerformanceView: View {
     private var reliefDialogTitle: String {
         switch pendingReliefAction {
         case .cpu:
-            return "Reduce CPU load by deprioritizing heavy apps?"
+            return t("Снизить нагрузку CPU (понизить приоритет тяжёлых приложений)?", "Reduce CPU load by deprioritizing heavy apps?")
         case .memory:
-            return "Reduce memory pressure by deprioritizing heavy apps?"
+            return t("Снизить нагрузку памяти (понизить приоритет тяжёлых приложений)?", "Reduce memory pressure by deprioritizing heavy apps?")
         case .none:
-            return "Adjust live load?"
+            return t("Изменить live-нагрузку?", "Adjust live load?")
         }
     }
 
     private var reliefActionTitle: String {
         switch pendingReliefAction {
-        case .cpu: return "Lower Priority for Top CPU Apps"
-        case .memory: return "Lower Priority for Top Memory Apps"
-        case .none: return "Run"
+        case .cpu: return t("Понизить приоритет CPU-лидеров", "Lower Priority for Top CPU Apps")
+        case .memory: return t("Понизить приоритет memory-лидеров", "Lower Priority for Top Memory Apps")
+        case .none: return t("Выполнить", "Run")
         }
     }
 
@@ -530,7 +647,10 @@ struct PerformanceView: View {
         let adjustedText = result.adjusted.isEmpty ? "0" : "\(result.adjusted.count): " + result.adjusted.joined(separator: ", ")
         let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
         let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
-        reliefResultMessage = "Adjusted \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+        reliefResultMessage = t(
+            "Изменено \(adjustedText)\nОшибки \(failedText)\nПропущено \(skippedText)",
+            "Adjusted \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+        )
     }
 
     private func handleRecommendationAction(_ action: PerformanceRecommendationAction) {
@@ -552,6 +672,14 @@ struct PerformanceView: View {
         case .none:
             break
         }
+    }
+}
+
+private extension PerformanceView {
+    var isRussian: Bool { model.appLanguage.localeCode.lowercased().hasPrefix("ru") }
+
+    func t(_ ru: String, _ en: String) -> String {
+        isRussian ? ru : en
     }
 }
 

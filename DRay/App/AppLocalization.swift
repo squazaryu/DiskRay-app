@@ -19,6 +19,14 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+}
+
 enum AppL10nKey: String {
     case navSmartCare
     case navClutter
@@ -39,6 +47,11 @@ enum AppL10nKey: String {
     case settingsSubtitle
     case settingsLanguage
     case settingsLanguageHint
+    case settingsAppearance
+    case settingsAppearanceHint
+    case appearanceSystem
+    case appearanceLight
+    case appearanceDark
     case settingsStartup
     case settingsLaunchAtLogin
     case settingsPermissions
@@ -141,6 +154,11 @@ enum AppL10n {
         case .settingsSubtitle: return "Language, launch and permissions preferences."
         case .settingsLanguage: return "App Language"
         case .settingsLanguageHint: return "Applied instantly for localized modules."
+        case .settingsAppearance: return "Interface Appearance"
+        case .settingsAppearanceHint: return "Controls light/dark style for the main DRay window."
+        case .appearanceSystem: return "System"
+        case .appearanceLight: return "Light"
+        case .appearanceDark: return "Dark"
         case .settingsStartup: return "Startup"
         case .settingsLaunchAtLogin: return "Launch DRay at login"
         case .settingsPermissions: return "Permissions"
@@ -201,8 +219,8 @@ enum AppL10n {
 
     private static func russian(_ key: AppL10nKey) -> String {
         switch key {
-        case .navSmartCare: return "Smart Care"
-        case .navClutter: return "My Clutter"
+        case .navSmartCare: return "Умный уход"
+        case .navClutter: return "Мой хлам"
         case .navUninstaller: return "Удаление"
         case .navRepair: return "Починка"
         case .navSpaceLens: return "Space Lens"
@@ -220,6 +238,11 @@ enum AppL10n {
         case .settingsSubtitle: return "Язык, автозапуск и системные разрешения."
         case .settingsLanguage: return "Язык интерфейса"
         case .settingsLanguageHint: return "Применяется сразу для локализованных модулей."
+        case .settingsAppearance: return "Тема интерфейса"
+        case .settingsAppearanceHint: return "Определяет светлый/тёмный стиль главного окна DRay."
+        case .appearanceSystem: return "Системная"
+        case .appearanceLight: return "Светлая"
+        case .appearanceDark: return "Тёмная"
         case .settingsStartup: return "Запуск"
         case .settingsLaunchAtLogin: return "Запускать DRay при входе"
         case .settingsPermissions: return "Разрешения"
@@ -278,4 +301,3 @@ enum AppL10n {
         }
     }
 }
-

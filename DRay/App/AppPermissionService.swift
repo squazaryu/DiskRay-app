@@ -16,6 +16,17 @@ final class AppPermissionService: ObservableObject {
     @Published var permissionHint: String?
 
     private let hasCompletedOnboardingKey = "dray.permissions.onboarding.completed"
+    private let systemProtectedPrefixes = [
+        "/System",
+        "/bin",
+        "/sbin",
+        "/usr/bin",
+        "/usr/sbin",
+        "/usr/lib",
+        "/usr/libexec",
+        "/usr/share",
+        "/private/etc"
+    ]
 
     init() {
         firstLaunchNeedsSetup = !UserDefaults.standard.bool(forKey: hasCompletedOnboardingKey)
@@ -84,8 +95,8 @@ final class AppPermissionService: ObservableObject {
         let fm = FileManager.default
         for url in urls {
             let path = url.path
-            if path.hasPrefix("/System/") || path == "/System" {
-                permissionHint = "System files are protected and cannot be modified by DRay."
+            if isSystemProtectedPath(path) {
+                permissionHint = "System files are protected by macOS (SIP) and cannot be modified by DRay."
                 return false
             }
 
@@ -108,6 +119,11 @@ final class AppPermissionService: ObservableObject {
             }
         }
         return true
+    }
+
+    private func isSystemProtectedPath(_ path: String) -> Bool {
+        if path == "/" { return true }
+        return systemProtectedPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 
     func openFullDiskAccessSettings() {

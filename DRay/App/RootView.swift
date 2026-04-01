@@ -83,9 +83,11 @@ struct RootView: View {
                             model.selectedSection = item.id
                         }
                     } label: {
-                        Label(model.localizedSectionTitle(for: item.id), systemImage: item.icon)
+                        Text(model.localizedSectionTitle(for: item.id))
                             .font(.system(size: 14, weight: .semibold))
-                            .labelStyle(.titleOnly)
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 1)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(MinimalGlassButtonStyle(isActive: model.selectedSection == item.id))
                 }

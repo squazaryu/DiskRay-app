@@ -21,13 +21,14 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     languageCard
+                    appearanceCard
                     startupCard
                     permissionsCard
                 }
-                .padding(8)
+                .padding(12)
             }
         }
-        .padding(.vertical, 8)
+        .padding(12)
         .onAppear {
             model.refreshPermissions()
             model.refreshLaunchAtLoginStatus()
@@ -65,6 +66,25 @@ struct SettingsView: View {
             )
             .toggleStyle(.switch)
             .frame(maxWidth: 420, alignment: .leading)
+        }
+    }
+
+    private var appearanceCard: some View {
+        sectionCard(
+            title: model.localized(.settingsAppearance),
+            subtitle: model.localized(.settingsAppearanceHint)
+        ) {
+            Picker(
+                model.localized(.settingsAppearance),
+                selection: $model.appAppearance
+            ) {
+                ForEach(AppAppearance.allCases) { appearance in
+                    Text(appearanceTitle(appearance))
+                        .tag(appearance)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 420)
         }
     }
 
@@ -140,5 +160,15 @@ struct SettingsView: View {
             return model.localized(.languageRussian)
         }
     }
-}
 
+    private func appearanceTitle(_ appearance: AppAppearance) -> String {
+        switch appearance {
+        case .system:
+            return model.localized(.appearanceSystem)
+        case .light:
+            return model.localized(.appearanceLight)
+        case .dark:
+            return model.localized(.appearanceDark)
+        }
+    }
+}

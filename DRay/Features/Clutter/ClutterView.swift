@@ -8,6 +8,7 @@ struct ClutterView: View {
     @State private var pendingTrashPaths: [String] = []
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
+    @State private var cleanupDiagnostics: [CleanupDiagnosticRow] = []
 
     var body: some View {
         VStack(spacing: 10) {
@@ -20,9 +21,12 @@ struct ClutterView: View {
             Group {
                 if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
                     ContentUnavailableView(
-                        "No Duplicates",
+                        t("Дубликаты не найдены", "No Duplicates"),
                         systemImage: "square.on.square",
-                        description: Text("Run duplicate scan for selected target or Home folder.")
+                        description: Text(t(
+                            "Запусти скан выбранной цели или домашней папки.",
+                            "Run duplicate scan for selected target or Home folder."
+                        ))
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -34,6 +38,10 @@ struct ClutterView: View {
             if !selectedPaths.isEmpty {
                 selectionPanel
             }
+
+            if !cleanupDiagnostics.isEmpty {
+                cleanupDiagnosticsPanel
+            }
         }
         .padding(12)
         .onAppear { selectRecommendedDuplicates() }
@@ -44,27 +52,33 @@ struct ClutterView: View {
             }
         }
         .confirmationDialog(
-            "Move selected duplicates to Trash?",
+            t("Переместить выбранные дубликаты в корзину?", "Move selected duplicates to Trash?"),
             isPresented: $showTrashConfirm,
             titleVisibility: .visible
         ) {
-            Button("Move to Trash", role: .destructive) {
+            Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
                 let result = model.moveDuplicatePathsToTrash(pendingTrashPaths)
                 let attempted = Set(pendingTrashPaths)
                 let skipped = Set(result.skippedProtected)
                 let failed = Set(result.failed)
                 let movedSet = attempted.subtracting(skipped).subtracting(failed)
+                cleanupDiagnostics = buildCleanupDiagnostics(
+                    attemptedPaths: pendingTrashPaths,
+                    moved: movedSet,
+                    skipped: skipped,
+                    failed: failed
+                )
                 selectedPaths.subtract(movedSet)
-                trashResultMessage = "Moved: \(result.moved), Skipped protected: \(result.skippedProtected.count), Failed: \(result.failed.count)"
+                trashResultMessage = model.trashResultMessage(result)
                 pendingTrashPaths = []
             }
-            Button("Cancel", role: .cancel) { pendingTrashPaths = [] }
+            Button(t("Отмена", "Cancel"), role: .cancel) { pendingTrashPaths = [] }
         }
-        .alert("Duplicate Cleanup Result", isPresented: Binding(
+        .alert(t("Результат очистки дубликатов", "Duplicate Cleanup Result"), isPresented: Binding(
             get: { trashResultMessage != nil },
             set: { if !$0 { trashResultMessage = nil } }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(t("ОК", "OK"), role: .cancel) {}
         } message: {
             Text(trashResultMessage ?? "")
         }
@@ -72,30 +86,39 @@ struct ClutterView: View {
 
     private var controls: some View {
         ModuleHeaderCard(
-            title: "My Clutter: Exact Duplicates",
-            subtitle: "Groups with identical content (SHA-256) and equal file size."
+            title: t("My Clutter: Точные дубликаты", "My Clutter: Exact Duplicates"),
+            subtitle: t(
+                "Группы с одинаковым содержимым (SHA-256) и размером файла.",
+                "Groups with identical content (SHA-256) and equal file size."
+            )
         ) {
             VStack(alignment: .trailing, spacing: 8) {
                 HStack(spacing: 8) {
-                    GlassPillBadge(title: "Groups \(model.duplicateGroups.count)", tint: .blue)
+                    GlassPillBadge(title: t("Групп \(model.duplicateGroups.count)", "Groups \(model.duplicateGroups.count)"), tint: .blue)
                     GlassPillBadge(
-                        title: "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
+                        title: t(
+                            "К освобождению \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
+                            "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))"
+                        ),
                         tint: .green
                     )
                     GlassPillBadge(
-                        title: "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
+                        title: t(
+                            "Выбрано \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
+                            "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))"
+                        ),
                         tint: .orange
                     )
                 }
 
                 HStack(spacing: 8) {
                     Stepper(value: $model.duplicateMinSizeMB, in: 1...2_048, step: 1) {
-                        Text("Min \(Int(model.duplicateMinSizeMB)) MB")
+                        Text(t("Мин \(Int(model.duplicateMinSizeMB)) МБ", "Min \(Int(model.duplicateMinSizeMB)) MB"))
                             .frame(minWidth: 120, alignment: .trailing)
                     }
                     .frame(width: 170)
 
-                    Button("Scan Target") {
+                    Button(t("Скан цели", "Scan Target")) {
                         selectedPaths.removeAll()
                         model.scanDuplicatesInSelectedTarget()
                     }
@@ -103,7 +126,7 @@ struct ClutterView: View {
                     .controlSize(.small)
                     .disabled(model.isDuplicateScanRunning)
 
-                    Button("Scan Home") {
+                    Button(t("Скан Home", "Scan Home")) {
                         selectedPaths.removeAll()
                         model.scanDuplicatesInHome()
                     }
@@ -111,34 +134,54 @@ struct ClutterView: View {
                     .disabled(model.isDuplicateScanRunning)
 
                     if model.isDuplicateScanRunning {
-                        Button("Cancel") {
+                        Button(t("Отмена", "Cancel")) {
                             model.cancelDuplicateScan()
                         }
                         .controlSize(.small)
                     }
 
-                    Button("Clear") {
+                    Button(t("Очистить", "Clear")) {
                         selectedPaths.removeAll()
                         model.clearDuplicateResults()
                     }
                     .controlSize(.small)
                     .disabled(model.duplicateGroups.isEmpty && selectedPaths.isEmpty)
+
+                    Button(t("Экспорт лога", "Export Ops Log")) {
+                        if let url = model.exportOperationLogReport() {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                            trashResultMessage = t("Лог сохранён:\n\(url.path)", "Ops log exported:\n\(url.path)")
+                        } else {
+                            trashResultMessage = t("Не удалось сохранить лог.", "Failed to export ops log.")
+                        }
+                    }
+                    .controlSize(.small)
                 }
             }
         }
     }
 
     private var progressPanel: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(model.duplicateScanProgress.phase): \(model.duplicateScanProgress.visitedFiles) file(s)")
+        HStack(spacing: 10) {
+            Text("\(model.duplicateScanProgress.phase): \(model.duplicateScanProgress.visitedFiles.formatted(.number.grouping(.automatic))) file(s)")
                 .font(.subheadline.weight(.semibold))
-            Text("Candidate groups: \(model.duplicateScanProgress.candidateGroups)")
-                .font(.caption)
+                .lineLimit(1)
+            Text("•")
+                .foregroundStyle(.secondary)
+            Text(t(
+                "Потенциальных групп: \(model.duplicateScanProgress.candidateGroups.formatted(.number.grouping(.automatic)))",
+                "Candidate groups: \(model.duplicateScanProgress.candidateGroups.formatted(.number.grouping(.automatic)))"
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            Text("•")
                 .foregroundStyle(.secondary)
             Text(model.duplicateScanProgress.currentPath)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
             ProgressView()
                 .controlSize(.small)
         }
@@ -155,10 +198,16 @@ struct ClutterView: View {
                     }
                 } header: {
                     HStack {
-                        Text("\(group.files.count) items")
-                        Text("Each \(ByteCountFormatter.string(fromByteCount: group.sizeInBytes, countStyle: .file))")
+                        Text(t("\(group.files.count) элементов", "\(group.files.count) items"))
+                        Text(t(
+                            "По \(ByteCountFormatter.string(fromByteCount: group.sizeInBytes, countStyle: .file))",
+                            "Each \(ByteCountFormatter.string(fromByteCount: group.sizeInBytes, countStyle: .file))"
+                        ))
                         Spacer()
-                        Text("Reclaimable \(ByteCountFormatter.string(fromByteCount: group.reclaimableBytes, countStyle: .file))")
+                        Text(t(
+                            "К освобождению \(ByteCountFormatter.string(fromByteCount: group.reclaimableBytes, countStyle: .file))",
+                            "Reclaimable \(ByteCountFormatter.string(fromByteCount: group.reclaimableBytes, countStyle: .file))"
+                        ))
                     }
                     .font(.caption.weight(.semibold))
                     .textCase(nil)
@@ -173,6 +222,7 @@ struct ClutterView: View {
     private func duplicateRow(_ file: DuplicateFile, group: DuplicateGroup) -> some View {
         let path = file.url.path
         let isRecommendedKeep = group.files.first?.url.path == path
+        let isProtected = model.isPathProtectedForManualCleanup(path)
 
         return HStack(spacing: 10) {
             Toggle("", isOn: Binding(
@@ -184,17 +234,25 @@ struct ClutterView: View {
             ))
             .toggleStyle(.checkbox)
             .labelsHidden()
+            .disabled(isProtected)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(file.name)
                         .lineLimit(1)
                     if isRecommendedKeep {
-                        Text("keep")
+                        Text(t("оставить", "keep"))
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1)
                             .background(Color.green.opacity(0.16), in: Capsule())
+                    }
+                    if isProtected {
+                        Text(t("защищён", "protected"))
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.18), in: Capsule())
                     }
                 }
                 Text(path)
@@ -218,34 +276,36 @@ struct ClutterView: View {
         )
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Open") { NSWorkspace.shared.open(file.url) }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([file.url]) }
+            Button(t("Открыть", "Open")) { NSWorkspace.shared.open(file.url) }
+            Button(t("Показать в Finder", "Reveal in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([file.url]) }
             Divider()
-            Button(selectedPaths.contains(path) ? "Remove from Selection" : "Add to Selection") {
+            Button(selectedPaths.contains(path) ? t("Убрать из выбора", "Remove from Selection") : t("Добавить в выбор", "Add to Selection")) {
                 if selectedPaths.contains(path) { selectedPaths.remove(path) }
                 else { selectedPaths.insert(path) }
             }
-            Button("Move to Trash", role: .destructive) {
+            .disabled(isProtected)
+            Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
                 pendingTrashPaths = [path]
                 showTrashConfirm = true
             }
+            .disabled(isProtected)
         }
     }
 
     private var selectionPanel: some View {
         HStack(spacing: 8) {
-            Text("Selected: \(selectedPaths.count)")
+            Text(t("Выбрано: \(selectedPaths.count)", "Selected: \(selectedPaths.count)"))
             Text(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))
                 .foregroundStyle(.secondary)
-            Button("Reveal first") {
+            Button(t("Показать первый", "Reveal first")) {
                 guard let first = selectedPaths.sorted().first else { return }
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: first)])
             }
-            Button("Move to Trash", role: .destructive) {
+            Button(t("В корзину", "Move to Trash"), role: .destructive) {
                 pendingTrashPaths = selectedPaths.sorted()
                 showTrashConfirm = true
             }
-            Button("Clear") {
+            Button(t("Очистить", "Clear")) {
                 selectedPaths.removeAll()
             }
         }
@@ -253,6 +313,72 @@ struct ClutterView: View {
         .controlSize(.small)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var cleanupDiagnosticsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(t("Диагностика удаления", "Cleanup Diagnostics"))
+                    .font(.headline)
+                Spacer()
+                Button(t("Очистить", "Clear")) {
+                    cleanupDiagnostics.removeAll()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            HStack(spacing: 8) {
+                Text(t("Файл", "File"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(t("Статус", "Status"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 96, alignment: .leading)
+                Text(t("Причина", "Reason"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    ForEach(cleanupDiagnostics) { row in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.fileName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(row.path)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Text(row.status)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(row.statusColor)
+                                .frame(width: 96, alignment: .leading)
+
+                            Text(row.reason)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+                .padding(6)
+            }
+            .frame(minHeight: 120, maxHeight: 240)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
     }
 
     private var groupsSignature: String {
@@ -283,13 +409,91 @@ struct ClutterView: View {
 
     private func syncSelectionWithExistingFiles() {
         let existing = Set(fileByPath.keys)
-        selectedPaths = selectedPaths.filter { existing.contains($0) }
+        selectedPaths = selectedPaths.filter { existing.contains($0) && !model.isPathProtectedForManualCleanup($0) }
     }
 
     private func selectRecommendedDuplicates() {
         let recommended = model.duplicateGroups.flatMap { group in
             Array(group.files.dropFirst().map { $0.url.path })
         }
-        selectedPaths = Set(recommended)
+        selectedPaths = Set(recommended.filter { !model.isPathProtectedForManualCleanup($0) })
+    }
+
+    private func buildCleanupDiagnostics(
+        attemptedPaths: [String],
+        moved: Set<String>,
+        skipped: Set<String>,
+        failed: Set<String>
+    ) -> [CleanupDiagnosticRow] {
+        let fm = FileManager.default
+        return attemptedPaths.map { path in
+            if moved.contains(path) {
+                return CleanupDiagnosticRow(
+                    path: path,
+                    status: t("Удалён", "Moved"),
+                    statusColor: .green,
+                    reason: t("Успешно перемещён в корзину.", "Moved to Trash successfully.")
+                )
+            }
+            if skipped.contains(path) {
+                return CleanupDiagnosticRow(
+                    path: path,
+                    status: t("Пропущен", "Skipped"),
+                    statusColor: .orange,
+                    reason: t(
+                        "Системно-защищённый путь macOS (SIP/TCC).",
+                        "System-protected macOS path (SIP/TCC)."
+                    )
+                )
+            }
+            if failed.contains(path) {
+                let reason: String
+                if !fm.fileExists(atPath: path) {
+                    reason = t("Файл уже отсутствует на диске.", "File no longer exists.")
+                } else if !fm.isDeletableFile(atPath: path) {
+                    reason = t(
+                        "Нет прав на удаление или файл заблокирован.",
+                        "No delete permission or file is locked."
+                    )
+                } else {
+                    reason = t(
+                        "Ошибка файловой системы, блокировка процессом или ограничение доступа.",
+                        "Filesystem error, in-use lock, or access restriction."
+                    )
+                }
+                return CleanupDiagnosticRow(
+                    path: path,
+                    status: t("Ошибка", "Failed"),
+                    statusColor: .red,
+                    reason: reason
+                )
+            }
+            return CleanupDiagnosticRow(
+                path: path,
+                status: t("Неизвестно", "Unknown"),
+                statusColor: .secondary,
+                reason: t("Статус операции не определён.", "Operation status is unknown.")
+            )
+        }
+    }
+
+    private var isRussian: Bool {
+        model.appLanguage.localeCode.lowercased().hasPrefix("ru")
+    }
+
+    private func t(_ ru: String, _ en: String) -> String {
+        isRussian ? ru : en
+    }
+}
+
+private struct CleanupDiagnosticRow: Identifiable {
+    let id = UUID()
+    let path: String
+    let status: String
+    let statusColor: Color
+    let reason: String
+
+    var fileName: String {
+        URL(fileURLWithPath: path).lastPathComponent
     }
 }

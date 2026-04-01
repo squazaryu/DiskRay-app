@@ -73,50 +73,51 @@ struct BubbleMapView: View {
                     bubbleView(for: item)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Button {
-                            resetToRoot()
-                        } label: {
-                            Label(t(.bubbleRoot), systemImage: "house")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(accentColor)
-
-                        Button {
-                            goUp()
-                        } label: {
-                            Label(t(.bubbleBack), systemImage: "chevron.left")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(navigation.isEmpty)
+                HStack(spacing: 8) {
+                    Button {
+                        resetToRoot()
+                    } label: {
+                        Label(t(.bubbleRoot), systemImage: "house")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(accentColor)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(breadcrumbNodes(), id: \.url.path) { node in
-                                Button {
-                                    jumpTo(node)
-                                } label: {
-                                    Text(node.name == "/" ? t(.bubbleRootName) : node.name)
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                }
-                                .buttonStyle(.bordered)
+                    Button {
+                        goUp()
+                    } label: {
+                        Label(t(.bubbleBack), systemImage: "chevron.left")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(navigation.isEmpty)
+
+                    Menu {
+                        ForEach(breadcrumbNodes(), id: \.url.path) { node in
+                            Button(node.name == "/" ? t(.bubbleRootName) : node.name) {
+                                jumpTo(node)
                             }
                         }
+                    } label: {
+                        Label(current.name == "/" ? t(.bubbleRootName) : current.name, systemImage: "folder")
+                            .lineLimit(1)
                     }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: 180, alignment: .leading)
 
                     Text(current.url.path)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(secondaryTextColor)
                         .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer(minLength: 4)
+
                     Text(tapMode == .select ? t(.bubbleHintSelect) : t(.bubbleHintOpen))
                         .font(.caption2)
                         .foregroundStyle(secondaryTextColor.opacity(0.9))
+                        .lineLimit(1)
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .background(
                     GeometryReader { proxy in

@@ -57,19 +57,36 @@ struct LiveSystemSnapshot: Sendable {
 final class LiveSystemMetricsMonitor: ObservableObject {
     @Published private(set) var snapshot: LiveSystemSnapshot = .empty
 
+    private let updateInterval: TimeInterval
+    private let heavySampleTickInterval: Int
+    private let powerNotifier = PowerSourceNotifier()
     private var timer: Timer?
     private var previousCPU: CPUCounters?
     private var previousNetwork: NetworkCounters?
     private var cachedCPUConsumers: [ProcessConsumer] = []
     private var cachedMemoryConsumers: [ProcessConsumer] = []
     private var cachedBatteryConsumers: [ProcessConsumer] = []
+    private var batterySmoother = BatterySmoother()
     private var tickCounter = 0
     private var isSamplingConsumers = false
 
+    init(updateInterval: TimeInterval = 1.0, heavySamplePeriod: TimeInterval = 4.0) {
+        let safeInterval = max(0.4, updateInterval)
+        self.updateInterval = safeInterval
+        let safeHeavyPeriod = max(safeInterval, heavySamplePeriod)
+        self.heavySampleTickInterval = max(1, Int((safeHeavyPeriod / safeInterval).rounded()))
+    }
+
     func start() {
         guard timer == nil else { return }
+        powerNotifier.onPowerSourceChanged = { [weak self] in
+            Task { @MainActor in
+                self?.updateBatteryFromSystemEvent()
+            }
+        }
+        powerNotifier.start()
         update()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.update()
             }
@@ -82,6 +99,8 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
+        powerNotifier.stop()
+        powerNotifier.onPowerSourceChanged = nil
     }
 
     private func update() {
@@ -89,10 +108,14 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let cpu = cpuSample()
         let memory = memorySample()
         let disk = diskSample()
-        let battery = batterySample()
+        let battery = batterySmoother.ingest(
+            batterySample(),
+            source: .timer,
+            now: now
+        )
         let network = networkSample(at: now)
         tickCounter += 1
-        if (tickCounter.isMultiple(of: 4) || cachedCPUConsumers.isEmpty), !isSamplingConsumers {
+        if (tickCounter.isMultiple(of: heavySampleTickInterval) || cachedCPUConsumers.isEmpty), !isSamplingConsumers {
             isSamplingConsumers = true
             DispatchQueue.global(qos: .utility).async {
                 let consumers = ProcessConsumerSampler.sample()
@@ -124,6 +147,35 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             topCPUConsumers: cachedCPUConsumers,
             topMemoryConsumers: cachedMemoryConsumers,
             topBatteryConsumers: cachedBatteryConsumers
+        )
+    }
+
+    private func updateBatteryFromSystemEvent() {
+        let now = Date()
+        let battery = batterySmoother.ingest(
+            batterySample(),
+            source: .event,
+            now: now
+        )
+        snapshot = LiveSystemSnapshot(
+            updatedAt: now,
+            cpuLoadPercent: snapshot.cpuLoadPercent,
+            cpuUserPercent: snapshot.cpuUserPercent,
+            cpuSystemPercent: snapshot.cpuSystemPercent,
+            memoryUsedBytes: snapshot.memoryUsedBytes,
+            memoryTotalBytes: snapshot.memoryTotalBytes,
+            memoryPressurePercent: snapshot.memoryPressurePercent,
+            diskFreeBytes: snapshot.diskFreeBytes,
+            diskTotalBytes: snapshot.diskTotalBytes,
+            batteryLevelPercent: battery.percent,
+            batteryIsCharging: battery.isCharging,
+            batteryMinutesRemaining: battery.minutesRemaining,
+            networkDownBytesPerSecond: snapshot.networkDownBytesPerSecond,
+            networkUpBytesPerSecond: snapshot.networkUpBytesPerSecond,
+            uptimeSeconds: snapshot.uptimeSeconds,
+            topCPUConsumers: snapshot.topCPUConsumers,
+            topMemoryConsumers: snapshot.topMemoryConsumers,
+            topBatteryConsumers: snapshot.topBatteryConsumers
         )
     }
 
@@ -240,9 +292,9 @@ final class LiveSystemMetricsMonitor: ObservableObject {
 
             let minutes: Int?
             if let isCharging, isCharging {
-                minutes = timeToFull
+                minutes = normalizedMinutes(timeToFull)
             } else {
-                minutes = timeToEmpty
+                minutes = normalizedMinutes(timeToEmpty)
             }
 
             return (percent, isCharging, minutes)
@@ -271,6 +323,12 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func normalizedMinutes(_ value: Int?) -> Int? {
+        guard let value, value >= 0 else { return nil }
+        guard value <= 72 * 60 else { return nil }
+        return value
     }
 
     private func networkSample(at now: Date) -> (downPerSecond: Double, upPerSecond: Double) {
@@ -326,6 +384,103 @@ private struct NetworkCounters {
     let timestamp: Date
     let inboundBytes: UInt64
     let outboundBytes: UInt64
+}
+
+private enum BatteryUpdateSource {
+    case timer
+    case event
+}
+
+private struct BatterySmoother {
+    private var smoothedPercent: Double?
+    private var smoothedMinutes: Double?
+    private var lastCharging: Bool?
+    private var lastUpdateAt: Date?
+
+    mutating func ingest(
+        _ sample: (percent: Int?, isCharging: Bool?, minutesRemaining: Int?),
+        source: BatteryUpdateSource,
+        now: Date
+    ) -> (percent: Int?, isCharging: Bool?, minutesRemaining: Int?) {
+        let elapsed = max(0.2, now.timeIntervalSince(lastUpdateAt ?? now))
+        defer {
+            lastUpdateAt = now
+            lastCharging = sample.isCharging
+        }
+
+        guard let rawPercent = sample.percent else {
+            smoothedPercent = nil
+            smoothedMinutes = nil
+            return (nil, sample.isCharging, nil)
+        }
+
+        let chargingChanged = lastCharging != nil && sample.isCharging != lastCharging
+
+        if smoothedPercent == nil || chargingChanged {
+            smoothedPercent = Double(rawPercent)
+        } else if let previous = smoothedPercent {
+            let baseAlpha = source == .event ? 0.68 : 0.24
+            let elapsedFactor = min(2.1, max(0.6, elapsed))
+            let alpha = max(0.16, min(0.88, baseAlpha * elapsedFactor))
+            smoothedPercent = previous + (Double(rawPercent) - previous) * alpha
+        }
+
+        let outputPercent = max(0, min(100, Int((smoothedPercent ?? Double(rawPercent)).rounded())))
+
+        let outputMinutes: Int?
+        if let rawMinutes = sample.minutesRemaining {
+            if smoothedMinutes == nil || chargingChanged {
+                smoothedMinutes = Double(rawMinutes)
+            } else if let previous = smoothedMinutes {
+                let deltaLimit = source == .event ? 80.0 : 28.0
+                let boundedRaw = previous + min(deltaLimit, max(-deltaLimit, Double(rawMinutes) - previous))
+                let baseAlpha = source == .event ? 0.50 : 0.20
+                let elapsedFactor = min(2.0, max(0.6, elapsed))
+                let alpha = max(0.12, min(0.72, baseAlpha * elapsedFactor))
+                smoothedMinutes = previous + (boundedRaw - previous) * alpha
+            }
+            outputMinutes = max(0, Int((smoothedMinutes ?? Double(rawMinutes)).rounded()))
+        } else {
+            if let previous = smoothedMinutes, elapsed < 80 {
+                outputMinutes = max(0, Int(previous.rounded()))
+            } else {
+                smoothedMinutes = nil
+                outputMinutes = nil
+            }
+        }
+
+        return (outputPercent, sample.isCharging, outputMinutes)
+    }
+}
+
+private final class PowerSourceNotifier {
+    var onPowerSourceChanged: (() -> Void)?
+    private var runLoopSource: CFRunLoopSource?
+
+    func start() {
+        guard runLoopSource == nil else { return }
+        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        guard let unmanaged = IOPSNotificationCreateRunLoopSource(powerSourceChanged, context) else { return }
+        let source = unmanaged.takeRetainedValue()
+        runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, CFRunLoopMode.commonModes)
+    }
+
+    func stop() {
+        guard let runLoopSource else { return }
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, CFRunLoopMode.commonModes)
+        self.runLoopSource = nil
+    }
+
+    deinit {
+        stop()
+    }
+}
+
+private func powerSourceChanged(_ context: UnsafeMutableRawPointer?) {
+    guard let context else { return }
+    let notifier = Unmanaged<PowerSourceNotifier>.fromOpaque(context).takeUnretainedValue()
+    notifier.onPowerSourceChanged?()
 }
 
 private enum ProcessConsumerSampler {

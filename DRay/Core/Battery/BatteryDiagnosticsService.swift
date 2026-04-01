@@ -57,6 +57,30 @@ struct BatteryDiagnosticsService: Sendable {
         let deviceName = Host.current().localizedName ?? "Mac"
         let manufactureDate = decodeManufactureDate(intValue(props["ManufactureDate"]))
         let adapterWatts = adapterWattage(from: props)
+        let chargingState = resolvedChargingState(
+            batteryFlag: boolValue(props["IsCharging"]),
+            powerFlag: power.isCharging,
+            externalConnected: boolValue(props["ExternalConnected"]),
+            fullyCharged: boolValue(props["FullyCharged"]),
+            chargePercent: chargePercent
+        )
+        let resolvedMinutesToFull = resolvedMinutesToFull(
+            powerMinutesToFull: power.minutesToFull,
+            isCharging: chargingState,
+            currentCapacityMAh: currentCapacity,
+            fullChargeCapacityMAh: fullCapacity,
+            amperageAmps: amperageAmps,
+            powerWatts: powerWatts,
+            voltageVolts: voltageVolts
+        )
+        let resolvedMinutesToEmpty = resolvedMinutesToEmpty(
+            powerMinutesToEmpty: power.minutesToEmpty,
+            isCharging: chargingState,
+            currentCapacityMAh: currentCapacity,
+            amperageAmps: amperageAmps,
+            powerWatts: powerWatts,
+            voltageVolts: voltageVolts
+        )
 
         return BatteryDiagnosticsSnapshot(
             updatedAt: Date(),
@@ -74,12 +98,107 @@ struct BatteryDiagnosticsService: Sendable {
             amperageAmps: amperageAmps,
             powerWatts: powerWatts,
             adapterWatts: adapterWatts,
-            isCharging: boolValue(props["IsCharging"]) ?? power.isCharging,
-            minutesToEmpty: power.minutesToEmpty,
-            minutesToFull: power.minutesToFull,
+            isCharging: chargingState,
+            minutesToEmpty: resolvedMinutesToEmpty,
+            minutesToFull: resolvedMinutesToFull,
             lowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled,
             manufactureDate: manufactureDate
         )
+    }
+
+    private func resolvedMinutesToFull(
+        powerMinutesToFull: Int?,
+        isCharging: Bool?,
+        currentCapacityMAh: Int?,
+        fullChargeCapacityMAh: Int?,
+        amperageAmps: Double?,
+        powerWatts: Double?,
+        voltageVolts: Double?
+    ) -> Int? {
+        if let powerMinutesToFull, (0...48 * 60).contains(powerMinutesToFull) {
+            return powerMinutesToFull
+        }
+        guard isCharging == true,
+              let currentCapacityMAh,
+              let fullChargeCapacityMAh,
+              fullChargeCapacityMAh > 0 else {
+            return nil
+        }
+        if currentCapacityMAh >= fullChargeCapacityMAh {
+            return 0
+        }
+        let currentA = chargingCurrentAmps(amperageAmps: amperageAmps, powerWatts: powerWatts, voltageVolts: voltageVolts)
+        guard let currentA, currentA > 0.02 else { return nil }
+        let remainingMAh = Double(fullChargeCapacityMAh - currentCapacityMAh)
+        let minutes = Int((remainingMAh / (currentA * 1000.0)) * 60.0)
+        return normalizeMinutes(minutes)
+    }
+
+    private func resolvedMinutesToEmpty(
+        powerMinutesToEmpty: Int?,
+        isCharging: Bool?,
+        currentCapacityMAh: Int?,
+        amperageAmps: Double?,
+        powerWatts: Double?,
+        voltageVolts: Double?
+    ) -> Int? {
+        if let powerMinutesToEmpty, (0...48 * 60).contains(powerMinutesToEmpty) {
+            return powerMinutesToEmpty
+        }
+        guard isCharging == false, let currentCapacityMAh else { return nil }
+        let currentA = dischargingCurrentAmps(amperageAmps: amperageAmps, powerWatts: powerWatts, voltageVolts: voltageVolts)
+        guard let currentA, currentA > 0.02 else { return nil }
+        let minutes = Int((Double(currentCapacityMAh) / (currentA * 1000.0)) * 60.0)
+        return normalizeMinutes(minutes)
+    }
+
+    private func resolvedChargingState(
+        batteryFlag: Bool?,
+        powerFlag: Bool?,
+        externalConnected: Bool?,
+        fullyCharged: Bool?,
+        chargePercent: Int?
+    ) -> Bool? {
+        if let batteryFlag {
+            return batteryFlag
+        }
+        if let powerFlag {
+            return powerFlag
+        }
+        if let externalConnected {
+            if externalConnected {
+                if fullyCharged == true { return true }
+                if let chargePercent, chargePercent >= 100 { return true }
+                return true
+            }
+            return false
+        }
+        return nil
+    }
+
+    private func chargingCurrentAmps(amperageAmps: Double?, powerWatts: Double?, voltageVolts: Double?) -> Double? {
+        if let amps = amperageAmps, amps > 0 {
+            return amps
+        }
+        if let watts = powerWatts, watts > 0, let volts = voltageVolts, volts > 1 {
+            return watts / volts
+        }
+        return nil
+    }
+
+    private func dischargingCurrentAmps(amperageAmps: Double?, powerWatts: Double?, voltageVolts: Double?) -> Double? {
+        if let amps = amperageAmps, amps < 0 {
+            return abs(amps)
+        }
+        if let watts = powerWatts, watts < 0, let volts = voltageVolts, volts > 1 {
+            return abs(watts / volts)
+        }
+        return nil
+    }
+
+    private func normalizeMinutes(_ value: Int) -> Int? {
+        guard value >= 0 else { return nil }
+        return min(value, 48 * 60)
     }
 
     private func readSmartBatteryProperties() -> [String: Any] {

@@ -15,16 +15,15 @@ struct SpaceLensView: View {
     var body: some View {
         VStack(spacing: 10) {
             header
-            HSplitView {
+            HStack(alignment: .top, spacing: 12) {
                 sidebar
                     .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
                 detail
                     .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
-                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 8)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
             }
-            .padding(.horizontal, 8)
         }
-        .padding(.vertical, 8)
+        .padding(12)
         .onAppear {
             selectedPaths.removeAll()
             model.hoveredPath = nil
@@ -44,36 +43,38 @@ struct SpaceLensView: View {
             title: model.localized(.navSpaceLens),
             subtitle: "\(model.localized(.spaceLensTarget)): \(model.selectedTarget.url.path)"
         ) {
-            HStack(spacing: 8) {
-                GlassPillBadge(title: "\(model.localized(.spaceLensSelected)) \(selectedPaths.count)", tint: .blue)
-                if let root = model.root {
-                    GlassPillBadge(title: "\(model.localized(.spaceLensNodes)) \(root.children.count)", tint: .green)
-                }
-                targetPicker
-
-                Button(model.localized(.spaceLensScan)) { model.scanSelected() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.isLoading)
-
-                Picker(model.localized(.spaceLensTapMode), selection: $bubbleTapMode) {
-                    ForEach(BubbleTapMode.allCases) { mode in
-                        Text(bubbleTapModeTitle(mode)).tag(mode)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "\(model.localized(.spaceLensSelected)) \(selectedPaths.count)", tint: .blue)
+                    if let root = model.root {
+                        GlassPillBadge(title: "\(model.localized(.spaceLensNodes)) \(root.children.count)", tint: .green)
                     }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 240)
+                    targetPicker
 
-                if model.isLoading {
-                    Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
+                    Button(model.localized(.spaceLensScan)) { model.scanSelected() }
+                        .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                    Button(model.localized(.spaceLensCancel)) { model.cancelScan() }
-                        .controlSize(.small)
-                }
+                        .disabled(model.isLoading)
 
-                Button(model.localized(.spaceLensRescan)) { model.rescan() }
-                    .controlSize(.small)
-                    .disabled(model.lastScannedTarget == nil || model.isLoading)
+                    Picker(model.localized(.spaceLensTapMode), selection: $bubbleTapMode) {
+                        ForEach(BubbleTapMode.allCases) { mode in
+                            Text(bubbleTapModeTitle(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+
+                    if model.isLoading {
+                        Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
+                            .controlSize(.small)
+                        Button(model.localized(.spaceLensCancel)) { model.cancelScan() }
+                            .controlSize(.small)
+                    }
+
+                    Button(model.localized(.spaceLensRescan)) { model.rescan() }
+                        .controlSize(.small)
+                        .disabled(model.lastScannedTarget == nil || model.isLoading)
+                }
             }
         }
     }
@@ -95,10 +96,10 @@ struct SpaceLensView: View {
             }
             .padding(10)
         }
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 0)
+        .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 0)
         .overlay {
             if model.isLoading {
-                ProgressView("Scanning disk...")
+                ProgressView(t("Сканирование диска...", "Scanning disk..."))
             }
         }
     }
@@ -201,8 +202,8 @@ struct SpaceLensView: View {
         }
         .contextMenu {
             Button(model.localized(.spaceLensOpen)) { model.openItem(node) }
-            Button("Reveal in Finder") { model.revealInFinder(node) }
-            Button(selectedPaths.contains(node.url.path) ? "Remove from Selection" : "Add to Selection") {
+            Button(t("Показать в Finder", "Reveal in Finder")) { model.revealInFinder(node) }
+            Button(selectedPaths.contains(node.url.path) ? t("Убрать из выбора", "Remove from Selection") : t("Добавить в выбор", "Add to Selection")) {
                 toggleSelection(node.url.path)
             }
             Divider()
@@ -227,7 +228,11 @@ struct SpaceLensView: View {
                 emptyState
             }
         }
-        .overlay(alignment: .bottomLeading) { bottomPanel }
+        .overlay(alignment: .bottomLeading) {
+            if model.root != nil {
+                bottomPanel
+            }
+        }
         .confirmationDialog(
             model.localized(.spaceLensTrashDialogTitle),
             isPresented: $showTrashConfirm,
@@ -236,7 +241,7 @@ struct SpaceLensView: View {
             Button(model.localized(.spaceLensTrashDialogAction), role: .destructive) {
                 guard !pendingTrashNodes.isEmpty else { return }
                 let result = model.moveToTrash(nodes: pendingTrashNodes)
-                trashResultMessage = "Moved: \(result.moved), Skipped protected: \(result.skippedProtected.count), Failed: \(result.failed.count)"
+                trashResultMessage = model.trashResultMessage(result)
                 pendingTrashNodes = []
                 selectedPaths.removeAll()
             }
@@ -264,10 +269,6 @@ struct SpaceLensView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.regularMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.8)
-                )
         )
     }
 
@@ -287,6 +288,10 @@ struct SpaceLensView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isLoading)
             }
+
+            if model.isLoading {
+                scanningProgressCard
+            }
         }
     }
 
@@ -295,7 +300,7 @@ struct SpaceLensView: View {
         if model.isLoading || !selectedPaths.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 if model.isLoading {
-                    Text("\(model.localized(.spaceLensScanning)): \(model.progress.visitedItems) items")
+                    Text("\(model.localized(.spaceLensScanning)): \(formattedVisitedItems(model.progress.visitedItems))")
                     Text(model.progress.currentPath)
                         .lineLimit(1)
                         .font(.caption)
@@ -327,13 +332,25 @@ struct SpaceLensView: View {
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.regularMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 0.8)
-                    )
             )
             .padding()
         }
+    }
+
+    private var scanningProgressCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(model.localized(.spaceLensScanning)): \(formattedVisitedItems(model.progress.visitedItems))")
+                .font(.headline)
+            Text(model.progress.currentPath)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(maxWidth: 620)
     }
 
     private var targetPicker: some View {
@@ -388,6 +405,19 @@ struct SpaceLensView: View {
                 self.nodeIndex = map
             }
         }
+    }
+
+    private var isRussian: Bool {
+        model.appLanguage.localeCode.lowercased().hasPrefix("ru")
+    }
+
+    private func t(_ ru: String, _ en: String) -> String {
+        isRussian ? ru : en
+    }
+
+    private func formattedVisitedItems(_ count: Int) -> String {
+        let formatted = count.formatted(.number.grouping(.automatic))
+        return isRussian ? "\(formatted) файлов" : "\(formatted) files"
     }
 }
 

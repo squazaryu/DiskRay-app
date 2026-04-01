@@ -33,16 +33,29 @@ final class OperationLogStore: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(entries) else { return nil }
 
-        let baseDir = directory ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-        guard let baseDir else { return nil }
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let url = baseDir.appendingPathComponent("dray-operation-log-\(stamp).json")
-        do {
-            try data.write(to: url, options: [.atomic])
-            return url
-        } catch {
-            return nil
+        let fileName = "dray-operation-log-\(stamp).json"
+        let fm = FileManager.default
+
+        var candidateDirs: [URL] = []
+        if let directory {
+            candidateDirs.append(directory)
         }
+        candidateDirs.append(contentsOf: fm.urls(for: .downloadsDirectory, in: .userDomainMask))
+        candidateDirs.append(contentsOf: fm.urls(for: .desktopDirectory, in: .userDomainMask))
+        candidateDirs.append(contentsOf: fm.urls(for: .documentDirectory, in: .userDomainMask))
+        candidateDirs.append(URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
+
+        for baseDir in candidateDirs {
+            let url = baseDir.appendingPathComponent(fileName)
+            do {
+                try data.write(to: url, options: [.atomic])
+                return url
+            } catch {
+                continue
+            }
+        }
+        return nil
     }
 
     private func load() {

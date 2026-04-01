@@ -8,7 +8,7 @@ struct GlassShellBackground: View {
             LinearGradient(
                 colors: colorScheme == .dark
                 ? [Color(red: 0.05, green: 0.07, blue: 0.12), Color(red: 0.10, green: 0.13, blue: 0.20)]
-                : [Color(red: 0.95, green: 0.97, blue: 1.00), Color(red: 0.89, green: 0.92, blue: 0.98)],
+                : [Color(red: 0.94, green: 0.97, blue: 1.00), Color(red: 0.87, green: 0.91, blue: 0.98)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -17,14 +17,14 @@ struct GlassShellBackground: View {
             LinearGradient(
                 colors: colorScheme == .dark
                 ? [Color(red: 0.10, green: 0.14, blue: 0.21).opacity(0.6), .clear]
-                : [Color.white.opacity(0.75), .clear],
+                : [Color.white.opacity(0.80), Color(red: 0.85, green: 0.92, blue: 1.0).opacity(0.22)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [accent.opacity(colorScheme == .dark ? 0.28 : 0.18), .clear],
+                colors: [accent.opacity(colorScheme == .dark ? 0.30 : 0.23), .clear],
                 center: .topLeading,
                 startRadius: 40,
                 endRadius: 560
@@ -32,12 +32,22 @@ struct GlassShellBackground: View {
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [secondaryAccent.opacity(colorScheme == .dark ? 0.16 : 0.12), .clear],
+                colors: [secondaryAccent.opacity(colorScheme == .dark ? 0.16 : 0.14), .clear],
                 center: .bottomTrailing,
                 startRadius: 20,
                 endRadius: 520
             )
             .ignoresSafeArea()
+
+            if colorScheme == .light {
+                RadialGradient(
+                    colors: [Color.cyan.opacity(0.10), .clear],
+                    center: .bottomLeading,
+                    startRadius: 30,
+                    endRadius: 440
+                )
+                .ignoresSafeArea()
+            }
         }
     }
 
@@ -62,34 +72,64 @@ struct GlassSurfaceModifier: ViewModifier {
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(colorScheme == .dark ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(.ultraThinMaterial))
+                    .fill(baseFillStyle)
                     .overlay(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.12 : 0.38),
-                                Color.clear,
-                                Color.black.opacity(colorScheme == .dark ? 0.22 : 0.06)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                        surfaceOverlay
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(borderColor.opacity(strokeOpacity + 0.05), lineWidth: 0.9)
+                            .stroke(borderColor.opacity(strokeOpacity), lineWidth: 0.7)
+                            .allowsHitTesting(false)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.33), lineWidth: 0.6)
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.40), lineWidth: 0.6)
                             .blur(radius: 0.3)
+                            .allowsHitTesting(false)
                     )
-                    .shadow(color: .black.opacity(shadowOpacity), radius: colorScheme == .dark ? 22 : 16, y: 10)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? shadowOpacity : shadowOpacity * 0.55), radius: colorScheme == .dark ? 22 : 14, y: 9)
+                    .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.35), radius: 7, x: -2, y: -2)
             )
     }
 
+    private var baseFillStyle: AnyShapeStyle {
+        if colorScheme == .dark {
+            return AnyShapeStyle(.thinMaterial)
+        }
+        return AnyShapeStyle(.regularMaterial)
+    }
+
+    private var surfaceOverlay: some View {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(colorScheme == .dark ? 0.14 : 0.55),
+                Color.white.opacity(colorScheme == .dark ? 0.02 : 0.16),
+                Color.black.opacity(colorScheme == .dark ? 0.24 : 0.04)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(
+            RadialGradient(
+                colors: [
+                    (colorScheme == .dark ? Color.cyan : Color.blue).opacity(colorScheme == .dark ? 0.09 : 0.08),
+                    .clear
+                ],
+                center: .topLeading,
+                startRadius: 30,
+                endRadius: 340
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .allowsHitTesting(false)
+        )
+        .allowsHitTesting(false)
+    }
+
     private var borderColor: Color {
-        colorScheme == .dark ? .white : .black
+        colorScheme == .dark
+        ? Color.white.opacity(0.30)
+        : Color.white.opacity(0.66)
     }
 }
 
@@ -125,6 +165,7 @@ struct ModuleHeaderCard<Actions: View>: View {
                 }
                 Spacer(minLength: 12)
                 actions
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
@@ -164,22 +205,23 @@ struct MinimalGlassButtonStyle: ButtonStyle {
                             LinearGradient(
                                 colors: colorScheme == .dark
                                 ? [Color.cyan.opacity(0.30), Color.blue.opacity(0.22)]
-                                : [Color.white.opacity(0.86), Color.blue.opacity(0.16)],
+                                : [Color.white.opacity(0.92), Color.blue.opacity(0.20)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                           )
-                          : AnyShapeStyle(Color.clear))
+                          : AnyShapeStyle(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.10)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(strokeColor.opacity(isActive ? 0.42 : 0.16), lineWidth: 0.9)
+                            .stroke(strokeColor.opacity(isActive ? 0.26 : 0.08), lineWidth: 0.7)
                     )
             )
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 
     private var strokeColor: Color {
-        colorScheme == .dark ? Color.white : Color.black
+        colorScheme == .dark ? Color.white : Color.blue
     }
 }

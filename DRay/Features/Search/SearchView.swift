@@ -7,233 +7,290 @@ struct SearchView: View {
     @State private var pendingDeleteNodes: [FileNode] = []
     @State private var showDeleteConfirm = false
     @State private var resultMessage: String?
-    @State private var showRestoreFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("Search by name or path...", text: $model.searchQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit {
-                        if model.searchMode == .live {
-                            model.triggerLiveSearch()
-                        }
-                    }
+            searchToolbar
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
 
-                Picker("Mode", selection: $model.searchMode) {
-                    ForEach(SearchExecutionMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 170)
+            filtersPanel
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 12)
 
-                if model.searchMode == .live {
-                    Button("Search") {
-                        model.triggerLiveSearch()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    if model.isLiveSearchRunning {
-                        Button("Stop") {
-                            model.cancelLiveSearch()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-
-                if model.isLoading || model.isLiveSearchRunning {
-                    ProgressView()
-                }
+            if model.searchQuery.isEmpty {
+                ContentUnavailableView(
+                    t("Поиск", "Search"),
+                    systemImage: "magnifyingglass",
+                    description: Text(t("Введи запрос и нажми «Поиск».", "Type query and press Search."))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+            } else {
+                resultsPanel
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 8)
             }
 
-            HStack {
-                TextField("Path contains", text: $model.pathContains)
+            Spacer()
+        }
+        .padding(12)
+        .onChange(of: model.searchResults) {
+            let valid = Set(model.searchResults.map(\.id))
+            selection = selection.intersection(valid)
+        }
+        .confirmationDialog(
+            t("Переместить выбранные элементы в корзину?", "Move selected items to Trash?"),
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
+                let result = model.moveToTrash(nodes: pendingDeleteNodes)
+                selection.removeAll()
+                pendingDeleteNodes = []
+                resultMessage = buildResultMessage(result)
+            }
+            Button(t("Отмена", "Cancel"), role: .cancel) {
+                pendingDeleteNodes = []
+            }
+        } message: {
+            Text(t(
+                "\(pendingDeleteNodes.count) элементов будет перемещено в корзину.",
+                "\(pendingDeleteNodes.count) item(s) will be moved to Trash."
+            ))
+        }
+        .alert(t("Результат удаления", "Trash Result"), isPresented: Binding(
+            get: { resultMessage != nil },
+            set: { if !$0 { resultMessage = nil } }
+        )) {
+            Button(t("ОК", "OK"), role: .cancel) {}
+        } message: {
+            Text(resultMessage ?? "")
+        }
+    }
+
+    private var searchToolbar: some View {
+        HStack(spacing: 10) {
+            TextField(t("Поиск по имени или пути...", "Search by name or path..."), text: $model.searchQuery)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    model.triggerLiveSearch()
+                }
+
+            Button(t("Поиск", "Search")) {
+                model.triggerLiveSearch()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
+            if model.isLiveSearchRunning {
+                Button(t("Стоп", "Stop")) {
+                    model.cancelLiveSearch()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            if model.isLoading || model.isLiveSearchRunning {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var filtersPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                TextField(t("Путь содержит", "Path contains"), text: $model.pathContains)
                     .textFieldStyle(.roundedBorder)
-                TextField("Owner contains", text: $model.ownerContains)
+                TextField(t("Владелец содержит", "Owner contains"), text: $model.ownerContains)
                     .textFieldStyle(.roundedBorder)
-                Text("Min MB")
+                Text(t("Мин. МБ", "Min MB"))
+                    .font(.caption.weight(.semibold))
                 TextField("0", value: $model.minSizeMB, format: .number)
                     .frame(width: 90)
                     .textFieldStyle(.roundedBorder)
-                Toggle("Dirs", isOn: $model.onlyDirectories)
-                Toggle("Files", isOn: $model.onlyFiles)
-                TextField("Preset name", text: $presetName)
+                Toggle(t("Папки", "Dirs"), isOn: $model.onlyDirectories)
+                    .toggleStyle(.checkbox)
+                Toggle(t("Файлы", "Files"), isOn: $model.onlyFiles)
+                    .toggleStyle(.checkbox)
+                TextField(t("Имя пресета", "Preset name"), text: $presetName)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 160)
-                Button("Save Preset") {
+                Button(t("Сохранить пресет", "Save Preset")) {
                     let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !name.isEmpty else { return }
                     model.saveCurrentSearchPreset(named: name)
                     presetName = ""
                 }
-                Menu("Presets") {
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Menu(t("Пресеты", "Presets")) {
                     ForEach(model.searchPresets) { preset in
                         Button(preset.name) { model.applySearchPreset(preset) }
                     }
                     if !model.searchPresets.isEmpty {
                         Divider()
                         ForEach(model.searchPresets) { preset in
-                            Button("Delete \(preset.name)") { model.deletePreset(preset) }
+                            Button("\(t("Удалить", "Delete")) \(preset.name)") { model.deletePreset(preset) }
                         }
                     }
                 }
+                .controlSize(.small)
             }
             .font(.caption)
 
-            HStack {
+            HStack(spacing: 8) {
                 Toggle("Regex", isOn: $model.searchUseRegex)
-                Text("Depth")
+                    .toggleStyle(.checkbox)
+                Text(t("Глубина", "Depth"))
                 TextField("0", value: $model.searchDepthMin, format: .number)
-                    .frame(width: 50)
+                    .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
                 Text("..")
                 TextField("12", value: $model.searchDepthMax, format: .number)
-                    .frame(width: 50)
+                    .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
-                Text("Modified ≤ days")
+                Text(t("Изменён ≤ дней", "Modified ≤ days"))
                 TextField("0", value: $model.searchModifiedWithinDays, format: .number)
-                    .frame(width: 60)
+                    .frame(width: 65)
                     .textFieldStyle(.roundedBorder)
-                Picker("Type", selection: $model.searchNodeType) {
-                    Text("Any").tag(QueryEngine.SearchNodeType.any)
-                    Text("Files").tag(QueryEngine.SearchNodeType.file)
-                    Text("Folders").tag(QueryEngine.SearchNodeType.directory)
-                    Text("Apps").tag(QueryEngine.SearchNodeType.package)
+                Picker(t("Тип", "Type"), selection: $model.searchNodeType) {
+                    Text(t("Любой", "Any")).tag(QueryEngine.SearchNodeType.any)
+                    Text(t("Файлы", "Files")).tag(QueryEngine.SearchNodeType.file)
+                    Text(t("Папки", "Folders")).tag(QueryEngine.SearchNodeType.directory)
+                    Text(t("Приложения", "Apps")).tag(QueryEngine.SearchNodeType.package)
                 }
                 .pickerStyle(.menu)
                 .frame(width: 120)
                 Spacer()
             }
             .font(.caption)
+        }
+    }
 
-            if model.searchQuery.isEmpty {
-                ContentUnavailableView("Search Index", systemImage: "magnifyingglass", description: Text("Type query after scan completes."))
-            } else {
-                HStack {
-                    Text("Selected: \(selection.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Reveal") {
-                        guard let first = selectedNodes().first else { return }
-                        model.revealInFinder(first)
-                    }
-                    .disabled(selection.isEmpty)
-                    Button("Trash Selected") {
-                        pendingDeleteNodes = selectedNodes()
-                        showDeleteConfirm = !pendingDeleteNodes.isEmpty
-                    }
-                    .disabled(selection.isEmpty)
+    private var resultsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(t("Выбрано: \(selection.count)", "Selected: \(selection.count)"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(t("Найдено: \(model.searchResults.count)", "Found: \(model.searchResults.count)"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(t("Показать", "Reveal")) {
+                    guard let first = selectedNodes().first else { return }
+                    model.revealInFinder(first)
                 }
-                Table(model.searchResults, selection: $selection) {
-                    TableColumn("Name") { node in
-                        Text(node.name)
-                    }
-                    TableColumn("Size") { node in
-                        Text(node.formattedSize)
-                    }
-                    TableColumn("Path") { node in
-                        Text(node.url.path)
-                            .lineLimit(1)
-                    }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selection.isEmpty)
+                Button(t("Удалить выбранное", "Trash Selected")) {
+                    pendingDeleteNodes = selectedNodes()
+                    showDeleteConfirm = !pendingDeleteNodes.isEmpty
                 }
-                .contextMenu(forSelectionType: FileNode.ID.self) { ids in
-                    if let id = ids.first, let node = model.searchResults.first(where: { $0.id == id }) {
-                        Button("Reveal in Finder") { model.revealInFinder(node) }
-                        Button("Open") { model.openItem(node) }
-                        Button("Move to Trash") {
-                            pendingDeleteNodes = [node]
-                            showDeleteConfirm = true
-                        }
-                    }
-                } primaryAction: { ids in
-                    if let id = ids.first, let node = model.searchResults.first(where: { $0.id == id }) {
-                        model.openItem(node)
-                    }
-                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selection.isEmpty)
             }
 
-            if !model.recentlyDeleted.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Recently Deleted")
-                        .font(.headline)
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Text(t("Имя", "Name"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(t("Размер", "Size"))
+                        .frame(width: 120, alignment: .trailing)
+                    Text(t("Путь", "Path"))
+                        .frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.regularMaterial)
 
-                    List {
-                        ForEach(model.recentlyDeleted.prefix(30)) { item in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name)
-                                    Text(item.originalPath)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                Text(item.deletedAt, style: .relative)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Button("Restore") {
-                                    if !model.restoreDeletedItem(item) {
-                                        showRestoreFailed = true
-                                    }
-                                }
-                                Button("Reveal") {
-                                    model.revealInFinder(FileNode(
-                                        url: URL(fileURLWithPath: item.trashedPath),
-                                        name: item.name,
-                                        isDirectory: false,
-                                        sizeInBytes: 0,
-                                        children: []
-                                    ))
-                                }
-                                Button("Remove") {
-                                    model.removeDeletedHistoryItem(item)
-                                }
+                Divider()
+
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        if model.searchResults.isEmpty && model.isLiveSearchRunning {
+                            ForEach(0..<8, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.primary.opacity(0.05))
+                                    .frame(height: 34)
+                            }
+                        } else if model.searchResults.isEmpty {
+                            Text(t("Ничего не найдено", "No files found"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 18)
+                        } else {
+                            ForEach(model.searchResults) { node in
+                                resultRow(node)
                             }
                         }
                     }
-                    .frame(minHeight: 150, maxHeight: 220)
+                    .padding(8)
                 }
+                .frame(maxHeight: .infinity)
             }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.thinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 0.7)
+            )
+        }
+    }
 
-            Spacer()
+    private func resultRow(_ node: FileNode) -> some View {
+        let isSelected = selection.contains(node.id)
+        return HStack(spacing: 10) {
+            Image(systemName: node.isDirectory ? "folder.fill" : "doc.fill")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            Text(node.name)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(node.formattedSize)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .trailing)
+            Text(node.url.path)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
-        .confirmationDialog(
-            "Move selected items to Trash?",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Move to Trash", role: .destructive) {
-                let result = model.moveToTrash(nodes: pendingDeleteNodes)
-                selection.removeAll()
-                pendingDeleteNodes = []
-                resultMessage = buildResultMessage(result)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleSelection(node.id)
+        }
+        .onTapGesture(count: 2) {
+            model.openItem(node)
+        }
+        .contextMenu {
+            Button(t("Показать в Finder", "Reveal in Finder")) { model.revealInFinder(node) }
+            Button(t("Открыть", "Open")) { model.openItem(node) }
+            Button(t("В корзину", "Move to Trash")) {
+                pendingDeleteNodes = [node]
+                showDeleteConfirm = true
             }
-            Button("Cancel", role: .cancel) {
-                pendingDeleteNodes = []
-            }
-        } message: {
-            Text("\(pendingDeleteNodes.count) item(s) will be moved to Trash.")
         }
-        .alert("Trash Result", isPresented: Binding(
-            get: { resultMessage != nil },
-            set: { if !$0 { resultMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(resultMessage ?? "")
-        }
-        .alert("Restore failed", isPresented: $showRestoreFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Could not restore this item. It may be removed from Trash or blocked by permissions.")
-        }
-        .onChange(of: model.searchMode) {
-            if model.searchMode == .indexed {
-                model.cancelLiveSearch()
-            } else {
-                model.clearLiveSearchResults()
-            }
+    }
+
+    private func toggleSelection(_ id: FileNode.ID) {
+        if selection.contains(id) {
+            selection.remove(id)
+        } else {
+            selection.insert(id)
         }
     }
 
@@ -242,9 +299,14 @@ struct SearchView: View {
     }
 
     private func buildResultMessage(_ result: TrashOperationResult) -> String {
-        var parts: [String] = ["Moved: \(result.moved)"]
-        if !result.skippedProtected.isEmpty { parts.append("Skipped protected: \(result.skippedProtected.count)") }
-        if !result.failed.isEmpty { parts.append("Failed: \(result.failed.count)") }
-        return parts.joined(separator: ", ")
+        model.trashResultMessage(result)
+    }
+
+    private var isRussian: Bool {
+        model.appLanguage.localeCode.lowercased().hasPrefix("ru")
+    }
+
+    private func t(_ ru: String, _ en: String) -> String {
+        isRussian ? ru : en
     }
 }

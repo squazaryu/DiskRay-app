@@ -267,6 +267,7 @@ struct DRayApp: App {
         WindowGroup("DRay") {
             RootView(model: model)
                 .frame(minWidth: 1024, minHeight: 680)
+                .preferredColorScheme(preferredColorScheme)
                 .onAppear {
                     AppLogger.telemetry.info("Root view appeared")
                     applyLaunchActionIfNeeded()
@@ -281,5 +282,16 @@ struct DRayApp: App {
         didApplyLaunchAction = true
         guard let startupAction = launchContext.startupAction else { return }
         AppIPCReceiver.shared.execute(action: startupAction, model: model)
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch model.appAppearance {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
     }
 }
