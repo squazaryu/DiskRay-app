@@ -612,7 +612,9 @@ final class RootViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
+            // Manual category selection should clean exactly what user selected,
+            // without hidden size threshold filtering.
+            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: 0)
             await MainActor.run {
                 AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.operationLogs.add(category: "smartcare", message: "Smart clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
@@ -623,7 +625,26 @@ final class RootViewModel: ObservableObject {
 
     func cleanRecommendedSmartCategories() {
         selectRecommendedSmartCategories()
-        cleanSelectedSmartCategories()
+        let items = smartScanCategories
+            .filter(\.isSelected)
+            .flatMap { $0.result.items }
+
+        guard !items.isEmpty else { return }
+        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            // Keep min-size threshold for auto-recommended cleanup flow.
+            let cleanupResult = await smartScanService.clean(
+                items: items,
+                minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576)
+            )
+            await MainActor.run {
+                AppLogger.actions.info("Smart recommended clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
+                self.operationLogs.add(category: "smartcare", message: "Smart recommended clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
+                self.runSmartScan()
+            }
+        }
     }
 
     func cleanSmartItems(_ items: [CleanupItem]) {
@@ -631,7 +652,8 @@ final class RootViewModel: ObservableObject {
         guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
         Task { [weak self] in
             guard let self else { return }
-            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576))
+            // Manual item selection should clean exact picks, regardless of min size.
+            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: 0)
             await MainActor.run {
                 AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.operationLogs.add(category: "smartcare", message: "Smart item clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")

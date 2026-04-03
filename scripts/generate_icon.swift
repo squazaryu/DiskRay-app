@@ -23,51 +23,56 @@ func image(size: CGFloat) -> NSImage {
     image.lockFocus()
 
     let rect = NSRect(x: 0, y: 0, width: size, height: size)
-    let corner = size * 0.23
-    let bgPath = NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner)
+    // Keep icon footprint close to Apple's stock app icons.
+    let targetCanvasUsage: CGFloat = 0.834
+    let outerInset = size * ((1 - targetCanvasUsage) / 2)
+    let iconRect = rect.insetBy(dx: outerInset, dy: outerInset)
+    let corner = iconRect.width * 0.225
+    let bgPath = NSBezierPath(roundedRect: iconRect, xRadius: corner, yRadius: corner)
 
     let gradient: NSGradient
     let border: NSColor
-    let panelFill: NSColor
+    let topGlowColor: NSColor
+    let vignetteColor: NSColor
     let textColor: NSColor
     let accentColor: NSColor
 
     if theme == "dark" {
         gradient = NSGradient(colors: [
-            NSColor(calibratedWhite: 0.13, alpha: 1.0),
-            NSColor(calibratedWhite: 0.08, alpha: 1.0),
-            NSColor(calibratedWhite: 0.03, alpha: 1.0)
+            NSColor(calibratedWhite: 0.17, alpha: 1.0),
+            NSColor(calibratedWhite: 0.09, alpha: 1.0),
+            NSColor(calibratedWhite: 0.04, alpha: 1.0)
         ])!
-        border = NSColor(calibratedWhite: 0.92, alpha: 0.14)
-        panelFill = NSColor(calibratedWhite: 1.0, alpha: 0.06)
+        border = NSColor(calibratedWhite: 0.98, alpha: 0.23)
+        topGlowColor = NSColor.white.withAlphaComponent(0.13)
+        vignetteColor = NSColor.black.withAlphaComponent(0.26)
         textColor = NSColor(calibratedWhite: 0.97, alpha: 1.0)
         accentColor = NSColor(calibratedRed: 0.30, green: 0.74, blue: 1.0, alpha: 1.0)
     } else {
         gradient = NSGradient(colors: [
             NSColor(calibratedRed: 0.95, green: 0.97, blue: 1.0, alpha: 1.0),
             NSColor(calibratedRed: 0.90, green: 0.94, blue: 1.0, alpha: 1.0),
-            NSColor(calibratedRed: 0.93, green: 0.90, blue: 1.0, alpha: 1.0)
+            NSColor(calibratedRed: 0.93, green: 0.91, blue: 1.0, alpha: 1.0)
         ])!
-        border = NSColor(calibratedRed: 0.31, green: 0.46, blue: 0.80, alpha: 0.30)
-        panelFill = NSColor.white.withAlphaComponent(0.32)
+        border = NSColor(calibratedRed: 0.30, green: 0.45, blue: 0.82, alpha: 0.34)
+        topGlowColor = NSColor.white.withAlphaComponent(0.23)
+        vignetteColor = NSColor.black.withAlphaComponent(0.08)
         textColor = NSColor(calibratedRed: 0.10, green: 0.22, blue: 0.45, alpha: 1.0)
         accentColor = NSColor(calibratedRed: 0.08, green: 0.46, blue: 0.94, alpha: 1.0)
     }
 
     gradient.draw(in: bgPath, angle: -35)
-
-    let panelRect = rect.insetBy(dx: size * 0.12, dy: size * 0.18)
-    let panel = NSBezierPath(roundedRect: panelRect, xRadius: size * 0.13, yRadius: size * 0.13)
-    panelFill.setFill()
-    panel.fill()
+    NSGraphicsContext.saveGraphicsState()
+    bgPath.addClip()
+    let topGlow = NSGradient(colors: [topGlowColor, .clear])!
+    topGlow.draw(in: iconRect, angle: 90)
+    let vignette = NSGradient(colors: [.clear, vignetteColor])!
+    vignette.draw(in: iconRect, angle: 90)
+    NSGraphicsContext.restoreGraphicsState()
 
     border.setStroke()
     bgPath.lineWidth = max(1, size * 0.012)
     bgPath.stroke()
-
-    NSColor.white.withAlphaComponent(theme == "dark" ? 0.12 : 0.24).setStroke()
-    panel.lineWidth = max(1, size * 0.007)
-    panel.stroke()
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
@@ -78,20 +83,25 @@ func image(size: CGFloat) -> NSImage {
     shadow.shadowOffset = NSSize(width: 0, height: -size * 0.004)
 
     let attrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: size * 0.20, weight: .heavy),
+        .font: NSFont.systemFont(ofSize: size * 0.235, weight: .heavy),
         .foregroundColor: textColor,
         .paragraphStyle: paragraph,
         .shadow: shadow,
         .kern: 0.2
     ]
-    let textRect = NSRect(x: 0, y: size * 0.38, width: size, height: size * 0.28)
+    let textRect = NSRect(
+        x: iconRect.minX,
+        y: iconRect.minY + iconRect.height * 0.34,
+        width: iconRect.width,
+        height: iconRect.height * 0.40
+    )
     ("DRay" as NSString).draw(in: textRect, withAttributes: attrs)
 
     let accent = NSBezierPath()
-    accent.move(to: NSPoint(x: size * 0.30, y: size * 0.36))
-    accent.line(to: NSPoint(x: size * 0.70, y: size * 0.36))
+    accent.move(to: NSPoint(x: iconRect.minX + iconRect.width * 0.31, y: iconRect.minY + iconRect.height * 0.325))
+    accent.line(to: NSPoint(x: iconRect.minX + iconRect.width * 0.69, y: iconRect.minY + iconRect.height * 0.325))
     accent.lineCapStyle = .round
-    accent.lineWidth = max(1, size * 0.016)
+    accent.lineWidth = max(1, size * 0.0135)
     accentColor.withAlphaComponent(theme == "dark" ? 0.85 : 0.74).setStroke()
     accent.stroke()
 

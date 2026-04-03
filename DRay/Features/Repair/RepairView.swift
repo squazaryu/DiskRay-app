@@ -84,7 +84,7 @@ struct RepairView: View {
                         .padding(6)
                     }
                 }
-                .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+                .frame(minWidth: 240, idealWidth: 280, maxWidth: 330)
                 .padding(10)
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
 
@@ -305,8 +305,11 @@ struct RepairView: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(selected ? Color.accentColor.opacity(0.16) : Color.clear)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func repairArtifactRow(_ artifact: AppRemnant) -> some View {

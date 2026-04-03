@@ -7,7 +7,8 @@ BUNDLE_ID="com.squazaryu.DRay"
 VERSION="${1:-0.0.3-alpha}"
 BUILD_NUMBER="${2:-1}"
 
-ICON_THEME="${DRAY_ICON_THEME:-auto}"
+ICON_BASENAME="DRay"
+ICON_THEME="${DRAY_ICON_THEME:-light}"
 if [[ "$ICON_THEME" == "auto" ]]; then
   if [[ "$(defaults read -g AppleInterfaceStyle 2>/dev/null || true)" == "Dark" ]]; then
     ICON_THEME="dark"
@@ -15,18 +16,7 @@ if [[ "$ICON_THEME" == "auto" ]]; then
     ICON_THEME="light"
   fi
 fi
-
-ICON_BASENAME="DRay"
-ICON_SOURCE="assets/DRay.icns"
-if [[ "$ICON_THEME" == "dark" && -f "assets/DRayDark.icns" ]]; then
-  ICON_BASENAME="DRayDark"
-  ICON_SOURCE="assets/DRayDark.icns"
-elif [[ "$ICON_THEME" == "light" && -f "assets/DRayLight.icns" ]]; then
-  ICON_BASENAME="DRayLight"
-  ICON_SOURCE="assets/DRayLight.icns"
-fi
-
-echo "Using icon theme: $ICON_THEME ($ICON_BASENAME)"
+echo "Packaging icon set: DRay / DRayLight / DRayDark (active base: $ICON_THEME)"
 
 swift build -c release >/dev/null
 BIN_DIR="$(swift build -c release --show-bin-path)"
@@ -69,12 +59,26 @@ if [[ -x "$HELPER_EXECUTABLE" ]]; then
   cp "$HELPER_EXECUTABLE" "${BUNDLE_ROOT}/Contents/Helpers/DRayMenuBarHelper"
   chmod +x "${BUNDLE_ROOT}/Contents/Helpers/DRayMenuBarHelper"
 fi
-if [[ -f "$ICON_SOURCE" ]]; then
-  cp "$ICON_SOURCE" "${BUNDLE_ROOT}/Contents/Resources/${ICON_BASENAME}.icns"
+if [[ -f "assets/DRay.icns" ]]; then
+  cp "assets/DRay.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
+fi
+if [[ -f "assets/DRayLight.icns" ]]; then
+  cp "assets/DRayLight.icns" "${BUNDLE_ROOT}/Contents/Resources/DRayLight.icns"
+fi
+if [[ -f "assets/DRayDark.icns" ]]; then
+  cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRayDark.icns"
+fi
+
+# Closed-app default icon (helper keeps it synced to current system theme at runtime).
+if [[ "$ICON_THEME" == "dark" && -f "assets/DRayDark.icns" ]]; then
+  cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
+elif [[ "$ICON_THEME" == "light" && -f "assets/DRayLight.icns" ]]; then
+  cp "assets/DRayLight.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
 fi
 
 codesign --force --deep --sign - "${BUNDLE_ROOT}" >/dev/null 2>&1 || true
 
+pkill -x DRay >/dev/null 2>&1 || true
 pkill -x DRayMenuBarHelper >/dev/null 2>&1 || true
 rm -rf "$APP_PATH"
 cp -R "${BUNDLE_ROOT}" "$APP_PATH"

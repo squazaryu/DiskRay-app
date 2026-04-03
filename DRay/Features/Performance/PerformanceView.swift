@@ -22,10 +22,6 @@ struct PerformanceView: View {
             loadPanel
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
-            if model.isPerformanceScanRunning {
-                ProgressView(t("Анализ конфигурации автозапуска...", "Analyzing startup configuration..."))
-            }
-
             if model.performanceReport == nil && !model.isPerformanceScanRunning {
                 ContentUnavailableView(
                     t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
@@ -129,6 +125,19 @@ struct PerformanceView: View {
                         model.revealCrashTelemetry()
                     }
                     .buttonStyle(.bordered)
+
+                    if model.isPerformanceScanRunning {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(t("Идёт анализ...", "Analyzing..."))
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.regularMaterial, in: Capsule())
+                    }
                 }
             }
         }

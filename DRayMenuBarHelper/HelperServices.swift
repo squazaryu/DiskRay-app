@@ -178,6 +178,76 @@ struct DRayMainBridge {
     }
 }
 
+@MainActor
+final class AppBundleIconThemeSynchronizer {
+    static let shared = AppBundleIconThemeSynchronizer()
+
+    private let themeNotification = Notification.Name("AppleInterfaceThemeChangedNotification")
+    private var appPath: String?
+    private var observer: NSObjectProtocol?
+    private var lastIconName: String?
+
+    private init() {}
+
+    func start(appPath: String) {
+        let normalizedPath = (appPath as NSString).standardizingPath
+        self.appPath = normalizedPath
+        applyCurrentThemeIcon(force: true)
+        if observer != nil { return }
+
+        observer = DistributedNotificationCenter.default().addObserver(
+            forName: themeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.applyCurrentThemeIcon(force: false)
+            }
+        }
+    }
+
+    func stop() {
+        if let observer {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
+        observer = nil
+    }
+
+    func applyCurrentThemeIcon(force: Bool) {
+        guard let appPath else { return }
+
+        let preferredName = currentThemeIsDark ? "DRayDark" : "DRayLight"
+        if !force, lastIconName == preferredName { return }
+
+        let resourceRoot = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/Resources", isDirectory: true)
+        let candidates = [preferredName, "DRay"]
+        guard
+            let iconURL = candidates
+                .map({ resourceRoot.appendingPathComponent("\($0).icns", isDirectory: false) })
+                .first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+            let icon = NSImage(contentsOf: iconURL)
+        else {
+            return
+        }
+
+        guard NSWorkspace.shared.setIcon(icon, forFile: appPath, options: []) else {
+            return
+        }
+        lastIconName = preferredName
+    }
+
+    private var currentThemeIsDark: Bool {
+        let appearance = NSApplication.shared.effectiveAppearance
+        if let match = appearance.bestMatch(from: [.darkAqua, .aqua]) {
+            return match == .darkAqua
+        }
+        if let style = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleInterfaceStyle"] as? String {
+            return style.caseInsensitiveCompare("dark") == .orderedSame
+        }
+        return false
+    }
+}
+
 struct LoadReliefResult {
     let adjusted: [String]
     let skipped: [String]

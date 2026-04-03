@@ -3,6 +3,7 @@ import AppKit
 
 @MainActor
 final class MenuBarPopupModel: ObservableObject {
+    let appPath: String
     @Published private(set) var launchAtLoginEnabled = false
     @Published var reliefResultMessage: String?
 
@@ -12,6 +13,7 @@ final class MenuBarPopupModel: ObservableObject {
     private let batteryService = BatteryDiagnosticsService()
 
     init(config: HelperConfig) {
+        appPath = config.appPath
         let helperPath = CommandLine.arguments.first ?? ""
         bridge = DRayMainBridge(appPath: config.appPath)
         loginAgentService = MenuBarLoginAgentService(appPath: config.appPath, helperPath: helperPath)
@@ -106,6 +108,7 @@ final class MenuBarHelperAppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             workspaceActivationObserver = nil
         }
+        AppBundleIconThemeSynchronizer.shared.stop()
     }
 
     private func dismissTransientUI() {
@@ -128,6 +131,7 @@ struct DRayMenuBarHelperApp: App {
         let liveMonitor = LiveSystemMetricsMonitor(updateInterval: 0.5, heavySamplePeriod: 4.0)
         _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
         _monitor = StateObject(wrappedValue: liveMonitor)
+        AppBundleIconThemeSynchronizer.shared.start(appPath: config.appPath)
         liveMonitor.start()
         if let startupSection = config.startupSection {
             let bridge = DRayMainBridge(appPath: config.appPath)
@@ -181,6 +185,7 @@ private struct MenuBarPopupView: View {
     @State private var batterySnapshot: BatteryDiagnosticsSnapshot?
     @State private var isBatteryDetailsLoading = false
     @State private var batteryDetailsError: String?
+    @State private var suppressBatteryDetailsOpenUntil = Date.distantPast
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     private let batteryRefreshTimer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
@@ -206,6 +211,11 @@ private struct MenuBarPopupView: View {
             showBatteryDetails = false
             showReliefConfirm = false
             pendingReliefAction = nil
+        }
+        .onChange(of: showBatteryDetails) {
+            if !showBatteryDetails {
+                suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
+            }
         }
         .onReceive(batteryRefreshTimer) { _ in
             guard showBatteryDetails else { return }
@@ -498,23 +508,44 @@ private struct MenuBarPopupView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                Button {
-                    openBatteryDetails()
-                } label: {
-                    Image(systemName: "chevron.right.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(tintColor)
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                    BatteryDetailsSheetView(
-                        snapshot: batterySnapshot,
-                        isLoading: isBatteryDetailsLoading,
-                        errorText: batteryDetailsError,
-                        onRefresh: loadBatteryDetails,
-                        onClose: { showBatteryDetails = false }
-                    )
-                    .padding(8)
+                if showBatteryDetails {
+                    Button {
+                        closeBatteryDetails()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(closeTintColor)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                        BatteryDetailsSheetView(
+                            snapshot: batterySnapshot,
+                            isLoading: isBatteryDetailsLoading,
+                            errorText: batteryDetailsError,
+                            onRefresh: loadBatteryDetails,
+                            onClose: { closeBatteryDetails() }
+                        )
+                        .padding(8)
+                    }
+                } else {
+                    Button {
+                        openBatteryDetails()
+                    } label: {
+                        Image(systemName: "chevron.right.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(tintColor)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
+                        BatteryDetailsSheetView(
+                            snapshot: batterySnapshot,
+                            isLoading: isBatteryDetailsLoading,
+                            errorText: batteryDetailsError,
+                            onRefresh: loadBatteryDetails,
+                            onClose: { closeBatteryDetails() }
+                        )
+                        .padding(8)
+                    }
                 }
             }
             Text(batteryStateText)
@@ -616,6 +647,10 @@ private struct MenuBarPopupView: View {
 
     private var tintColor: Color {
         colorScheme == .dark ? Color.cyan : Color.blue
+    }
+
+    private var closeTintColor: Color {
+        Color(red: 1.0, green: 0.42, blue: 0.18)
     }
 
     private var borderColor: Color {
@@ -842,10 +877,22 @@ private struct MenuBarPopupView: View {
     }
 
     private func openBatteryDetails() {
+        let now = Date()
+        if now < suppressBatteryDetailsOpenUntil {
+            return
+        }
+
         withAnimation(.easeInOut(duration: 0.16)) {
             showBatteryDetails = true
         }
         loadBatteryDetails()
+    }
+
+    private func closeBatteryDetails() {
+        suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
+        withAnimation(.easeInOut(duration: 0.16)) {
+            showBatteryDetails = false
+        }
     }
 
     private func loadBatteryDetails() {

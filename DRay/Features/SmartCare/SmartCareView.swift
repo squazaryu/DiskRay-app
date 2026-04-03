@@ -54,71 +54,75 @@ struct SmartCareView: View {
     }
 
     private var header: some View {
-        ModuleHeaderCard(
-            title: "Smart Care",
-            subtitle: headerSubtitle
-        ) {
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Categories \(model.smartScanCategories.count)", tint: .blue)
-                    GlassPillBadge(title: "Selected \(selectedCategoryCount)", tint: .green)
-                    GlassPillBadge(title: "Items \(selectedItemPaths.count)", tint: .orange)
-                }
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Smart Care")
+                    .font(.title3.weight(.bold))
+                Text(headerSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
 
-                HStack(spacing: 8) {
-                    Button("Run Full Smart Scan") {
-                        selectedItemPaths.removeAll()
-                        model.runUnifiedScan()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.isUnifiedScanRunning)
+            GlassPillBadge(
+                title: "Cat \(model.smartScanCategories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
+                tint: .blue
+            )
 
-                    Button("Run Smart Scan") {
-                        selectedItemPaths.removeAll()
-                        model.runSmartScan()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
-
-                    Button("Clean Selected") {
-                        cleanSelection()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
-
-                    Button("Quick Clean Recommended") {
-                        selectedItemPaths.removeAll()
-                        model.cleanRecommendedSmartCategories()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.isSmartScanRunning || model.smartScanCategories.isEmpty)
-                }
-
-                HStack(spacing: 8) {
-                    Button("Select Recommended") {
-                        model.selectRecommendedSmartCategories()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.smartScanCategories.isEmpty)
-
-                    Picker("Profile", selection: Binding(
-                        get: { model.smartProfile },
-                        set: { model.applySmartProfile($0) }
-                    )) {
-                        ForEach(SmartCleanProfile.allCases) { profile in
-                            Text(profile.title).tag(profile)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 150)
+            Picker("Profile", selection: Binding(
+                get: { model.smartProfile },
+                set: { model.applySmartProfile($0) }
+            )) {
+                ForEach(SmartCleanProfile.allCases) { profile in
+                    Text(profile.title).tag(profile)
                 }
             }
+            .pickerStyle(.menu)
+            .frame(width: 116)
+
+            Button("Run") {
+                selectedItemPaths.removeAll()
+                model.runSmartScan()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
+
+            Button("Clean") {
+                cleanSelection()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+
+            Menu {
+                Button("Run Full Smart Scan") {
+                    selectedItemPaths.removeAll()
+                    model.runUnifiedScan()
+                }
+                .disabled(model.isUnifiedScanRunning)
+
+                Button("Quick Clean Recommended") {
+                    selectedItemPaths.removeAll()
+                    model.cleanRecommendedSmartCategories()
+                }
+                .disabled(model.isSmartScanRunning || model.smartScanCategories.isEmpty)
+
+                Divider()
+
+                Button("Select Recommended") {
+                    selectedItemPaths.removeAll()
+                    model.selectRecommendedSmartCategories()
+                }
+                .disabled(model.smartScanCategories.isEmpty)
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .controlSize(.small)
+            .buttonStyle(.bordered)
         }
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 10)
     }
 
     private var exclusionsPanel: some View {
@@ -298,7 +302,9 @@ struct SmartCareView: View {
         HStack(alignment: .top, spacing: 12) {
             Toggle("", isOn: Binding(
                 get: { category.isSelected },
-                set: { _ in model.toggleSmartCategorySelection(category.id) }
+                set: { isSelected in
+                    setCategorySelection(category, isSelected: isSelected)
+                }
             ))
             .labelsHidden()
 
@@ -326,7 +332,7 @@ struct SmartCareView: View {
             )
 
             Button(expandedCategories.contains(category.id) ? "Hide" : "Preview") {
-                toggleExpanded(category.id)
+                toggleExpanded(category)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -376,22 +382,43 @@ struct SmartCareView: View {
         ]
     }
 
-    private func toggleExpanded(_ id: String) {
-        if expandedCategories.contains(id) {
-            expandedCategories.remove(id)
+    private func toggleExpanded(_ category: SmartCategoryState) {
+        if expandedCategories.contains(category.id) {
+            expandedCategories.remove(category.id)
         } else {
-            expandedCategories.insert(id)
+            expandedCategories.insert(category.id)
+            if category.isSelected {
+                selectAllItems(in: category)
+            }
         }
+    }
+
+    private func setCategorySelection(_ category: SmartCategoryState, isSelected: Bool) {
+        guard category.isSelected != isSelected else { return }
+        model.toggleSmartCategorySelection(category.id)
+        if isSelected {
+            if expandedCategories.contains(category.id) {
+                selectAllItems(in: category)
+            }
+        } else {
+            deselectAllItems(in: category)
+        }
+    }
+
+    private func selectAllItems(in category: SmartCategoryState) {
+        selectedItemPaths.formUnion(category.result.items.map { $0.url.path })
+    }
+
+    private func deselectAllItems(in category: SmartCategoryState) {
+        selectedItemPaths.subtract(category.result.items.map { $0.url.path })
     }
 
     private var headerSubtitle: String {
         let categories = model.smartScanCategories.count
-        let selectedCategories = selectedCategoryCount
-        let selectedItems = selectedItemPaths.count
         if categories == 0 {
             return "Run one scan to find safe cleanup opportunities."
         }
-        return "Found \(categories) categories · selected \(selectedCategories) categories and \(selectedItems) items."
+        return "Found \(categories) cleanup categories."
     }
 
     private func toggleItem(_ path: String) {

@@ -203,6 +203,9 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey || $0.isVisible }) {
+            MainWindowFrameStore.save(frame: window.frame)
+        }
         CrashTelemetryService.shared.endSession()
     }
 }
@@ -265,15 +268,17 @@ struct DRayApp: App {
 
     var body: some Scene {
         WindowGroup("DRay") {
-            RootView(model: model)
-                .frame(minWidth: 1024, minHeight: 680)
-                .preferredColorScheme(preferredColorScheme)
-                .onAppear {
-                    AppLogger.telemetry.info("Root view appeared")
-                    applyLaunchActionIfNeeded()
-                }
+            ThemedRootContainer(
+                model: model,
+                preferredColorScheme: preferredColorScheme
+            ) {
+                AppLogger.telemetry.info("Root view appeared")
+                applyLaunchActionIfNeeded()
+            }
+            .frame(minWidth: 1024, minHeight: 680)
+            .background(MainWindowFramePersistenceView())
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.automatic)
         .commands { appCommands }
     }
 
@@ -293,5 +298,175 @@ struct DRayApp: App {
         case .dark:
             return .dark
         }
+    }
+}
+
+@MainActor
+private struct MainWindowFramePersistenceView: NSViewRepresentable {
+    private static let minSize = NSSize(width: 1024, height: 680)
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: nsView.window)
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        private weak var configuredWindow: NSWindow?
+
+        func attach(to window: NSWindow?) {
+            guard let window else { return }
+            guard configuredWindow !== window else { return }
+            stopObservingWindowChanges()
+            configuredWindow = window
+
+            window.minSize = MainWindowFramePersistenceView.minSize
+            if let restored = MainWindowFrameStore.restoredFrame(minSize: MainWindowFramePersistenceView.minSize) {
+                window.setFrame(restored, display: false)
+            }
+            beginObservingWindowChanges(for: window)
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        private func beginObservingWindowChanges(for window: NSWindow) {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowFrameDidChange(_:)),
+                name: NSWindow.didMoveNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowFrameDidChange(_:)),
+                name: NSWindow.didResizeNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowFrameDidChange(_:)),
+                name: NSWindow.didEndLiveResizeNotification,
+                object: window
+            )
+        }
+
+        private func stopObservingWindowChanges() {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didMoveNotification, object: configuredWindow)
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didResizeNotification, object: configuredWindow)
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didEndLiveResizeNotification, object: configuredWindow)
+        }
+
+        @objc
+        private func windowFrameDidChange(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow else { return }
+            MainWindowFrameStore.save(frame: window.frame)
+        }
+    }
+}
+
+@MainActor
+private enum MainWindowFrameStore {
+    private static let key = "DRayMainWindowFrame"
+
+    static func save(frame: NSRect) {
+        UserDefaults.standard.set(NSStringFromRect(frame), forKey: key)
+    }
+
+    static func restoredFrame(minSize: NSSize) -> NSRect? {
+        guard let raw = UserDefaults.standard.string(forKey: key) else { return nil }
+        var frame = NSRectFromString(raw)
+        guard frame.width > 0, frame.height > 0 else { return nil }
+
+        frame.size.width = max(frame.size.width, minSize.width)
+        frame.size.height = max(frame.size.height, minSize.height)
+
+        if let visible = bestVisibleFrame(for: frame) {
+            frame.size.width = min(frame.size.width, visible.width)
+            frame.size.height = min(frame.size.height, visible.height)
+            frame.origin.x = min(max(frame.origin.x, visible.minX), visible.maxX - frame.size.width)
+            frame.origin.y = min(max(frame.origin.y, visible.minY), visible.maxY - frame.size.height)
+        }
+        return frame
+    }
+
+    private static func bestVisibleFrame(for frame: NSRect) -> NSRect? {
+        if let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(frame) }) {
+            return screen.visibleFrame
+        }
+        return NSScreen.main?.visibleFrame
+    }
+}
+
+private struct ThemedRootContainer: View {
+    @ObservedObject var model: RootViewModel
+    let preferredColorScheme: ColorScheme?
+    let onInitialAppear: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var didAppear = false
+
+    var body: some View {
+        RootView(model: model)
+            .preferredColorScheme(preferredColorScheme)
+            .onAppear {
+                AppIconThemeController.shared.apply(for: colorScheme)
+                guard !didAppear else { return }
+                didAppear = true
+                onInitialAppear()
+            }
+            .onChange(of: colorScheme) {
+                AppIconThemeController.shared.apply(for: colorScheme)
+            }
+            .onChange(of: model.appAppearance) {
+                // App appearance update can race with ColorScheme propagation.
+                DispatchQueue.main.async {
+                    AppIconThemeController.shared.apply(for: colorScheme)
+                }
+            }
+    }
+}
+
+@MainActor
+private final class AppIconThemeController {
+    static let shared = AppIconThemeController()
+
+    private var lastAppliedIconName: String?
+
+    private init() {}
+
+    func apply(for colorScheme: ColorScheme) {
+        let preferredNames = colorScheme == .dark
+            ? ["DRayDark", "DRay", "DRayLight"]
+            : ["DRayLight", "DRay", "DRayDark"]
+
+        for name in preferredNames {
+            guard let image = icon(named: name) else { continue }
+            guard lastAppliedIconName != name else { return }
+            NSApp.applicationIconImage = image
+            NSApp.dockTile.display()
+            lastAppliedIconName = name
+            return
+        }
+    }
+
+    private func icon(named name: String) -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "icns") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
     }
 }
