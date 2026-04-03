@@ -233,25 +233,19 @@ private struct MenuBarPopupView: View {
             guard showBatteryDetails else { return }
             loadBatteryDetails()
         }
-        .confirmationDialog(
-            reliefDialogTitle,
-            isPresented: $showReliefConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(reliefActionTitle) {
-                executeReliefAction()
-            }
-            Button("Cancel", role: .cancel) {
-                pendingReliefAction = nil
+        .overlay(alignment: .bottom) {
+            if let message = model.reliefResultMessage {
+                reliefResultBanner(message)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .alert("Load Reduction", isPresented: Binding(
-            get: { model.reliefResultMessage != nil },
-            set: { if !$0 { model.reliefResultMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.reliefResultMessage ?? "")
+        .overlay {
+            if showReliefConfirm {
+                reliefConfirmOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
     }
 
@@ -869,13 +863,74 @@ private struct MenuBarPopupView: View {
     private func executeReliefAction() {
         guard let action = pendingReliefAction else { return }
         pendingReliefAction = nil
+        showReliefConfirm = false
         switch action {
         case .cpu:
             model.reduceCPU(consumers: cpuReliefCandidates, limit: 3)
         case .memory:
             model.reduceMemory(consumers: memoryReliefCandidates, limit: 3)
         }
-        model.open(section: .performance, action: .runPerformanceScan)
+    }
+
+    private var reliefConfirmOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.30 : 0.16)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    pendingReliefAction = nil
+                    showReliefConfirm = false
+                }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Load Reduction")
+                    .font(.headline)
+                Text(reliefDialogTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Button("Cancel") {
+                        pendingReliefAction = nil
+                        showReliefConfirm = false
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button(reliefActionTitle) {
+                        executeReliefAction()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+            .padding(14)
+            .frame(width: 360, alignment: .leading)
+            .background(cardBackground)
+        }
+    }
+
+    private func reliefResultBanner(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Load Reduction")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("OK") {
+                    model.reliefResultMessage = nil
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
     }
 
     private func openBatteryDetails() {
