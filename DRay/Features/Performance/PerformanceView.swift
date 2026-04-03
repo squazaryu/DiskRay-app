@@ -43,6 +43,7 @@ struct PerformanceView: View {
                     .padding(.horizontal, 4)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(12)
         .confirmationDialog(
             t("Отключить выбранные элементы автозапуска?", "Disable selected startup entries?"),

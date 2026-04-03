@@ -452,8 +452,10 @@ private struct MenuBarPopupView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(cardBackground)
             }
             HStack {
