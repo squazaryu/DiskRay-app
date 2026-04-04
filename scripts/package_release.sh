@@ -16,6 +16,11 @@ DMG_PATH="${OUT_DIR}/DRay-${VERSION}.dmg"
 
 mkdir -p "${OUT_DIR}"
 
+if [[ "${SKIP_PII_SCAN:-0}" != "1" ]]; then
+  echo "Running PII scan..."
+  ./scripts/pii_scan.sh
+fi
+
 if [[ "${SKIP_SMOKE:-0}" != "1" ]]; then
   echo "Running UI smoke checks..."
   ./scripts/ui_smoke.sh

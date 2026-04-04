@@ -67,6 +67,16 @@ Artifacts are created in `dist`.
 ./scripts/ui_smoke.sh
 ```
 
+## PII Scan (pre-release)
+```bash
+./scripts/pii_scan.sh
+```
+The script scans tracked text files for personal absolute paths and email-like strings.
+
+Optional:
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 1.0.1-beta`
+- allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
+
 ## Crash Symbolication
 ```bash
 ./scripts/symbolicate_crash.sh <path-to-crash-report> [path-to-DRay.dSYM]
