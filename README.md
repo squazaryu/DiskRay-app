@@ -60,7 +60,7 @@ swift run
 ```bash
 ./scripts/package_release.sh 1.0.1-beta
 ```
-Artifacts are created in `/Users/tumowuh/Projects/Disk Ray/dist`.
+Artifacts are created in `dist`.
 
 ## Smoke Check
 ```bash
@@ -73,9 +73,9 @@ Artifacts are created in `/Users/tumowuh/Projects/Disk Ray/dist`.
 ```
 
 ## Release Notes and Roadmap
-- Release process: `/Users/tumowuh/Projects/Disk Ray/docs/RELEASE.md`
-- Roadmap: `/Users/tumowuh/Projects/Disk Ray/docs/ROADMAP.md`
-- Past notes: `/Users/tumowuh/Projects/Disk Ray/docs/releases`
+- Release process: `docs/RELEASE.md`
+- Roadmap: `docs/ROADMAP.md`
+- Past notes: `docs/releases`
 
 ## Current Channel
 `v1.0.1-beta` is the active beta channel focused on UX stabilization, helper reliability, icon/theming consistency, and cleanup workflow robustness.
