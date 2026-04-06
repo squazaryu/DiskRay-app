@@ -25,6 +25,7 @@ struct RootView: View {
 
             VStack(spacing: 12) {
                 topNavigation
+                    .zIndex(100)
                 if model.permissions.firstLaunchNeedsSetup {
                     permissionsOnboardingCard
                         .glassSurface(cornerRadius: 18, strokeOpacity: 0.16, shadowOpacity: 0.12, padding: 12)
@@ -32,6 +33,7 @@ struct RootView: View {
                 sectionView(for: model.selectedSection)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .glassSurface(cornerRadius: 24, strokeOpacity: 0.16, shadowOpacity: 0.18, padding: 0)
+                    .zIndex(1)
             }
             .padding(14)
         }
@@ -93,7 +95,9 @@ struct RootView: View {
                 }
             }
             .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(height: 50)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.2, shadowOpacity: 0.08, padding: 8)
     }
 

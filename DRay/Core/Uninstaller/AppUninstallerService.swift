@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 actor AppUninstallerService: UninstallerServicing {
     func installedApps() -> [InstalledApp] {
@@ -73,6 +74,7 @@ actor AppUninstallerService: UninstallerServicing {
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
+        terminateIfRunning(bundleID: app.bundleID)
 
         for (target, type) in targets {
             let path = target.path
@@ -98,6 +100,21 @@ actor AppUninstallerService: UninstallerServicing {
                     details: nil
                 ))
             } catch {
+                if type == .appBundle,
+                   path.hasPrefix("/Applications/"),
+                   isPermissionError(error),
+                   moveToTrashWithAdministratorPrivileges(target: target) {
+                    let userTrash = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent(".Trash/\(target.lastPathComponent)").path
+                    results.append(UninstallActionResult(
+                        url: target,
+                        type: type,
+                        status: .removed,
+                        trashedPath: userTrash,
+                        details: "Moved to Trash with administrator authorization."
+                    ))
+                    continue
+                }
                 results.append(UninstallActionResult(url: target, type: type, status: .failed, trashedPath: nil, details: error.localizedDescription))
             }
         }
@@ -161,5 +178,70 @@ actor AppUninstallerService: UninstallerServicing {
             total += Int64(values.fileSize ?? 0)
         }
         return total
+    }
+
+    private func terminateIfRunning(bundleID: String) {
+        guard !bundleID.isEmpty else { return }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        guard !running.isEmpty else { return }
+
+        running.forEach { _ = $0.terminate() }
+
+        let deadline = Date().addingTimeInterval(1.5)
+        while Date() < deadline {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .forEach { _ = $0.forceTerminate() }
+    }
+
+    private func isPermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain {
+            let codes: Set<Int> = [
+                NSFileReadNoPermissionError,
+                NSFileWriteNoPermissionError,
+                NSFileWriteVolumeReadOnlyError,
+                NSFileWriteFileExistsError
+            ]
+            if codes.contains(nsError.code) {
+                return true
+            }
+        }
+
+        if nsError.domain == NSPOSIXErrorDomain {
+            return nsError.code == EACCES || nsError.code == EPERM
+        }
+
+        let message = nsError.localizedDescription.lowercased()
+        return message.contains("permission") || message.contains("not permitted") || message.contains("operation not permitted")
+    }
+
+    private func moveToTrashWithAdministratorPrivileges(target: URL) -> Bool {
+        let script = """
+        on run argv
+            set targetPath to item 1 of argv
+            do shell script "/bin/mkdir -p \"$HOME/.Trash\"; /bin/mv " & quoted form of targetPath & " \"$HOME/.Trash/\"" with administrator privileges
+            return "ok"
+        end run
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script, target.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 }
