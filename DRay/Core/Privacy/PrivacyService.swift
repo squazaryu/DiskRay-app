@@ -1,8 +1,6 @@
 import Foundation
 
 actor PrivacyService {
-    private let protectedPathPrefixes = ["/System", "/bin", "/sbin", "/usr"]
-
     func runScan() -> PrivacyScanReport {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let categorySpecs: [(String, String, String, PrivacyRisk, [URL])] = [
@@ -84,7 +82,7 @@ actor PrivacyService {
         var cleanedBytes: Int64 = 0
 
         for artifact in artifacts {
-            if isProtectedPath(artifact.url.path) {
+            if SystemPathProtection.isProtected(artifact.url.path) {
                 skippedProtected += 1
                 continue
             }
@@ -134,9 +132,5 @@ actor PrivacyService {
             total += Int64(values.fileSize ?? 0)
         }
         return total
-    }
-
-    private func isProtectedPath(_ path: String) -> Bool {
-        path == "/" || protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 }

@@ -36,6 +36,23 @@ struct PrivacyView: View {
                 .padding(.horizontal, 4)
             }
 
+            if let delta = model.privacyQuickActionDelta {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Action \(delta.actionTitle)", tint: .blue)
+                    GlassPillBadge(title: "Items \(delta.beforeItems) -> \(delta.afterItems)", tint: .green)
+                    GlassPillBadge(
+                        title: "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) -> \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
+                        tint: .orange
+                    )
+                    Spacer()
+                    Text("Updated \(delta.createdAt, style: .relative)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+            }
+
             Group {
                 if model.privacyCategories.isEmpty, !model.isPrivacyScanRunning {
                     ContentUnavailableView(

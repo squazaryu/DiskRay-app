@@ -55,3 +55,9 @@ struct StartupCleanupReport: Sendable {
     let failed: Int
     let skippedProtected: Int
 }
+
+struct LoadReliefResult: Sendable {
+    let adjusted: [String]
+    let skipped: [String]
+    let failed: [String]
+}

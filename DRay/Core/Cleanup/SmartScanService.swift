@@ -1,6 +1,6 @@
 import Foundation
 
-actor SmartScanService {
+actor SmartScanService: SmartCareServicing {
     private let analyzers: [CleanupAnalyzer]
     private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 

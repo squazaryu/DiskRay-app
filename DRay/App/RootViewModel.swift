@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import Darwin
 
 struct ScanTarget {
     let name: String
@@ -93,18 +92,6 @@ struct TrashOperationResult {
     let failed: [String]
 }
 
-struct LoadReliefResult {
-    let adjusted: [String]
-    let skipped: [String]
-    let failed: [String]
-}
-
-private struct ProcessPriorityAdjustment {
-    let pid: Int32
-    let name: String
-    let baselineNice: Int32
-}
-
 struct RecentlyDeletedItem: Codable, Identifiable {
     let id: UUID
     let originalPath: String
@@ -114,12 +101,6 @@ struct RecentlyDeletedItem: Codable, Identifiable {
     var name: String {
         URL(fileURLWithPath: originalPath).lastPathComponent
     }
-}
-
-struct SmartCategoryState: Identifiable {
-    let id: String
-    let result: CleanupCategoryResult
-    var isSelected: Bool
 }
 
 struct PrivacyCategoryState: Identifiable {
@@ -232,30 +213,10 @@ final class RootViewModel: ObservableObject {
     @Published private(set) var lastScannedTarget: ScanTarget?
     @Published private(set) var progress = ScanProgress(currentPath: "", visitedItems: 0)
     @Published private(set) var isPaused = false
-    @Published var searchQuery = ""
-    @Published var minSizeMB: Double = 0
-    @Published var pathContains = ""
-    @Published var ownerContains = ""
-    @Published var onlyDirectories = false
-    @Published var onlyFiles = false
-    @Published var searchUseRegex = false
-    @Published var searchDepthMin = 0
-    @Published var searchDepthMax = 12
-    @Published var searchModifiedWithinDays = 0
-    @Published var searchNodeType: QueryEngine.SearchNodeType = .any
-    @Published var searchMode: SearchExecutionMode = .live
-    @Published private(set) var isLiveSearchRunning = false
-    @Published private(set) var liveSearchResults: [FileNode] = []
-    @Published private(set) var searchPresets: [SearchPreset] = []
+    @Published var search = SearchFeatureState()
     @Published private(set) var recentlyDeleted: [RecentlyDeletedItem] = []
     @Published var hoveredPath: String?
-    @Published private(set) var smartScanCategories: [SmartCategoryState] = []
-    @Published private(set) var isSmartScanRunning = false
-    @Published private(set) var smartExclusions: [String] = []
-    @Published private(set) var smartExcludedAnalyzerKeys: [String] = []
-    @Published private(set) var smartAnalyzerTelemetry: [CleanupAnalyzerTelemetry] = []
-    @Published var smartMinCleanSizeMB: Double = 1
-    @Published var smartProfile: SmartCleanProfile = .balanced
+    @Published var smartCare = SmartCareFeatureState()
     @Published private(set) var installedApps: [InstalledApp] = []
     @Published private(set) var uninstallerRemnants: [AppRemnant] = []
     @Published private(set) var isUninstallerLoading = false
@@ -276,13 +237,13 @@ final class RootViewModel: ObservableObject {
         candidateGroups: 0
     )
     @Published var duplicateMinSizeMB: Double = 10
-    @Published private(set) var performanceReport: PerformanceReport?
-    @Published private(set) var isPerformanceScanRunning = false
-    @Published private(set) var startupCleanupReport: StartupCleanupReport?
-    @Published private(set) var activeLoadReliefAdjustments = 0
+    @Published var performance = PerformanceFeatureState()
+    @Published private(set) var performanceQuickActionDelta: QuickActionDeltaReport?
     @Published private(set) var privacyCategories: [PrivacyCategoryState] = []
     @Published private(set) var isPrivacyScanRunning = false
     @Published private(set) var privacyCleanReport: PrivacyCleanReport?
+    @Published private(set) var privacyQuickActionDelta: QuickActionDeltaReport?
+    @Published private(set) var quickActionRollbackSessions: [QuickActionRollbackSession] = []
     @Published private(set) var lastExportedOperationLogURL: URL?
     @Published private(set) var isUnifiedScanRunning = false
     @Published private(set) var unifiedScanSummary: UnifiedScanSummary?
@@ -300,43 +261,34 @@ final class RootViewModel: ObservableObject {
         }
     }
 
-    let permissions = AppPermissionService()
-    let operationLogs = OperationLogStore()
+    let permissions: AppPermissionService
+    let operationLogs: OperationLogStore
 
-    private let scanner = FileScanner()
-    private let smartScanService = SmartScanService()
-    private let uninstallerService = AppUninstallerService()
-    private let duplicateFinderService = DuplicateFinderService()
-    private let performanceService = PerformanceService()
-    private let privacyService = PrivacyService()
-    private let queryEngine = QueryEngine()
-    private let liveSearchService = LiveSearchService()
-    private let menuBarLoginAgentService = MenuBarLoginAgentService()
-    private let indexStore = SQLiteIndexStore()
+    private let scanner: FileScanner
+    private let incrementalTreeMergeUseCase: IncrementalTreeMergeUseCase
+    private let permissionGateUseCase: PermissionGateUseCase
+    private let searchPresetUseCase: SearchPresetUseCase
+    private let uninstallerUseCase: UninstallerUseCase
+    private let uninstallSessionUseCase: UninstallSessionUseCase
+    private let recoveryHistoryUseCase: RecoveryHistoryUseCase
+    private let duplicateFinderService: DuplicateFinderService
+    private let performanceUseCase: PerformanceUseCase
+    private let smartCareUseCase: SmartCareUseCase
+    private let smartExclusionUseCase: SmartExclusionUseCase
+    private let privacyService: PrivacyService
+    private let queryEngine: QueryEngine
+    private let liveSearchService: LiveSearchService
+    private let menuBarLoginAgentService: MenuBarLoginAgentService
+    private let indexStore: SQLiteIndexStore?
+    private let safeFileOperations: SafeFileOperationService
+    private let historyStore: OperationalHistoryStore
+    private let quickActionRollbackSessionsFileName = "quick-action-rollback-sessions.json"
     private let selectedTargetBookmarkKey = "dray.scan.target.bookmark"
     private let appLanguageKey = "dray.ui.language"
     private let appAppearanceKey = "dray.ui.appearance"
-    private let searchPresetsKey = "dray.search.presets"
-    private let recentlyDeletedKey = "dray.recently.deleted"
-    private let smartExclusionsKey = "dray.smart.exclusions"
-    private let smartAnalyzerExclusionsKey = "dray.smart.analyzer.exclusions"
-    private let uninstallSessionsKey = "dray.uninstall.sessions"
-    private let repairSessionsKey = "dray.repair.sessions"
     private var scanTask: Task<Void, Never>?
     private var liveSearchTask: Task<Void, Never>?
     private var duplicateScanTask: Task<Void, Never>?
-    private var priorityAdjustments: [ProcessPriorityAdjustment] = []
-    private let protectedPathPrefixes = [
-        "/System",
-        "/bin",
-        "/sbin",
-        "/usr/bin",
-        "/usr/sbin",
-        "/usr/lib",
-        "/usr/libexec",
-        "/usr/share",
-        "/private/etc"
-    ]
     let smartAnalyzerOptions: [SmartAnalyzerOption] = [
         .init(key: "user_logs", title: "User Logs", description: "Old files in ~/Library/Logs"),
         .init(key: "user_caches", title: "User Caches", description: "Rebuildable cache files"),
@@ -348,7 +300,37 @@ final class RootViewModel: ObservableObject {
         .init(key: "orphan_preferences", title: "Orphan Preferences", description: "Unused app preference files")
     ]
 
-    init(initialSection: AppSection? = nil) {
+    init(initialSection: AppSection? = nil, dependencies: RootViewModelDependencies = .live) {
+        self.permissions = dependencies.permissions
+        self.operationLogs = dependencies.operationLogs
+        self.scanner = dependencies.scanner
+        self.incrementalTreeMergeUseCase = IncrementalTreeMergeUseCase()
+        self.permissionGateUseCase = PermissionGateUseCase(service: dependencies.permissions)
+        self.searchPresetUseCase = SearchPresetUseCase(historyStore: dependencies.historyStore)
+        self.uninstallerUseCase = UninstallerUseCase(service: dependencies.uninstallerService)
+        self.duplicateFinderService = dependencies.duplicateFinderService
+        self.smartCareUseCase = SmartCareUseCase(service: dependencies.smartScanService)
+        self.smartExclusionUseCase = SmartExclusionUseCase()
+        self.performanceUseCase = PerformanceUseCase(
+            performanceService: dependencies.performanceService,
+            processPriorityService: dependencies.processPriorityService
+        )
+        self.privacyService = dependencies.privacyService
+        self.queryEngine = dependencies.queryEngine
+        self.liveSearchService = dependencies.liveSearchService
+        self.menuBarLoginAgentService = dependencies.menuBarLoginAgentService
+        self.indexStore = dependencies.indexStore
+        self.safeFileOperations = dependencies.safeFileOperations
+        self.historyStore = dependencies.historyStore
+        self.uninstallSessionUseCase = UninstallSessionUseCase(
+            historyStore: dependencies.historyStore,
+            safeFileOperations: dependencies.safeFileOperations
+        )
+        self.recoveryHistoryUseCase = RecoveryHistoryUseCase(
+            historyStore: dependencies.historyStore,
+            safeFileOperations: dependencies.safeFileOperations
+        )
+
         if let storedLanguage = UserDefaults.standard.string(forKey: appLanguageKey),
            let language = AppLanguage(rawValue: storedLanguage) {
             appLanguage = language
@@ -360,8 +342,8 @@ final class RootViewModel: ObservableObject {
         restoreLastTargetIfPossible()
         loadSearchPresets()
         loadRecentlyDeleted()
+        loadQuickActionRollbackSessions()
         loadSmartExclusions()
-        loadSmartAnalyzerExclusions()
         loadUninstallSessions()
         loadRepairSessions()
         refreshLaunchAtLoginStatus()
@@ -371,11 +353,157 @@ final class RootViewModel: ObservableObject {
         }
     }
 
+    private var searchQuery: String {
+        get { search.query }
+        set { search.query = newValue }
+    }
+
+    private var minSizeMB: Double {
+        get { search.minSizeMB }
+        set { search.minSizeMB = newValue }
+    }
+
+    private var pathContains: String {
+        get { search.pathContains }
+        set { search.pathContains = newValue }
+    }
+
+    private var ownerContains: String {
+        get { search.ownerContains }
+        set { search.ownerContains = newValue }
+    }
+
+    private var onlyDirectories: Bool {
+        get { search.onlyDirectories }
+        set { search.onlyDirectories = newValue }
+    }
+
+    private var onlyFiles: Bool {
+        get { search.onlyFiles }
+        set { search.onlyFiles = newValue }
+    }
+
+    private var searchUseRegex: Bool {
+        get { search.useRegex }
+        set { search.useRegex = newValue }
+    }
+
+    private var searchDepthMin: Int {
+        get { search.depthMin }
+        set { search.depthMin = newValue }
+    }
+
+    private var searchDepthMax: Int {
+        get { search.depthMax }
+        set { search.depthMax = newValue }
+    }
+
+    private var searchModifiedWithinDays: Int {
+        get { search.modifiedWithinDays }
+        set { search.modifiedWithinDays = newValue }
+    }
+
+    private var searchNodeType: QueryEngine.SearchNodeType {
+        get { search.nodeType }
+        set { search.nodeType = newValue }
+    }
+
+    private var searchMode: SearchExecutionMode {
+        get { search.mode }
+        set { search.mode = newValue }
+    }
+
+    private var isLiveSearchRunning: Bool {
+        get { search.isLiveRunning }
+        set { search.isLiveRunning = newValue }
+    }
+
+    private var liveSearchResults: [FileNode] {
+        get { search.liveResults }
+        set { search.liveResults = newValue }
+    }
+
+    private var searchPresets: [SearchPreset] {
+        get { search.presets }
+        set { search.presets = newValue }
+    }
+
+    private var smartScanCategories: [SmartCategoryState] {
+        get { smartCare.categories }
+        set { smartCare.categories = newValue }
+    }
+
+    private var isSmartScanRunning: Bool {
+        get { smartCare.isScanRunning }
+        set { smartCare.isScanRunning = newValue }
+    }
+
+    private var smartExclusions: [String] {
+        get { smartCare.exclusions }
+        set { smartCare.exclusions = newValue }
+    }
+
+    private var smartExcludedAnalyzerKeys: [String] {
+        get { smartCare.excludedAnalyzerKeys }
+        set { smartCare.excludedAnalyzerKeys = newValue }
+    }
+
+    private var smartAnalyzerTelemetry: [CleanupAnalyzerTelemetry] {
+        get { smartCare.analyzerTelemetry }
+        set { smartCare.analyzerTelemetry = newValue }
+    }
+
+    private var smartMinCleanSizeMB: Double {
+        get { smartCare.minCleanSizeMB }
+        set { smartCare.minCleanSizeMB = newValue }
+    }
+
+    private var smartProfile: SmartCleanProfile {
+        get { smartCare.profile }
+        set { smartCare.profile = newValue }
+    }
+
+    private(set) var performanceReport: PerformanceReport? {
+        get { performance.report }
+        set { performance.report = newValue }
+    }
+
+    private(set) var isPerformanceScanRunning: Bool {
+        get { performance.isScanRunning }
+        set { performance.isScanRunning = newValue }
+    }
+
+    private(set) var startupCleanupReport: StartupCleanupReport? {
+        get { performance.startupCleanupReport }
+        set { performance.startupCleanupReport = newValue }
+    }
+
+    private(set) var activeLoadReliefAdjustments: Int {
+        get { performance.activeLoadReliefAdjustments }
+        set { performance.activeLoadReliefAdjustments = newValue }
+    }
+
     var searchResults: [FileNode] {
-        guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return []
+        search.results
+    }
+
+    var appVersionDisplay: String {
+        let info = Bundle.main.infoDictionary
+        let version = (info?["CFBundleShortVersionString"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let build = (info?["CFBundleVersion"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch (version, build) {
+        case let (v?, b?) where !v.isEmpty && !b.isEmpty && v != b:
+            return "\(v) (\(b))"
+        case let (v?, _) where !v.isEmpty:
+            return v
+        case let (_, b?) where !b.isEmpty:
+            return b
+        default:
+            return "dev"
         }
-        return liveSearchResults
     }
 
     func localized(_ key: AppL10nKey) -> String {
@@ -483,55 +611,52 @@ final class RootViewModel: ObservableObject {
     }
 
     func reduceCPULoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
-        adjustTopConsumers(consumers.sorted { $0.cpuPercent > $1.cpuPercent }, limit: limit, label: "cpu")
+        let beforeAdjustments = activeLoadReliefAdjustments
+        let result = performanceUseCase.reduceCPULoad(consumers: consumers, limit: limit)
+        activeLoadReliefAdjustments = performanceUseCase.activeAdjustmentsCount
+        recordQuickActionRollbackSession(
+            actionTitle: "Reduce CPU",
+            rollbackKind: .restorePriorities,
+            adjustedTargets: result.adjusted,
+            beforeItems: beforeAdjustments,
+            afterItems: activeLoadReliefAdjustments
+        )
+        operationLogs.add(
+            category: "relief",
+            message: "Load relief (cpu): adjusted \(result.adjusted.count), skipped \(result.skipped.count), failed \(result.failed.count)"
+        )
+        return result
     }
 
     func reduceMemoryLoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {
-        adjustTopConsumers(consumers.sorted { $0.memoryMB > $1.memoryMB }, limit: limit, label: "memory")
+        let beforeAdjustments = activeLoadReliefAdjustments
+        let result = performanceUseCase.reduceMemoryLoad(consumers: consumers, limit: limit)
+        activeLoadReliefAdjustments = performanceUseCase.activeAdjustmentsCount
+        recordQuickActionRollbackSession(
+            actionTitle: "Reduce Memory",
+            rollbackKind: .restorePriorities,
+            adjustedTargets: result.adjusted,
+            beforeItems: beforeAdjustments,
+            afterItems: activeLoadReliefAdjustments
+        )
+        operationLogs.add(
+            category: "relief",
+            message: "Load relief (memory): adjusted \(result.adjusted.count), skipped \(result.skipped.count), failed \(result.failed.count)"
+        )
+        return result
     }
 
     func restoreAdjustedProcessPriorities(limit: Int = 5) -> LoadReliefResult {
-        guard !priorityAdjustments.isEmpty else {
-            return LoadReliefResult(adjusted: [], skipped: [], failed: [])
-        }
-
-        var restored: [String] = []
-        var skipped: [String] = []
-        var failed: [String] = []
-
-        let maxCount = max(1, limit)
-        let targets = Array(priorityAdjustments.prefix(maxCount))
-
-        for target in targets {
-            guard canAdjustPriority(forPID: target.pid) else {
-                skipped.append(target.name)
-                priorityAdjustments.removeAll { $0.pid == target.pid }
-                continue
-            }
-
-            let niceValue = String(target.baselineNice)
-            let reniceOK = runCommand(
-                "/usr/bin/renice",
-                arguments: [niceValue, "-p", String(target.pid)]
-            )
-            let policyOK = runCommand(
-                "/usr/bin/taskpolicy",
-                arguments: ["-B", "-p", String(target.pid)]
-            )
-            if reniceOK || policyOK {
-                restored.append(target.name)
-                priorityAdjustments.removeAll { $0.pid == target.pid }
-            } else {
-                failed.append(target.name)
-            }
-        }
-
-        activeLoadReliefAdjustments = priorityAdjustments.count
+        let result = performanceUseCase.restoreAdjustedPriorities(limit: limit)
+        activeLoadReliefAdjustments = performanceUseCase.activeAdjustmentsCount
+        markLatestQuickRollbackSessionResolved(
+            summary: "Restored \(result.adjusted.count), failed \(result.failed.count), skipped \(result.skipped.count)"
+        )
         operationLogs.add(
             category: "relief",
-            message: "Load relief restore: restored \(restored.count), skipped \(skipped.count), failed \(failed.count)"
+            message: "Load relief restore: restored \(result.adjusted.count), skipped \(result.skipped.count), failed \(result.failed.count)"
         )
-        return LoadReliefResult(adjusted: restored, skipped: skipped, failed: failed)
+        return result
     }
 
     func selectMacDisk() {
@@ -581,16 +706,12 @@ final class RootViewModel: ObservableObject {
         isSmartScanRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let result = await smartScanService.runSmartScan(
+            let result = await smartCareUseCase.runScan(
                 excludedPrefixes: smartExclusions,
                 excludedAnalyzerKeys: smartExcludedAnalyzerKeys
             )
             await MainActor.run {
-                self.smartScanCategories = result.categories.map {
-                    SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
-                }
-                self.smartAnalyzerTelemetry = result.analyzerTelemetry
-                self.selectRecommendedSmartCategories()
+                self.applySmartScanResult(result)
                 self.isSmartScanRunning = false
                 self.operationLogs.add(category: "smartcare", message: "Smart scan done: categories \(result.categories.count), bytes \(result.totalBytes)")
             }
@@ -614,7 +735,7 @@ final class RootViewModel: ObservableObject {
             guard let self else { return }
             // Manual category selection should clean exactly what user selected,
             // without hidden size threshold filtering.
-            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: 0)
+            let cleanupResult = await smartCareUseCase.clean(items: items, minSizeBytes: 0)
             await MainActor.run {
                 AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.operationLogs.add(category: "smartcare", message: "Smart clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
@@ -635,7 +756,7 @@ final class RootViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             // Keep min-size threshold for auto-recommended cleanup flow.
-            let cleanupResult = await smartScanService.clean(
+            let cleanupResult = await smartCareUseCase.clean(
                 items: items,
                 minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576)
             )
@@ -653,7 +774,7 @@ final class RootViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             // Manual item selection should clean exact picks, regardless of min size.
-            let cleanupResult = await smartScanService.clean(items: items, minSizeBytes: 0)
+            let cleanupResult = await smartCareUseCase.clean(items: items, minSizeBytes: 0)
             await MainActor.run {
                 AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
                 self.operationLogs.add(category: "smartcare", message: "Smart item clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
@@ -663,18 +784,10 @@ final class RootViewModel: ObservableObject {
     }
 
     func selectRecommendedSmartCategories() {
-        for index in smartScanCategories.indices {
-            let risk = smartScanCategories[index].result.riskLevel
-            let safe = smartScanCategories[index].result.isSafeByDefault
-            switch smartProfile {
-            case .conservative:
-                smartScanCategories[index].isSelected = safe && risk == .low
-            case .balanced:
-                smartScanCategories[index].isSelected = safe && (risk == .low || risk == .medium)
-            case .aggressive:
-                smartScanCategories[index].isSelected = risk != .high
-            }
-        }
+        smartScanCategories = smartCareUseCase.applyRecommendations(
+            to: smartScanCategories,
+            profile: smartProfile
+        )
     }
 
     func applySmartProfile(_ profile: SmartCleanProfile) {
@@ -688,28 +801,19 @@ final class RootViewModel: ObservableObject {
     }
 
     func addSmartExclusion(_ path: String) {
-        let normalized = (path as NSString).expandingTildeInPath
-        guard !normalized.isEmpty, !smartExclusions.contains(normalized) else { return }
-        smartExclusions.append(normalized)
-        smartExclusions.sort()
-        persistSmartExclusions()
+        smartExclusions = smartExclusionUseCase.addPath(path, to: smartExclusions)
     }
 
     func toggleSmartExclusion(_ path: String) {
-        let normalized = (path as NSString).expandingTildeInPath
-        guard !normalized.isEmpty else { return }
-        if smartExclusions.contains(normalized) {
-            removeSmartExclusion(normalized)
-        } else {
-            addSmartExclusion(normalized)
-        }
+        smartExclusions = smartExclusionUseCase.togglePath(path, currentPaths: smartExclusions)
     }
+
 
     func loadInstalledApps() {
         isUninstallerLoading = true
         Task { [weak self] in
             guard let self else { return }
-            let apps = await uninstallerService.installedApps()
+            let apps = await uninstallerUseCase.installedApps()
             await MainActor.run {
                 self.installedApps = apps
                 self.isUninstallerLoading = false
@@ -721,7 +825,7 @@ final class RootViewModel: ObservableObject {
         isUninstallerLoading = true
         Task { [weak self] in
             guard let self else { return }
-            let remnants = await uninstallerService.findRemnants(for: app)
+            let remnants = await uninstallerUseCase.findRemnants(for: app)
             await MainActor.run {
                 self.uninstallerRemnants = remnants
                 self.uninstallReport = nil
@@ -739,21 +843,27 @@ final class RootViewModel: ObservableObject {
         isUninstallVerifyRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let result = await uninstallerService.uninstall(app: app, previewItems: items)
-            let verifyRemnants = await uninstallerService.findRemnants(for: app)
+            let result = await uninstallerUseCase.uninstallAndVerify(
+                app: app,
+                previewItems: items,
+                isProtectedPath: { path in
+                    self.safeFileOperations.isProtectedPath(path)
+                },
+                isAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
+            )
             await MainActor.run {
-                AppLogger.actions.info("Uninstall removed: \(result.removedCount), skipped: \(result.skippedCount), failed: \(result.failedCount)")
-                self.operationLogs.add(category: "uninstaller", message: "Uninstall \(app.name): removed \(result.removedCount), skipped \(result.skippedCount), failed \(result.failedCount)")
-                self.uninstallReport = result
-                self.uninstallVerifyReport = self.buildUninstallVerifyReport(
-                    app: app,
-                    previewItems: items,
-                    validation: result,
-                    remaining: verifyRemnants
-                )
+                let validation = result.validation
+                AppLogger.actions.info("Uninstall removed: \(validation.removedCount), skipped: \(validation.skippedCount), failed: \(validation.failedCount)")
+                self.operationLogs.add(category: "uninstaller", message: "Uninstall \(app.name): removed \(validation.removedCount), skipped \(validation.skippedCount), failed \(validation.failedCount)")
+                self.uninstallReport = validation
+                self.uninstallVerifyReport = result.verifyReport
                 self.isUninstallVerifyRunning = false
-                self.recordUninstallSession(from: result)
-                self.uninstallerRemnants = verifyRemnants
+                self.uninstallSessions = self.uninstallSessionUseCase.appendSession(
+                    from: validation,
+                    existingSessions: self.uninstallSessions,
+                    kind: .uninstall
+                )
+                self.uninstallerRemnants = result.remainingRemnants
                 self.loadInstalledApps()
             }
         }
@@ -765,15 +875,18 @@ final class RootViewModel: ObservableObject {
         isUninstallVerifyRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let remnants = await uninstallerService.findRemnants(for: app)
+            let result = await uninstallerUseCase.runVerifyPass(
+                app: app,
+                previewItems: preview,
+                validation: validation,
+                isProtectedPath: { path in
+                    self.safeFileOperations.isProtectedPath(path)
+                },
+                isAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
+            )
             await MainActor.run {
-                self.uninstallerRemnants = remnants
-                self.uninstallVerifyReport = self.buildUninstallVerifyReport(
-                    app: app,
-                    previewItems: preview,
-                    validation: validation,
-                    remaining: remnants
-                )
+                self.uninstallerRemnants = result.remainingRemnants
+                self.uninstallVerifyReport = result.verifyReport
                 self.isUninstallVerifyRunning = false
             }
         }
@@ -783,7 +896,7 @@ final class RootViewModel: ObservableObject {
         isRepairLoading = true
         Task { [weak self] in
             guard let self else { return }
-            let artifacts = await uninstallerService.findRemnants(for: app)
+            let artifacts = await uninstallerUseCase.findRemnants(for: app)
             await MainActor.run {
                 self.repairArtifacts = artifacts
                 self.repairReport = nil
@@ -808,11 +921,15 @@ final class RootViewModel: ObservableObject {
         }
         Task { [weak self] in
             guard let self else { return }
-            let report = await uninstallerService.uninstall(app: app, previewItems: previewItems)
+            let report = await uninstallerUseCase.uninstall(app: app, previewItems: previewItems)
             await MainActor.run {
                 self.repairReport = report
                 self.isRepairLoading = false
-                self.recordRepairSession(from: report)
+                self.repairSessions = self.uninstallSessionUseCase.appendSession(
+                    from: report,
+                    existingSessions: self.repairSessions,
+                    kind: .repair
+                )
                 self.operationLogs.add(
                     category: "repair",
                     message: "Repair \(app.name): removed \(report.removedCount), skipped \(report.skippedCount), failed \(report.failedCount)"
@@ -835,95 +952,83 @@ final class RootViewModel: ObservableObject {
     }
 
     func repairRisk(for artifact: AppRemnant) -> UninstallRiskLevel {
-        previewItem(for: artifact).risk
+        uninstallerUseCase.repairRisk(for: artifact)
     }
 
     func restoreFromUninstallSession(_ session: UninstallSession, item: UninstallRollbackItem? = nil) -> Int {
-        let targets = item.map { [$0] } ?? session.rollbackItems
-        var restored = 0
-
-        for rollback in targets {
-            let sourceURL = URL(fileURLWithPath: rollback.trashedPath)
-            let originalURL = URL(fileURLWithPath: rollback.originalPath)
-            let destinationURL = uniqueRestoreURL(for: originalURL)
-
-            do {
-                try FileManager.default.createDirectory(
-                    at: destinationURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
-                restored += 1
-            } catch {
-                AppLogger.actions.error("Failed uninstall rollback restore: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        let result = uninstallSessionUseCase.restore(
+            from: session,
+            item: item,
+            sessions: uninstallSessions,
+            kind: .uninstall
+        )
+        let restored = result.restoredCount
 
         if restored > 0 {
             operationLogs.add(category: "uninstaller", message: "Rollback restored \(restored) item(s) for \(session.appName)")
-            pruneRestoredItemsFromSessions(targets: targets)
+            uninstallSessions = result.sessions
+        }
+        if !result.failures.isEmpty {
+            for failure in result.failures {
+                AppLogger.actions.error("Failed uninstall rollback restore: \(failure.reason, privacy: .public)")
+            }
         }
         return restored
     }
 
     func restoreFromRepairSession(_ session: UninstallSession, item: UninstallRollbackItem? = nil) -> Int {
-        let targets = item.map { [$0] } ?? session.rollbackItems
-        var restored = 0
-
-        for rollback in targets {
-            let sourceURL = URL(fileURLWithPath: rollback.trashedPath)
-            let originalURL = URL(fileURLWithPath: rollback.originalPath)
-            let destinationURL = uniqueRestoreURL(for: originalURL)
-
-            do {
-                try FileManager.default.createDirectory(
-                    at: destinationURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
-                restored += 1
-            } catch {
-                AppLogger.actions.error("Failed repair rollback restore: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        let result = uninstallSessionUseCase.restore(
+            from: session,
+            item: item,
+            sessions: repairSessions,
+            kind: .repair
+        )
+        let restored = result.restoredCount
 
         if restored > 0 {
             operationLogs.add(category: "repair", message: "Repair rollback restored \(restored) item(s) for \(session.appName)")
-            pruneRestoredItemsFromRepairSessions(targets: targets)
+            repairSessions = result.sessions
+        }
+        if !result.failures.isEmpty {
+            for failure in result.failures {
+                AppLogger.actions.error("Failed repair rollback restore: \(failure.reason, privacy: .public)")
+            }
         }
         return restored
     }
 
     func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
-        let appItem = UninstallPreviewItem(
-            url: app.appURL,
-            type: .appBundle,
-            sizeInBytes: 0,
-            risk: .high,
-            reason: "Main app bundle will be moved to Trash"
-        )
-        let remnantItems = uninstallerRemnants.map { remnant in
-            previewItem(for: remnant)
-        }
-        return [appItem] + remnantItems.sorted { $0.sizeInBytes > $1.sizeInBytes }
+        uninstallerUseCase.uninstallPreview(app: app, remnants: uninstallerRemnants)
     }
 
     func removeSmartExclusion(_ path: String) {
-        smartExclusions.removeAll { $0 == path }
-        persistSmartExclusions()
+        smartExclusions = smartExclusionUseCase.removePath(path, from: smartExclusions)
     }
 
     func toggleSmartAnalyzerExclusion(_ analyzerKey: String) {
-        if smartExcludedAnalyzerKeys.contains(analyzerKey) {
-            smartExcludedAnalyzerKeys.removeAll { $0 == analyzerKey }
+        let previouslyExcluded = smartExcludedAnalyzerKeys.contains(analyzerKey)
+        smartExcludedAnalyzerKeys = smartExclusionUseCase.toggleAnalyzer(
+            analyzerKey,
+            currentAnalyzerKeys: smartExcludedAnalyzerKeys
+        )
+        if analyzerKey.isEmpty {
+            return
+        }
+        if previouslyExcluded {
             operationLogs.add(category: "smartcare", message: "Analyzer enabled: \(analyzerKey)")
         } else {
-            smartExcludedAnalyzerKeys.append(analyzerKey)
-            smartExcludedAnalyzerKeys.sort()
             operationLogs.add(category: "smartcare", message: "Analyzer excluded: \(analyzerKey)")
         }
-        persistSmartAnalyzerExclusions()
     }
+
+    func applySmartScanResult(_ result: SmartScanResult) {
+        smartScanCategories = result.categories.map {
+            SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
+        }
+        smartAnalyzerTelemetry = result.analyzerTelemetry
+        selectRecommendedSmartCategories()
+    }
+
 
     func scanDuplicatesInSelectedTarget() {
         scanDuplicates(roots: [selectedTarget.url], targetDescription: selectedTarget.url.path)
@@ -1000,7 +1105,7 @@ final class RootViewModel: ObservableObject {
         isPerformanceScanRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let report = await performanceService.buildReport()
+            let report = await performanceUseCase.runDiagnostics()
             await MainActor.run {
                 self.performanceReport = report
                 self.startupCleanupReport = nil
@@ -1071,13 +1176,34 @@ final class RootViewModel: ObservableObject {
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
         guard !entries.isEmpty else { return }
         guard ensureCanModify(urls: entries.map(\.url), actionName: "Startup Cleanup", requiresFullDisk: true) else { return }
+        let before = startupTotals(from: performanceReport)
+        isPerformanceScanRunning = true
         Task { [weak self] in
             guard let self else { return }
-            let report = await performanceService.cleanupStartupEntries(entries)
+            let report = await performanceUseCase.cleanupStartupEntries(entries)
+            let refreshedReport = await performanceUseCase.runDiagnostics()
+            let after = startupTotals(from: refreshedReport)
             await MainActor.run {
                 self.startupCleanupReport = report
+                self.performanceReport = refreshedReport
+                self.isPerformanceScanRunning = false
+                let delta = QuickActionDeltaReport(
+                    module: .performance,
+                    actionTitle: "Startup Cleanup",
+                    beforeItems: before.items,
+                    beforeBytes: before.bytes,
+                    afterItems: after.items,
+                    afterBytes: after.bytes,
+                    moved: report.moved,
+                    failed: report.failed,
+                    skippedProtected: report.skippedProtected
+                )
+                self.performanceQuickActionDelta = delta
                 self.operationLogs.add(category: "performance", message: "Startup cleanup moved \(report.moved), failed \(report.failed), skipped \(report.skippedProtected)")
-                self.runPerformanceScan()
+                self.operationLogs.add(
+                    category: "performance",
+                    message: "Startup cleanup delta: items \(before.items)->\(after.items), bytes \(before.bytes)->\(after.bytes)"
+                )
             }
         }
     }
@@ -1108,21 +1234,17 @@ final class RootViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            async let smartResult = smartScanService.runSmartScan(
+            async let smartResult = smartCareUseCase.runScan(
                 excludedPrefixes: smartExclusions,
                 excludedAnalyzerKeys: smartExcludedAnalyzerKeys
             )
             async let privacyResult = privacyService.runScan()
-            async let performanceResult = performanceService.buildReport()
+            async let performanceResult = performanceUseCase.runDiagnostics()
 
             let (smart, privacy, performance) = await (smartResult, privacyResult, performanceResult)
 
             await MainActor.run {
-                self.smartScanCategories = smart.categories.map {
-                    SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
-                }
-                self.smartAnalyzerTelemetry = smart.analyzerTelemetry
-                self.selectRecommendedSmartCategories()
+                self.applySmartScanResult(smart)
 
                 self.privacyCategories = privacy.categories.map {
                     PrivacyCategoryState(id: $0.id, category: $0, isSelected: false)
@@ -1177,59 +1299,79 @@ final class RootViewModel: ObservableObject {
 
     func cleanRecommendedPrivacyCategories(includeMediumRisk: Bool) {
         selectRecommendedPrivacyCategories(includeMediumRisk: includeMediumRisk)
-        cleanSelectedPrivacyCategories()
+        let actionTitle = includeMediumRisk ? "Quick Clean Recommended" : "Quick Clean Safe"
+        cleanSelectedPrivacyCategories(actionTitle: actionTitle)
     }
 
     func cleanSelectedPrivacyCategories() {
+        cleanSelectedPrivacyCategories(actionTitle: "Clean Selected")
+    }
+
+    private func cleanSelectedPrivacyCategories(actionTitle: String) {
         let artifacts = privacyCategories
             .filter(\.isSelected)
             .flatMap(\.category.artifacts)
         guard !artifacts.isEmpty else { return }
         guard ensureCanModify(urls: artifacts.map(\.url), actionName: "Privacy Cleanup", requiresFullDisk: true) else { return }
+        let before = privacyTotals(from: privacyCategories)
 
         Task { [weak self] in
             guard let self else { return }
             let report = await privacyService.clean(artifacts: artifacts)
+            let refreshed = await privacyService.runScan()
+            let refreshedCategories = refreshed.categories.map { category in
+                PrivacyCategoryState(id: category.id, category: category, isSelected: false)
+            }
+            let after = privacyTotals(from: refreshedCategories)
             await MainActor.run {
                 self.privacyCleanReport = report
+                self.privacyCategories = refreshedCategories
+                let delta = QuickActionDeltaReport(
+                    module: .privacy,
+                    actionTitle: actionTitle,
+                    beforeItems: before.items,
+                    beforeBytes: before.bytes,
+                    afterItems: after.items,
+                    afterBytes: after.bytes,
+                    moved: report.moved,
+                    failed: report.failed,
+                    skippedProtected: report.skippedProtected
+                )
+                self.privacyQuickActionDelta = delta
                 self.operationLogs.add(category: "privacy", message: "Privacy clean moved \(report.moved), failed \(report.failed), skipped \(report.skippedProtected)")
-                self.runPrivacyScan()
+                self.operationLogs.add(
+                    category: "privacy",
+                    message: "Privacy clean delta: items \(before.items)->\(after.items), bytes \(before.bytes)->\(after.bytes)"
+                )
             }
         }
     }
 
     private func ensureCanScanSelectedTarget() -> Bool {
-        if permissions.canRunScan(target: selectedTarget.url) {
-            permissionBlockingMessage = nil
-            return true
-        }
-        presentPermissionBlock(
-            permissions.permissionHint
-                ?? "Additional permissions are required for scan."
-        )
-        return false
+        applyPermissionDecision(permissionGateUseCase.canScan(target: selectedTarget.url))
     }
 
     private func ensureCanRunProtectedModule(actionName: String) -> Bool {
-        if permissions.canRunProtectedModule(actionName: actionName) {
-            permissionBlockingMessage = nil
-            return true
-        }
-        presentPermissionBlock(
-            permissions.permissionHint
-                ?? "Full Disk Access is required for \(actionName)."
-        )
-        return false
+        applyPermissionDecision(permissionGateUseCase.canRunProtectedModule(actionName: actionName))
     }
 
     private func ensureCanModify(urls: [URL], actionName: String, requiresFullDisk: Bool = false) -> Bool {
-        if permissions.canModify(urls: urls, actionName: actionName, requiresFullDisk: requiresFullDisk) {
+        applyPermissionDecision(
+            permissionGateUseCase.canModify(
+                urls: urls,
+                actionName: actionName,
+                requiresFullDisk: requiresFullDisk
+            )
+        )
+    }
+
+    private func applyPermissionDecision(_ decision: PermissionGateDecision) -> Bool {
+        if decision.isAllowed {
             permissionBlockingMessage = nil
             return true
         }
         presentPermissionBlock(
-            permissions.permissionHint
-                ?? "Additional permissions are required for \(actionName)."
+            decision.message ?? "Additional permissions are required for this action."
         )
         return false
     }
@@ -1344,7 +1486,7 @@ final class RootViewModel: ObservableObject {
                 }
             }
             guard !Task.isCancelled else { return }
-            let merged = mergeIncremental(base: base, delta: delta)
+            let merged = incrementalTreeMergeUseCase.merge(base: base, delta: delta)
             await MainActor.run {
                 self.root = merged
                 self.lastScannedTarget = selectedAtStart
@@ -1353,51 +1495,6 @@ final class RootViewModel: ObservableObject {
                 AppLogger.scanner.info("Incremental scan completed for \(url.path, privacy: .public), visited: \(self.progress.visitedItems)")
             }
         }
-    }
-
-    private func mergeIncremental(base: FileNode, delta: FileNode) -> FileNode {
-        var byPath = Dictionary(uniqueKeysWithValues: base.children.map { ($0.url.path, $0) })
-        for updated in delta.children {
-            if updated.url.path == base.url.path { continue }
-            if let existing = byPath[updated.url.path] {
-                byPath[updated.url.path] = mergeNode(existing: existing, updated: updated)
-            } else {
-                byPath[updated.url.path] = updated
-            }
-        }
-        let children = Array(byPath.values).sorted { $0.sizeInBytes > $1.sizeInBytes }
-        let total = children.reduce(Int64(0)) { $0 + $1.sizeInBytes }
-        return FileNode(
-            url: base.url,
-            name: base.name,
-            isDirectory: true,
-            sizeInBytes: total,
-            children: children
-        )
-    }
-
-    private func mergeChildrenByPath(base: [FileNode], delta: [FileNode]) -> [FileNode] {
-        var byPath = Dictionary(uniqueKeysWithValues: base.map { ($0.url.path, $0) })
-        for node in delta {
-            if let existing = byPath[node.url.path] {
-                byPath[node.url.path] = mergeNode(existing: existing, updated: node)
-            } else {
-                byPath[node.url.path] = node
-            }
-        }
-        return Array(byPath.values).sorted { $0.sizeInBytes > $1.sizeInBytes }
-    }
-
-    private func mergeNode(existing: FileNode, updated: FileNode) -> FileNode {
-        let mergedChildren = mergeChildrenByPath(base: existing.children, delta: updated.children)
-        let mergedSize = updated.sizeInBytes > 0 ? updated.sizeInBytes : existing.sizeInBytes
-        return FileNode(
-            url: existing.url,
-            name: existing.name,
-            isDirectory: existing.isDirectory,
-            sizeInBytes: mergedSize,
-            children: mergedChildren
-        )
     }
 
     func rescan() {
@@ -1438,52 +1535,51 @@ final class RootViewModel: ObservableObject {
     }
 
     func moveToTrash(nodes: [FileNode]) -> TrashOperationResult {
-        var moved = 0
-        var skippedProtected: [String] = []
-        var failed: [String] = []
-        var blockedPermissionHint: String?
+        let outcome = safeFileOperations.moveToTrash(
+            nodes: nodes,
+            actionName: "Move to Trash",
+            canModify: { [weak self] urls, actionName in
+                guard let self else { return false }
+                return permissions.canModify(urls: urls, actionName: actionName)
+            },
+            permissionHint: { [weak self] in
+                self?.permissions.permissionHint
+            }
+        )
 
-        for node in nodes {
-            if isProtectedPath(node.url.path) {
-                skippedProtected.append(node.url.path)
+        for path in outcome.skippedProtected {
+            operationLogs.add(
+                category: "permissions",
+                message: "Skipped system-protected path (SIP): \(path)"
+            )
+        }
+        for failure in outcome.failures {
+            if failure.isPermission {
                 operationLogs.add(
                     category: "permissions",
-                    message: "Skipped system-protected path (SIP): \(node.url.path)"
+                    message: "Blocked trash item: \(failure.path) — \(failure.reason)"
                 )
-                continue
-            }
-            if !permissions.canModify(urls: [node.url], actionName: "Move to Trash") {
-                failed.append(node.url.path)
-                let hint = permissions.permissionHint ?? "Unknown permissions block"
-                if blockedPermissionHint == nil {
-                    blockedPermissionHint = hint
-                }
-                operationLogs.add(
-                    category: "permissions",
-                    message: "Blocked trash item: \(node.url.path) — \(hint)"
-                )
-                AppLogger.permissions.error("Blocked trash item by permissions: \(node.url.path, privacy: .public)")
-                continue
-            }
-            do {
-                var trashedURL: NSURL?
-                try FileManager.default.trashItem(at: node.url, resultingItemURL: &trashedURL)
-                moved += 1
-                AppLogger.actions.info("Moved to trash: \(node.url.path, privacy: .public)")
-                if let trashedPath = (trashedURL as URL?)?.path {
-                    addRecentlyDeleted(originalPath: node.url.path, trashedPath: trashedPath)
-                }
-            } catch {
-                failed.append(node.url.path)
+                AppLogger.permissions.error("Blocked trash item by permissions: \(failure.path, privacy: .public)")
+            } else {
                 operationLogs.add(
                     category: "actions",
-                    message: "Failed to move to Trash: \(node.url.path) — \(error.localizedDescription)"
+                    message: "Failed to move to Trash: \(failure.path) — \(failure.reason)"
                 )
-                AppLogger.actions.error("Failed to trash item: \(error.localizedDescription, privacy: .public)")
+                AppLogger.actions.error("Failed to trash item: \(failure.reason, privacy: .public)")
             }
         }
+        for movedItem in outcome.moved {
+            AppLogger.actions.info("Moved to trash: \(movedItem.originalPath, privacy: .public)")
+        }
+        recentlyDeleted = recoveryHistoryUseCase.recordMovedItems(
+            outcome.moved,
+            in: recentlyDeleted
+        )
 
-        if moved == 0, !failed.isEmpty, let blockedPermissionHint, !blockedPermissionHint.isEmpty {
+        let moved = outcome.moved.count
+        let failed = outcome.failures.map(\.path)
+
+        if moved == 0, !failed.isEmpty, let blockedPermissionHint = outcome.blockedPermissionHint, !blockedPermissionHint.isEmpty {
             presentPermissionBlock(blockedPermissionHint)
         }
 
@@ -1492,7 +1588,11 @@ final class RootViewModel: ObservableObject {
             scanSelected()
         }
 
-        return TrashOperationResult(moved: moved, skippedProtected: skippedProtected, failed: failed)
+        return TrashOperationResult(
+            moved: moved,
+            skippedProtected: outcome.skippedProtected,
+            failed: failed
+        )
     }
 
     func trashResultMessage(_ result: TrashOperationResult) -> String {
@@ -1540,38 +1640,50 @@ final class RootViewModel: ObservableObject {
     }
 
     func restoreDeletedItem(_ item: RecentlyDeletedItem) -> Bool {
-        let sourceURL = URL(fileURLWithPath: item.trashedPath)
-        let originalURL = URL(fileURLWithPath: item.originalPath)
-        let destinationURL = uniqueRestoreURL(for: originalURL)
-
-        do {
-            try FileManager.default.createDirectory(
-                at: destinationURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
-            recentlyDeleted.removeAll { $0.id == item.id }
-            persistRecentlyDeleted()
-            if let lastScannedTarget {
-                selectedTarget = lastScannedTarget
-                scanSelected()
-            }
-            return true
-        } catch {
-            AppLogger.actions.error("Failed to restore item: \(error.localizedDescription, privacy: .public)")
+        let result = recoveryHistoryUseCase.restore(item: item, from: recentlyDeleted)
+        if let failure = result.failures.first {
+            AppLogger.actions.error("Failed to restore item: \(failure.reason, privacy: .public)")
             return false
         }
+        guard result.restoredCount > 0 else { return false }
+
+        recentlyDeleted = result.history
+        if let lastScannedTarget {
+            selectedTarget = lastScannedTarget
+            scanSelected()
+        }
+        return true
     }
 
     func removeDeletedHistoryItem(_ item: RecentlyDeletedItem) {
-        recentlyDeleted.removeAll { $0.id == item.id }
-        persistRecentlyDeleted()
+        recentlyDeleted = recoveryHistoryUseCase.removeHistoryItem(item, from: recentlyDeleted)
+    }
+
+    @discardableResult
+    func rollbackQuickActionSession(_ session: QuickActionRollbackSession) -> String? {
+        guard session.canRollback else { return nil }
+
+        switch session.rollbackKind {
+        case .none:
+            return nil
+        case .restorePriorities:
+            let limit = max(5, session.adjustedTargets.count)
+            let result = performanceUseCase.restoreAdjustedPriorities(limit: limit)
+            activeLoadReliefAdjustments = performanceUseCase.activeAdjustmentsCount
+            let summary = "Restored \(result.adjusted.count), failed \(result.failed.count), skipped \(result.skipped.count)"
+            updateQuickActionRollbackSession(id: session.id, restoredAt: Date(), summary: summary)
+            operationLogs.add(category: "relief", message: "Rollback session restored: \(summary)")
+            return summary
+        }
+    }
+
+    func removeQuickActionRollbackSession(_ session: QuickActionRollbackSession) {
+        quickActionRollbackSessions.removeAll { $0.id == session.id }
+        saveQuickActionRollbackSessions()
     }
 
     func saveCurrentSearchPreset(named name: String) {
-        let preset = SearchPreset(
-            id: UUID(),
-            name: name,
+        let draft = SearchPresetDraft(
             query: searchQuery,
             minSizeMB: minSizeMB,
             pathContains: pathContains,
@@ -1585,33 +1697,36 @@ final class RootViewModel: ObservableObject {
             nodeType: searchNodeType,
             searchMode: searchMode
         )
-        searchPresets.insert(preset, at: 0)
-        persistSearchPresets()
+        searchPresets = searchPresetUseCase.savePreset(
+            named: name,
+            draft: draft,
+            in: searchPresets
+        )
     }
 
     func applySearchPreset(_ preset: SearchPreset) {
-        searchQuery = preset.query
-        minSizeMB = preset.minSizeMB
-        pathContains = preset.pathContains
-        ownerContains = preset.ownerContains
-        onlyDirectories = preset.onlyDirectories
-        onlyFiles = preset.onlyFiles
-        searchUseRegex = preset.useRegex
-        searchDepthMin = preset.depthMin
-        searchDepthMax = preset.depthMax
-        searchModifiedWithinDays = preset.modifiedWithinDays ?? 0
-        searchNodeType = preset.nodeType
-        searchMode = .live
+        let appliedPreset = searchPresetUseCase.apply(preset)
+        searchQuery = appliedPreset.query
+        minSizeMB = appliedPreset.minSizeMB
+        pathContains = appliedPreset.pathContains
+        ownerContains = appliedPreset.ownerContains
+        onlyDirectories = appliedPreset.onlyDirectories
+        onlyFiles = appliedPreset.onlyFiles
+        searchUseRegex = appliedPreset.useRegex
+        searchDepthMin = appliedPreset.depthMin
+        searchDepthMax = appliedPreset.depthMax
+        searchModifiedWithinDays = appliedPreset.modifiedWithinDays
+        searchNodeType = appliedPreset.nodeType
+        searchMode = appliedPreset.searchMode
         triggerLiveSearch()
     }
 
     func isPathProtectedForManualCleanup(_ path: String) -> Bool {
-        isProtectedPath(path)
+        safeFileOperations.isProtectedPath(path)
     }
 
     func deletePreset(_ preset: SearchPreset) {
-        searchPresets.removeAll { $0.id == preset.id }
-        persistSearchPresets()
+        searchPresets = searchPresetUseCase.deletePreset(preset, from: searchPresets)
     }
 
     private func persistAndResolveBookmark(for url: URL) -> URL? {
@@ -1663,359 +1778,95 @@ final class RootViewModel: ObservableObject {
     }
 
     private func loadSearchPresets() {
-        guard let data = UserDefaults.standard.data(forKey: searchPresetsKey),
-              let presets = try? JSONDecoder().decode([SearchPreset].self, from: data) else { return }
-        searchPresets = presets
-    }
-
-    private func persistSearchPresets() {
-        guard let data = try? JSONEncoder().encode(searchPresets) else { return }
-        UserDefaults.standard.set(data, forKey: searchPresetsKey)
-    }
-
-    private func addRecentlyDeleted(originalPath: String, trashedPath: String) {
-        let item = RecentlyDeletedItem(
-            id: UUID(),
-            originalPath: originalPath,
-            trashedPath: trashedPath,
-            deletedAt: Date()
-        )
-        recentlyDeleted.insert(item, at: 0)
-        if recentlyDeleted.count > 200 {
-            recentlyDeleted = Array(recentlyDeleted.prefix(200))
-        }
-        persistRecentlyDeleted()
-    }
-
-    private func recordUninstallSession(from report: UninstallValidationReport) {
-        let rollbackItems = report.results.compactMap { result -> UninstallRollbackItem? in
-            guard result.status == .removed, let trashedPath = result.trashedPath else { return nil }
-            return UninstallRollbackItem(
-                originalPath: result.url.path,
-                trashedPath: trashedPath,
-                type: result.type
-            )
-        }
-        guard !rollbackItems.isEmpty else { return }
-        let session = UninstallSession(appName: report.appName, createdAt: report.createdAt, rollbackItems: rollbackItems)
-        uninstallSessions.insert(session, at: 0)
-        if uninstallSessions.count > 50 {
-            uninstallSessions = Array(uninstallSessions.prefix(50))
-        }
-        persistUninstallSessions()
-    }
-
-    private func adjustTopConsumers(_ consumers: [ProcessConsumer], limit: Int, label: String) -> LoadReliefResult {
-        var adjusted: [String] = []
-        var skipped: [String] = []
-        var failed: [String] = []
-        var processed = 0
-
-        for consumer in consumers {
-            if processed >= limit { break }
-            guard canAdjustPriority(forPID: consumer.pid) else {
-                skipped.append(consumer.name)
-                continue
-            }
-
-            processed += 1
-            let name = displayName(for: consumer)
-            let baselineNice = baselineNiceValue(forPID: consumer.pid)
-            let reniceOK = runCommand(
-                "/usr/bin/renice",
-                arguments: ["+10", "-p", String(consumer.pid)]
-            )
-            let backgroundOK = runCommand(
-                "/usr/bin/taskpolicy",
-                arguments: ["-b", "-p", String(consumer.pid)]
-            )
-
-            if reniceOK || backgroundOK {
-                adjusted.append(name)
-                let baseline = baselineNice ?? 0
-                if let existing = priorityAdjustments.firstIndex(where: { $0.pid == consumer.pid }) {
-                    priorityAdjustments[existing] = ProcessPriorityAdjustment(
-                        pid: consumer.pid,
-                        name: name,
-                        baselineNice: priorityAdjustments[existing].baselineNice
-                    )
-                } else {
-                    priorityAdjustments.append(
-                        ProcessPriorityAdjustment(
-                            pid: consumer.pid,
-                            name: name,
-                            baselineNice: baseline
-                        )
-                    )
-                }
-            } else {
-                failed.append(name)
-            }
-        }
-
-        activeLoadReliefAdjustments = priorityAdjustments.count
-        operationLogs.add(
-            category: "relief",
-            message: "Load relief (\(label)): adjusted \(adjusted.count), skipped \(skipped.count), failed \(failed.count)"
-        )
-        return LoadReliefResult(adjusted: adjusted, skipped: skipped, failed: failed)
-    }
-
-    private func canAdjustPriority(forPID pid: Int32) -> Bool {
-        guard pid > 1 else { return false }
-        guard pid != ProcessInfo.processInfo.processIdentifier else { return false }
-
-        if kill(pid, 0) != 0 {
-            switch errno {
-            case ESRCH, EPERM:
-                return false
-            default:
-                break
-            }
-        }
-
-        if let app = NSRunningApplication(processIdentifier: pid),
-           let bundleID = app.bundleIdentifier,
-           bundleID.hasPrefix("com.apple.") {
-            return false
-        }
-
-        return true
-    }
-
-    private func displayName(for consumer: ProcessConsumer) -> String {
-        if let app = NSRunningApplication(processIdentifier: consumer.pid),
-           let localized = app.localizedName,
-           !localized.isEmpty {
-            return localized
-        }
-        return consumer.name
-    }
-
-    private func baselineNiceValue(forPID pid: Int32) -> Int32? {
-        errno = 0
-        let value = getpriority(PRIO_PROCESS, UInt32(pid))
-        if errno != 0 {
-            return nil
-        }
-        return value
-    }
-
-    private func runCommand(_ launchPath: String, arguments: [String]) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            return false
-        }
-
-        process.waitUntilExit()
-        return process.terminationStatus == 0
+        searchPresets = searchPresetUseCase.loadPresets()
     }
 
     private func loadRecentlyDeleted() {
-        guard let data = UserDefaults.standard.data(forKey: recentlyDeletedKey),
-              let items = try? JSONDecoder().decode([RecentlyDeletedItem].self, from: data) else { return }
-        recentlyDeleted = items
-    }
-
-    private func persistRecentlyDeleted() {
-        guard let data = try? JSONEncoder().encode(recentlyDeleted) else { return }
-        UserDefaults.standard.set(data, forKey: recentlyDeletedKey)
+        recentlyDeleted = recoveryHistoryUseCase.loadRecentlyDeleted()
     }
 
     private func loadSmartExclusions() {
-        smartExclusions = UserDefaults.standard.stringArray(forKey: smartExclusionsKey) ?? []
-    }
-
-    private func persistSmartExclusions() {
-        UserDefaults.standard.set(smartExclusions, forKey: smartExclusionsKey)
-    }
-
-    private func loadSmartAnalyzerExclusions() {
-        smartExcludedAnalyzerKeys = UserDefaults.standard.stringArray(forKey: smartAnalyzerExclusionsKey) ?? []
-    }
-
-    private func persistSmartAnalyzerExclusions() {
-        UserDefaults.standard.set(smartExcludedAnalyzerKeys, forKey: smartAnalyzerExclusionsKey)
+        let state = smartExclusionUseCase.loadState()
+        smartExclusions = state.excludedPaths
+        smartExcludedAnalyzerKeys = state.excludedAnalyzerKeys
     }
 
     private func loadUninstallSessions() {
-        guard let data = UserDefaults.standard.data(forKey: uninstallSessionsKey),
-              let sessions = try? JSONDecoder().decode([UninstallSession].self, from: data) else { return }
-        uninstallSessions = sessions
-    }
-
-    private func persistUninstallSessions() {
-        guard let data = try? JSONEncoder().encode(uninstallSessions) else { return }
-        UserDefaults.standard.set(data, forKey: uninstallSessionsKey)
+        uninstallSessions = uninstallSessionUseCase.load(kind: .uninstall)
     }
 
     private func loadRepairSessions() {
-        guard let data = UserDefaults.standard.data(forKey: repairSessionsKey),
-              let sessions = try? JSONDecoder().decode([UninstallSession].self, from: data) else { return }
-        repairSessions = sessions
+        repairSessions = uninstallSessionUseCase.load(kind: .repair)
     }
 
-    private func persistRepairSessions() {
-        guard let data = try? JSONEncoder().encode(repairSessions) else { return }
-        UserDefaults.standard.set(data, forKey: repairSessionsKey)
+    private func startupTotals(from report: PerformanceReport?) -> (items: Int, bytes: Int64) {
+        guard let report else { return (0, 0) }
+        return (report.startupEntries.count, report.startupTotalBytes)
     }
 
-    private func pruneRestoredItemsFromSessions(targets: [UninstallRollbackItem]) {
-        let restoredSet = Set(targets.map { $0.trashedPath })
-        uninstallSessions = uninstallSessions.compactMap { session in
-            let remaining = session.rollbackItems.filter { !restoredSet.contains($0.trashedPath) }
-            guard !remaining.isEmpty else { return nil }
-            return UninstallSession(appName: session.appName, createdAt: session.createdAt, rollbackItems: remaining)
+    private func privacyTotals(from categories: [PrivacyCategoryState]) -> (items: Int, bytes: Int64) {
+        let items = categories.reduce(0) { partial, category in
+            partial + category.category.artifacts.count
         }
-        persistUninstallSessions()
+        let bytes = categories.reduce(Int64.zero) { partial, category in
+            partial + category.category.totalBytes
+        }
+        return (items, bytes)
     }
 
-    private func pruneRestoredItemsFromRepairSessions(targets: [UninstallRollbackItem]) {
-        let restoredSet = Set(targets.map { $0.trashedPath })
-        repairSessions = repairSessions.compactMap { session in
-            let remaining = session.rollbackItems.filter { !restoredSet.contains($0.trashedPath) }
-            guard !remaining.isEmpty else { return nil }
-            return UninstallSession(appName: session.appName, createdAt: session.createdAt, rollbackItems: remaining)
-        }
-        persistRepairSessions()
+    private func loadQuickActionRollbackSessions() {
+        quickActionRollbackSessions = historyStore.load(
+            [QuickActionRollbackSession].self,
+            fileName: quickActionRollbackSessionsFileName
+        ) ?? []
     }
 
-    private func uniqueRestoreURL(for desiredURL: URL) -> URL {
-        if !FileManager.default.fileExists(atPath: desiredURL.path) { return desiredURL }
-
-        let folder = desiredURL.deletingLastPathComponent()
-        let ext = desiredURL.pathExtension
-        let base = desiredURL.deletingPathExtension().lastPathComponent
-        var idx = 1
-
-        while idx < 10_000 {
-            let candidateName = ext.isEmpty ? "\(base) (\(idx))" : "\(base) (\(idx)).\(ext)"
-            let candidate = folder.appendingPathComponent(candidateName)
-            if !FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            idx += 1
-        }
-        return folder.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
-    }
-
-    private func isProtectedPath(_ path: String) -> Bool {
-        if path == "/" { return true }
-        return protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
-    }
-
-    private func previewItem(for remnant: AppRemnant) -> UninstallPreviewItem {
-        let path = remnant.url.path
-        if path.contains("/Library/LaunchDaemons") || path.contains("/Library/PrivilegedHelperTools") {
-            return UninstallPreviewItem(
-                url: remnant.url,
-                type: .remnant,
-                sizeInBytes: remnant.sizeInBytes,
-                risk: .high,
-                reason: "System-level helper or daemon"
-            )
-        }
-        if path.contains("/Library/LaunchAgents") || path.contains("/Library/StartupItems") {
-            return UninstallPreviewItem(
-                url: remnant.url,
-                type: .remnant,
-                sizeInBytes: remnant.sizeInBytes,
-                risk: .medium,
-                reason: "Auto-start component"
-            )
-        }
-        return UninstallPreviewItem(
-            url: remnant.url,
-            type: .remnant,
-            sizeInBytes: remnant.sizeInBytes,
-            risk: .low,
-            reason: "Regular app support/caches/logs"
+    private func saveQuickActionRollbackSessions() {
+        historyStore.save(
+            quickActionRollbackSessions,
+            fileName: quickActionRollbackSessionsFileName
         )
     }
 
-    private func buildUninstallVerifyReport(
-        app: InstalledApp,
-        previewItems: [UninstallPreviewItem],
-        validation: UninstallValidationReport?,
-        remaining: [AppRemnant]
-    ) -> UninstallVerifyReport {
-        let attemptedPaths = Set(previewItems.map { $0.url.path })
-        let actionByPath = Dictionary(uniqueKeysWithValues: (validation?.results ?? []).map { ($0.url.path, $0) })
-        let appIsRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
-
-        let issues = remaining.map { remnant in
-            let path = remnant.url.path
-            let risk = previewItem(for: remnant).risk
-            let reason: String
-
-            if let action = actionByPath[path] {
-                switch action.status {
-                case .skippedProtected:
-                    reason = "Skipped: system-protected path (SIP/TCC)."
-                case .failed:
-                    if let details = action.details, !details.isEmpty {
-                        reason = "Failed to remove: \(details)"
-                    } else {
-                        reason = "Failed to remove: unknown filesystem error."
-                    }
-                case .missing:
-                    reason = "Path changed during uninstall and was not removed."
-                case .removed:
-                    reason = appIsRunning
-                    ? "Recreated after removal by a running process/helper."
-                    : "Still present after remove call (possibly recreated by system helper)."
-                }
-            } else if isProtectedPath(path) {
-                reason = "System-protected path (SIP/TCC)."
-            } else if !attemptedPaths.contains(path) {
-                reason = "Not selected for removal in uninstall scope."
-            } else if !FileManager.default.isDeletableFile(atPath: path) {
-                reason = "No delete permission for this item."
-            } else if appIsRunning {
-                reason = "Application is still running and may recreate this file."
-            } else {
-                reason = "Unknown: item remained after verification pass."
-            }
-
-            return UninstallVerifyIssue(
-                url: remnant.url,
-                sizeInBytes: remnant.sizeInBytes,
-                reason: reason,
-                risk: risk
-            )
+    private func appendQuickActionRollbackSession(_ session: QuickActionRollbackSession) {
+        quickActionRollbackSessions.insert(session, at: 0)
+        if quickActionRollbackSessions.count > 80 {
+            quickActionRollbackSessions = Array(quickActionRollbackSessions.prefix(80))
         }
+        saveQuickActionRollbackSessions()
+    }
 
-        return UninstallVerifyReport(
-            appName: app.name,
-            createdAt: Date(),
-            attemptedItems: attemptedPaths.count,
-            removedItems: validation?.removedCount ?? 0,
-            remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes }
+    private func recordQuickActionRollbackSession(
+        actionTitle: String,
+        rollbackKind: QuickActionRollbackKind,
+        adjustedTargets: [String],
+        beforeItems: Int,
+        afterItems: Int
+    ) {
+        guard rollbackKind != .none, !adjustedTargets.isEmpty else { return }
+        let session = QuickActionRollbackSession(
+            module: .performance,
+            actionTitle: actionTitle,
+            rollbackKind: rollbackKind,
+            adjustedTargets: adjustedTargets,
+            restoredAt: nil,
+            rollbackSummary: "State \(beforeItems) -> \(afterItems)"
         )
+        appendQuickActionRollbackSession(session)
     }
 
-    private func recordRepairSession(from report: UninstallValidationReport) {
-        let rollbackItems = report.results.compactMap { result -> UninstallRollbackItem? in
-            guard result.status == .removed, let trashedPath = result.trashedPath else { return nil }
-            return UninstallRollbackItem(
-                originalPath: result.url.path,
-                trashedPath: trashedPath,
-                type: result.type
-            )
-        }
-        guard !rollbackItems.isEmpty else { return }
-        let session = UninstallSession(appName: report.appName, createdAt: report.createdAt, rollbackItems: rollbackItems)
-        repairSessions.insert(session, at: 0)
-        if repairSessions.count > 50 {
-            repairSessions = Array(repairSessions.prefix(50))
-        }
-        persistRepairSessions()
+    private func markLatestQuickRollbackSessionResolved(summary: String) {
+        guard let index = quickActionRollbackSessions.firstIndex(where: { $0.canRollback }) else { return }
+        quickActionRollbackSessions[index].restoredAt = Date()
+        quickActionRollbackSessions[index].rollbackSummary = summary
+        saveQuickActionRollbackSessions()
     }
+
+    private func updateQuickActionRollbackSession(id: UUID, restoredAt: Date, summary: String) {
+        guard let index = quickActionRollbackSessions.firstIndex(where: { $0.id == id }) else { return }
+        quickActionRollbackSessions[index].restoredAt = restoredAt
+        quickActionRollbackSessions[index].rollbackSummary = summary
+        saveQuickActionRollbackSessions()
+    }
+
 }

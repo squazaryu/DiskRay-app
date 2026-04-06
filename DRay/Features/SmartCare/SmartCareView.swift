@@ -1,10 +1,14 @@
 import SwiftUI
 
 struct SmartCareView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: SmartCareViewModel
     @State private var expandedCategories = Set<String>()
     @State private var selectedItemPaths = Set<String>()
     @State private var newExclusion = ""
+
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: SmartCareViewModel(root: rootModel))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -13,11 +17,11 @@ struct SmartCareView: View {
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
             Group {
-                if model.isSmartScanRunning {
+                if model.smartCare.isScanRunning {
                     scanProgressBanner
                 }
 
-                if model.smartScanCategories.isEmpty, !model.isSmartScanRunning {
+                if model.smartCare.categories.isEmpty, !model.smartCare.isScanRunning {
                     ContentUnavailableView(
                         "No Scan Results",
                         systemImage: "sparkles",
@@ -66,12 +70,12 @@ struct SmartCareView: View {
             Spacer(minLength: 6)
 
             GlassPillBadge(
-                title: "Cat \(model.smartScanCategories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
+                title: "Cat \(model.smartCare.categories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
                 tint: .blue
             )
 
             Picker("Profile", selection: Binding(
-                get: { model.smartProfile },
+                get: { model.smartCare.profile },
                 set: { model.applySmartProfile($0) }
             )) {
                 ForEach(SmartCleanProfile.allCases) { profile in
@@ -87,7 +91,7 @@ struct SmartCareView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            .disabled(model.isSmartScanRunning || model.isUnifiedScanRunning)
+            .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
 
             Button("Clean") {
                 cleanSelection()
@@ -107,7 +111,7 @@ struct SmartCareView: View {
                     selectedItemPaths.removeAll()
                     model.cleanRecommendedSmartCategories()
                 }
-                .disabled(model.isSmartScanRunning || model.smartScanCategories.isEmpty)
+                .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
 
                 Divider()
 
@@ -115,7 +119,7 @@ struct SmartCareView: View {
                     selectedItemPaths.removeAll()
                     model.selectRecommendedSmartCategories()
                 }
-                .disabled(model.smartScanCategories.isEmpty)
+                .disabled(model.smartCare.categories.isEmpty)
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
@@ -131,7 +135,7 @@ struct SmartCareView: View {
                 Text("Exclusions")
                     .font(.headline)
                 Spacer()
-                Text("Applied: \(model.smartExclusions.count)")
+                Text("Applied: \(model.smartCare.exclusions.count)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -139,7 +143,7 @@ struct SmartCareView: View {
                 Text("Min size MB")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("1", value: $model.smartMinCleanSizeMB, format: .number)
+                TextField("1", value: model.binding(\.minCleanSizeMB), format: .number)
                     .frame(width: 80)
                     .textFieldStyle(.roundedBorder)
                 TextField("/path/to/exclude", text: $newExclusion)
@@ -151,10 +155,10 @@ struct SmartCareView: View {
                     newExclusion = ""
                 }
             }
-            if !model.smartExclusions.isEmpty {
+            if !model.smartCare.exclusions.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                        ForEach(model.smartExclusions, id: \.self) { excluded in
+                        ForEach(model.smartCare.exclusions, id: \.self) { excluded in
                             HStack(spacing: 6) {
                                 Text(excluded)
                                     .lineLimit(1)
@@ -181,7 +185,7 @@ struct SmartCareView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(quickExclusionTargets, id: \.path) { target in
-                            let excluded = model.smartExclusions.contains(target.path)
+                            let excluded = model.smartCare.exclusions.contains(target.path)
                             Button {
                                 model.toggleSmartExclusion(target.path)
                             } label: {
@@ -210,7 +214,7 @@ struct SmartCareView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(model.smartAnalyzerOptions) { analyzer in
-                            let enabled = !model.smartExcludedAnalyzerKeys.contains(analyzer.key)
+                            let enabled = !model.smartCare.excludedAnalyzerKeys.contains(analyzer.key)
                             Button {
                                 model.toggleSmartAnalyzerExclusion(analyzer.key)
                             } label: {
@@ -249,9 +253,9 @@ struct SmartCareView: View {
                     .font(.subheadline)
                 }
             }
-            if !model.smartAnalyzerTelemetry.isEmpty {
+            if !model.smartCare.analyzerTelemetry.isEmpty {
                 Section("Analyzer Telemetry") {
-                    ForEach(model.smartAnalyzerTelemetry) { item in
+                    ForEach(model.smartCare.analyzerTelemetry) { item in
                         HStack(spacing: 8) {
                             Text(item.title)
                                 .font(.subheadline.weight(.semibold))
@@ -274,7 +278,7 @@ struct SmartCareView: View {
                     }
                 }
             }
-            ForEach(model.smartScanCategories) { category in
+            ForEach(model.smartCare.categories) { category in
                 Section {
                     categoryRow(category)
                     if expandedCategories.contains(category.id) {
@@ -369,7 +373,7 @@ struct SmartCareView: View {
     }
 
     private var selectedCategoryCount: Int {
-        model.smartScanCategories.filter(\.isSelected).count
+        model.smartCare.categories.filter(\.isSelected).count
     }
 
     private var quickExclusionTargets: [(title: String, path: String)] {
@@ -414,7 +418,7 @@ struct SmartCareView: View {
     }
 
     private var headerSubtitle: String {
-        let categories = model.smartScanCategories.count
+        let categories = model.smartCare.categories.count
         if categories == 0 {
             return "Run one scan to find safe cleanup opportunities."
         }
@@ -431,7 +435,7 @@ struct SmartCareView: View {
 
     private func cleanSelection() {
         if !selectedItemPaths.isEmpty {
-            let items = model.smartScanCategories
+            let items = model.smartCare.categories
                 .flatMap { $0.result.items }
                 .filter { selectedItemPaths.contains($0.url.path) }
             selectedItemPaths.removeAll()

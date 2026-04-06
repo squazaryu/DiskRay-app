@@ -1,8 +1,6 @@
 import Foundation
 
-actor PerformanceService {
-    private let protectedPathPrefixes = ["/System", "/bin", "/sbin", "/usr"]
-
+actor PerformanceService: PerformanceServicing {
     func buildReport() -> PerformanceReport {
         let startupEntries = discoverStartupEntries()
         let capacities = diskCapacity()
@@ -128,7 +126,7 @@ actor PerformanceService {
 
         for entry in entries {
             let path = entry.url.path
-            if isProtectedPath(path) {
+            if SystemPathProtection.isProtected(path) {
                 skippedProtected += 1
                 continue
             }
@@ -142,9 +140,5 @@ actor PerformanceService {
         }
 
         return StartupCleanupReport(moved: moved, failed: failed, skippedProtected: skippedProtected)
-    }
-
-    private func isProtectedPath(_ path: String) -> Bool {
-        path == "/" || protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 }

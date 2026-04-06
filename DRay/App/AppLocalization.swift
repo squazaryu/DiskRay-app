@@ -49,6 +49,8 @@ enum AppL10nKey: String {
     case settingsLanguageHint
     case settingsAppearance
     case settingsAppearanceHint
+    case settingsVersion
+    case settingsVersionHint
     case appearanceSystem
     case appearanceLight
     case appearanceDark
@@ -156,6 +158,8 @@ enum AppL10n {
         case .settingsLanguageHint: return "Applied instantly for localized modules."
         case .settingsAppearance: return "Interface Appearance"
         case .settingsAppearanceHint: return "Controls light/dark style for the main DRay window."
+        case .settingsVersion: return "App Version"
+        case .settingsVersionHint: return "Current installed DRay version."
         case .appearanceSystem: return "System"
         case .appearanceLight: return "Light"
         case .appearanceDark: return "Dark"
@@ -240,6 +244,8 @@ enum AppL10n {
         case .settingsLanguageHint: return "Применяется сразу для локализованных модулей."
         case .settingsAppearance: return "Тема интерфейса"
         case .settingsAppearanceHint: return "Определяет светлый/тёмный стиль главного окна DRay."
+        case .settingsVersion: return "Версия приложения"
+        case .settingsVersionHint: return "Текущая установленная версия DRay."
         case .appearanceSystem: return "Системная"
         case .appearanceLight: return "Светлая"
         case .appearanceDark: return "Тёмная"

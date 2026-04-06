@@ -1,8 +1,6 @@
 import Foundation
 
-actor AppUninstallerService {
-    private let protectedPathPrefixes = ["/System", "/bin", "/sbin", "/usr"]
-
+actor AppUninstallerService: UninstallerServicing {
     func installedApps() -> [InstalledApp] {
         let appsURL = URL(fileURLWithPath: "/Applications")
         guard let urls = try? FileManager.default.contentsOfDirectory(
@@ -79,7 +77,7 @@ actor AppUninstallerService {
         for (target, type) in targets {
             let path = target.path
 
-            if isProtectedPath(path) {
+            if SystemPathProtection.isProtected(path) {
                 results.append(UninstallActionResult(url: target, type: type, status: .skippedProtected, trashedPath: nil, details: "Protected system path"))
                 continue
             }
@@ -163,9 +161,5 @@ actor AppUninstallerService {
             total += Int64(values.fileSize ?? 0)
         }
         return total
-    }
-
-    private func isProtectedPath(_ path: String) -> Bool {
-        path == "/" || protectedPathPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
     }
 }

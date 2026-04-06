@@ -5,6 +5,7 @@ struct RecoveryView: View {
     @State private var selected = Set<RecentlyDeletedItem.ID>()
     @State private var showRestoreFailed = false
     @State private var resultMessage: String?
+    @State private var rollbackMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -43,24 +44,28 @@ struct RecoveryView: View {
                 .disabled(selected.isEmpty)
             }
 
-            if model.recentlyDeleted.isEmpty {
-                ContentUnavailableView(
-                    t("История пуста", "No Recently Deleted Items"),
-                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                    description: Text(t(
-                        "После удаления через DRay элементы появятся здесь с возможностью восстановления.",
-                        "Items deleted through DRay will appear here with restore options."
-                    ))
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    if model.recentlyDeleted.isEmpty {
+                        ContentUnavailableView(
+                            t("История пуста", "No Recently Deleted Items"),
+                            systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                            description: Text(t(
+                                "После удаления через DRay элементы появятся здесь с возможностью восстановления.",
+                                "Items deleted through DRay will appear here with restore options."
+                            ))
+                        )
+                    } else {
                         ForEach(model.recentlyDeleted) { item in
                             recoveryRow(item)
                         }
                     }
-                    .padding(.vertical, 2)
+
+                    if !model.quickActionRollbackSessions.isEmpty {
+                        quickRollbackSection
+                    }
                 }
+                .padding(.vertical, 2)
             }
         }
         .padding()
@@ -79,6 +84,14 @@ struct RecoveryView: View {
             Button(t("ОК", "OK"), role: .cancel) {}
         } message: {
             Text(resultMessage ?? "")
+        }
+        .alert(t("Rollback", "Rollback"), isPresented: Binding(
+            get: { rollbackMessage != nil },
+            set: { if !$0 { rollbackMessage = nil } }
+        )) {
+            Button(t("ОК", "OK"), role: .cancel) {}
+        } message: {
+            Text(rollbackMessage ?? "")
         }
     }
 
@@ -157,6 +170,69 @@ struct RecoveryView: View {
                 .stroke(selected.contains(item.id) ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
+    }
+
+    private var quickRollbackSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(t("Снимки отката действий", "Quick Action Rollback Sessions"))
+                .font(.headline)
+            Text(t(
+                "Откат применим только к действиям снижения нагрузки (без удаления файлов).",
+                "Rollback is available for load-relief actions only (no file deletion involved)."
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            ForEach(model.quickActionRollbackSessions) { session in
+                quickRollbackRow(session)
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func quickRollbackRow(_ session: QuickActionRollbackSession) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.actionTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text("\(session.createdAt.formatted(date: .abbreviated, time: .shortened)) · \(session.adjustedTargets.count) target(s)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if let rollbackSummary = session.rollbackSummary, !rollbackSummary.isEmpty {
+                    Text(rollbackSummary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if session.canRollback {
+                Button(t("Откатить", "Rollback")) {
+                    if let summary = model.rollbackQuickActionSession(session) {
+                        rollbackMessage = summary
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            } else {
+                GlassPillBadge(
+                    title: t("Откат применён", "Rollback Applied"),
+                    tint: .green
+                )
+            }
+
+            Button(t("Убрать", "Remove")) {
+                model.removeQuickActionRollbackSession(session)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func toggleSelection(_ id: RecentlyDeletedItem.ID) {

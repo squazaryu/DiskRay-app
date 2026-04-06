@@ -93,9 +93,33 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Performance recommendations now include actionable CTA buttons (select startup entries / open Smart Care / rerun diagnostics).
 - [x] Privacy module quick actions: `Select Low Risk`, `Select Recommended`, `Quick Clean Safe`, `Quick Clean Recommended`.
 - [x] Smart Care quick action: `Quick Clean Recommended`.
-- [ ] Add post-action delta report (before/after bytes + item counts) for Performance/Privacy quick actions.
-- [ ] Add rollback snapshot for quick-clean batches (outside Trash) with session metadata in Recovery.
-- [ ] Prepare `1.0.1-alpha` pre-release (`dmg` + `zip`) with focused notes on one-click automation.
+- [x] Add post-action delta report (before/after bytes + item counts) for Performance/Privacy quick actions.
+- [x] Add rollback snapshot for quick-clean batches (outside Trash) with session metadata in Recovery.
+- [x] Prepare and publish `1.0.1-beta` release artifacts (`dmg` + `zip`) with focused notes on one-click automation.
+
+## Milestone M12: Architecture Stabilization (in progress)
+- [x] Introduce dedicated use-case layer for Smart Care and Performance flows.
+- [x] Add protocol-based service seams for use-case testing (`SmartCareServicing`, `PerformanceServicing`, `ProcessPriorityServicing`).
+- [x] Add unit tests for Smart Care and Performance use-cases (delegation + recommendation rules).
+- [x] Move operational history persistence from legacy `UserDefaults` blobs to JSON store in `Application Support` with one-time migration.
+- [x] Move `LoadReliefResult` to core performance models to remove feature-to-app coupling.
+- [x] Introduce `UninstallerUseCase` + `UninstallPlanningUseCase` (service delegation, preview/risk/verify logic).
+- [x] Complete Uninstaller/Repair orchestration extraction (session bookkeeping + rollback flows) to further reduce `RootViewModel` ownership.
+- [x] Extract search preset persistence/application logic into `SearchPresetUseCase` (reduce storage coupling in `RootViewModel`).
+- [x] Extract Smart Care exclusion persistence/toggle logic into `SmartExclusionUseCase` (remove direct `UserDefaults` writes from `RootViewModel` paths).
+- [x] Split `RootViewModel` into feature models + root coordinator.
+  - [x] Move Search state into `SearchFeatureState` and migrate `SearchView` bindings to `model.search.*`.
+  - [x] Move Smart Care state into `SmartCareFeatureState` and migrate `SmartCareView` bindings to `model.smartCare.*`.
+  - [x] Move Performance state into `PerformanceFeatureState` and migrate `PerformanceView` bindings to `model.performance.*`.
+  - [x] Extract feature-specific observable view models (`SearchViewModel`, `SmartCareViewModel`, `PerformanceViewModel`) coordinated by root shell.
+    - [x] `SearchViewModel` extracted and integrated into `SearchView` as feature-level observable coordinator.
+    - [x] `SmartCareViewModel` extracted and integrated into `SmartCareView` as feature-level observable coordinator.
+    - [x] `PerformanceViewModel` extracted and integrated into `PerformanceView` as feature-level observable coordinator.
+- [x] Move operational history from JSON files to structured storage (SQLite) with migrations.
+- [x] Cover critical flows with deterministic tests:
+  - [x] permission gates
+  - [x] uninstall verify pass
+  - [x] incremental scan merge
 
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.

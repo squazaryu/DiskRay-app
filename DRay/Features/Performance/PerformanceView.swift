@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct PerformanceView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: PerformanceViewModel
     @StateObject private var monitor = LiveSystemMetricsMonitor()
     @State private var selectedPaths = Set<String>()
     @State private var showCleanupConfirm = false
@@ -16,13 +16,17 @@ struct PerformanceView: View {
     @State private var showStartupEntries = false
     @State private var showLiveSummary = false
 
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: PerformanceViewModel(root: rootModel))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             loadPanel
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
-            if model.performanceReport == nil && !model.isPerformanceScanRunning {
+            if model.performance.report == nil && !model.performance.isScanRunning {
                 ContentUnavailableView(
                     t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
                     systemImage: "speedometer",
@@ -33,7 +37,7 @@ struct PerformanceView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
-            } else if let cleanup = model.startupCleanupReport {
+            } else if let cleanup = model.performance.startupCleanupReport {
                 Text(t(
                     "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
                     "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
@@ -83,7 +87,7 @@ struct PerformanceView: View {
         }
         .onAppear {
             monitor.start()
-            if model.performanceReport == nil {
+            if model.performance.report == nil {
                 model.runPerformanceScan()
             }
         }
@@ -107,7 +111,7 @@ struct PerformanceView: View {
                 HStack(spacing: 8) {
                     Button(t("Запустить диагностику", "Run Diagnostics")) { model.runPerformanceScan() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(model.isPerformanceScanRunning)
+                        .disabled(model.performance.isScanRunning)
 
                     Button(t("Отключить выбранные", "Disable Selected")) {
                         showCleanupConfirm = true
@@ -127,7 +131,7 @@ struct PerformanceView: View {
                     }
                     .buttonStyle(.bordered)
 
-                    if model.isPerformanceScanRunning {
+                    if model.performance.isScanRunning {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .controlSize(.small)
@@ -178,7 +182,7 @@ struct PerformanceView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(model.activeLoadReliefAdjustments == 0)
+                .disabled(model.performance.activeLoadReliefAdjustments == 0)
             }
 
             HStack(spacing: 10) {
@@ -207,8 +211,12 @@ struct PerformanceView: View {
                 )
             }
 
-            if let report = model.performanceReport {
+            if let report = model.performance.report {
                 diagnosticsSummary(report)
+            }
+
+            if let delta = model.performanceQuickActionDelta {
+                quickActionDeltaPanel(delta)
             }
 
             trendPanel
@@ -237,6 +245,36 @@ struct PerformanceView: View {
                 .padding(10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
+        }
+    }
+
+    private func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
+        HStack(spacing: 8) {
+            GlassPillBadge(
+                title: t("Действие: \(delta.actionTitle)", "Action: \(delta.actionTitle)"),
+                tint: .blue
+            )
+            GlassPillBadge(
+                title: t(
+                    "Элементы \(delta.beforeItems) → \(delta.afterItems)",
+                    "Items \(delta.beforeItems) -> \(delta.afterItems)"
+                ),
+                tint: .green
+            )
+            GlassPillBadge(
+                title: t(
+                    "Размер \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) → \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
+                    "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) -> \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))"
+                ),
+                tint: .orange
+            )
+            Spacer()
+            Text(t(
+                "Обновлено \(relativeTime(delta.createdAt))",
+                "Updated \(relativeTime(delta.createdAt))"
+            ))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -370,7 +408,7 @@ struct PerformanceView: View {
                     )
                     summaryBadge(
                         title: t("Изменено", "Tweaks"),
-                        value: "\(model.activeLoadReliefAdjustments)"
+                        value: "\(model.performance.activeLoadReliefAdjustments)"
                     )
                 }
             }
@@ -545,7 +583,7 @@ struct PerformanceView: View {
     }
 
     private var selectedEntries: [StartupEntry] {
-        guard let report = model.performanceReport else { return [] }
+        guard let report = model.performance.report else { return [] }
         return report.startupEntries.filter { selectedPaths.contains($0.url.path) }
     }
 
@@ -613,6 +651,12 @@ struct PerformanceView: View {
         return "\(Int(value.rounded()))%"
     }
 
+    private func relativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
     private var cpuReliefCandidates: [ProcessConsumer] {
         let heavy = monitor.snapshot.topCPUConsumers.filter { $0.cpuPercent >= 18 }
         return heavy.isEmpty ? Array(monitor.snapshot.topCPUConsumers.prefix(3)) : heavy
@@ -666,10 +710,10 @@ struct PerformanceView: View {
     private func handleRecommendationAction(_ action: PerformanceRecommendationAction) {
         switch action {
         case .selectAllStartup:
-            guard let report = model.performanceReport else { return }
+            guard let report = model.performance.report else { return }
             selectedPaths = Set(report.startupEntries.map { $0.url.path })
         case .selectHeavyStartup:
-            guard let report = model.performanceReport else { return }
+            guard let report = model.performance.report else { return }
             let heavy = report.startupEntries
                 .filter { $0.sizeInBytes >= 100 * 1_048_576 }
                 .map { $0.url.path }

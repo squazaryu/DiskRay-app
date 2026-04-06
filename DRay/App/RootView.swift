@@ -196,7 +196,7 @@ struct RootView: View {
     private func sectionView(for section: AppSection) -> some View {
         switch section {
         case .smartCare:
-            SmartCareView(model: model)
+            SmartCareView(rootModel: model)
         case .clutter:
             ClutterView(model: model)
         case .uninstaller:
@@ -209,9 +209,9 @@ struct RootView: View {
                 onChooseFolder: { isFolderPickerPresented = true }
             )
         case .search:
-            SearchView(model: model)
+            SearchView(rootModel: model)
         case .performance:
-            PerformanceView(model: model)
+            PerformanceView(rootModel: model)
         case .privacy:
             PrivacyView(model: model)
         case .recovery:

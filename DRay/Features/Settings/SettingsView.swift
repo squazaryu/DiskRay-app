@@ -22,6 +22,7 @@ struct SettingsView: View {
                 VStack(spacing: 12) {
                     languageCard
                     appearanceCard
+                    versionCard
                     startupCard
                     permissionsCard
                 }
@@ -66,6 +67,18 @@ struct SettingsView: View {
             )
             .toggleStyle(.switch)
             .frame(maxWidth: 420, alignment: .leading)
+        }
+    }
+
+    private var versionCard: some View {
+        sectionCard(
+            title: model.localized(.settingsVersion),
+            subtitle: model.localized(.settingsVersionHint)
+        ) {
+            Text(model.appVersionDisplay)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -171,4 +184,5 @@ struct SettingsView: View {
             return model.localized(.appearanceDark)
         }
     }
+
 }

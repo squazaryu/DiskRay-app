@@ -16,18 +16,6 @@ final class AppPermissionService: ObservableObject {
     @Published var permissionHint: String?
 
     private let hasCompletedOnboardingKey = "dray.permissions.onboarding.completed"
-    private let systemProtectedPrefixes = [
-        "/System",
-        "/bin",
-        "/sbin",
-        "/usr/bin",
-        "/usr/sbin",
-        "/usr/lib",
-        "/usr/libexec",
-        "/usr/share",
-        "/private/etc"
-    ]
-
     init() {
         firstLaunchNeedsSetup = !UserDefaults.standard.bool(forKey: hasCompletedOnboardingKey)
         refreshPermissionStatus(for: nil)
@@ -122,8 +110,7 @@ final class AppPermissionService: ObservableObject {
     }
 
     private func isSystemProtectedPath(_ path: String) -> Bool {
-        if path == "/" { return true }
-        return systemProtectedPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
+        SystemPathProtection.isProtected(path)
     }
 
     func openFullDiskAccessSettings() {

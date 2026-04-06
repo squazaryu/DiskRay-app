@@ -1,12 +1,16 @@
 import SwiftUI
 
 struct SearchView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: SearchViewModel
     @State private var selection = Set<FileNode.ID>()
     @State private var presetName = ""
     @State private var pendingDeleteNodes: [FileNode] = []
     @State private var showDeleteConfirm = false
     @State private var resultMessage: String?
+
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: SearchViewModel(root: rootModel))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -16,7 +20,7 @@ struct SearchView: View {
             filtersPanel
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 12)
 
-            if model.searchQuery.isEmpty {
+            if model.search.query.isEmpty {
                 ContentUnavailableView(
                     t("Поиск", "Search"),
                     systemImage: "magnifyingglass",
@@ -32,8 +36,8 @@ struct SearchView: View {
             Spacer()
         }
         .padding(12)
-        .onChange(of: model.searchResults) {
-            let valid = Set(model.searchResults.map(\.id))
+        .onChange(of: model.search.results) {
+            let valid = Set(model.search.results.map(\.id))
             selection = selection.intersection(valid)
         }
         .confirmationDialog(
@@ -68,27 +72,27 @@ struct SearchView: View {
 
     private var searchToolbar: some View {
         HStack(spacing: 10) {
-            TextField(t("Поиск по имени или пути...", "Search by name or path..."), text: $model.searchQuery)
+            TextField(t("Поиск по имени или пути...", "Search by name or path..."), text: model.binding(\.query))
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
-                    model.triggerLiveSearch()
+                    model.triggerSearch()
                 }
 
             Button(t("Поиск", "Search")) {
-                model.triggerLiveSearch()
+                model.triggerSearch()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
-            if model.isLiveSearchRunning {
+            if model.search.isLiveRunning {
                 Button(t("Стоп", "Stop")) {
-                    model.cancelLiveSearch()
+                    model.cancelSearch()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
 
-            if model.isLoading || model.isLiveSearchRunning {
+            if model.isLoading || model.search.isLiveRunning {
                 ProgressView()
                     .controlSize(.small)
             }
@@ -98,18 +102,18 @@ struct SearchView: View {
     private var filtersPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                TextField(t("Путь содержит", "Path contains"), text: $model.pathContains)
+                TextField(t("Путь содержит", "Path contains"), text: model.binding(\.pathContains))
                     .textFieldStyle(.roundedBorder)
-                TextField(t("Владелец содержит", "Owner contains"), text: $model.ownerContains)
+                TextField(t("Владелец содержит", "Owner contains"), text: model.binding(\.ownerContains))
                     .textFieldStyle(.roundedBorder)
                 Text(t("Мин. МБ", "Min MB"))
                     .font(.caption.weight(.semibold))
-                TextField("0", value: $model.minSizeMB, format: .number)
+                TextField("0", value: model.binding(\.minSizeMB), format: .number)
                     .frame(width: 90)
                     .textFieldStyle(.roundedBorder)
-                Toggle(t("Папки", "Dirs"), isOn: $model.onlyDirectories)
+                Toggle(t("Папки", "Dirs"), isOn: model.binding(\.onlyDirectories))
                     .toggleStyle(.checkbox)
-                Toggle(t("Файлы", "Files"), isOn: $model.onlyFiles)
+                Toggle(t("Файлы", "Files"), isOn: model.binding(\.onlyFiles))
                     .toggleStyle(.checkbox)
                 TextField(t("Имя пресета", "Preset name"), text: $presetName)
                     .textFieldStyle(.roundedBorder)
@@ -117,18 +121,18 @@ struct SearchView: View {
                 Button(t("Сохранить пресет", "Save Preset")) {
                     let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !name.isEmpty else { return }
-                    model.saveCurrentSearchPreset(named: name)
+                    model.savePreset(named: name)
                     presetName = ""
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 Menu(t("Пресеты", "Presets")) {
-                    ForEach(model.searchPresets) { preset in
-                        Button(preset.name) { model.applySearchPreset(preset) }
+                    ForEach(model.search.presets) { preset in
+                        Button(preset.name) { model.applyPreset(preset) }
                     }
-                    if !model.searchPresets.isEmpty {
+                    if !model.search.presets.isEmpty {
                         Divider()
-                        ForEach(model.searchPresets) { preset in
+                        ForEach(model.search.presets) { preset in
                             Button("\(t("Удалить", "Delete")) \(preset.name)") { model.deletePreset(preset) }
                         }
                     }
@@ -138,21 +142,21 @@ struct SearchView: View {
             .font(.caption)
 
             HStack(spacing: 8) {
-                Toggle("Regex", isOn: $model.searchUseRegex)
+                Toggle("Regex", isOn: model.binding(\.useRegex))
                     .toggleStyle(.checkbox)
                 Text(t("Глубина", "Depth"))
-                TextField("0", value: $model.searchDepthMin, format: .number)
+                TextField("0", value: model.binding(\.depthMin), format: .number)
                     .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
                 Text("..")
-                TextField("12", value: $model.searchDepthMax, format: .number)
+                TextField("12", value: model.binding(\.depthMax), format: .number)
                     .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
                 Text(t("Изменён ≤ дней", "Modified ≤ days"))
-                TextField("0", value: $model.searchModifiedWithinDays, format: .number)
+                TextField("0", value: model.binding(\.modifiedWithinDays), format: .number)
                     .frame(width: 65)
                     .textFieldStyle(.roundedBorder)
-                Picker(t("Тип", "Type"), selection: $model.searchNodeType) {
+                Picker(t("Тип", "Type"), selection: model.binding(\.nodeType)) {
                     Text(t("Любой", "Any")).tag(QueryEngine.SearchNodeType.any)
                     Text(t("Файлы", "Files")).tag(QueryEngine.SearchNodeType.file)
                     Text(t("Папки", "Folders")).tag(QueryEngine.SearchNodeType.directory)
@@ -173,7 +177,7 @@ struct SearchView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(t("Найдено: \(model.searchResults.count)", "Found: \(model.searchResults.count)"))
+                Text(t("Найдено: \(model.search.results.count)", "Found: \(model.search.results.count)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(t("Показать", "Reveal")) {
@@ -211,20 +215,20 @@ struct SearchView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 4) {
-                        if model.searchResults.isEmpty && model.isLiveSearchRunning {
+                        if model.search.results.isEmpty && model.search.isLiveRunning {
                             ForEach(0..<8, id: \.self) { _ in
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .fill(Color.primary.opacity(0.05))
                                     .frame(height: 34)
                             }
-                        } else if model.searchResults.isEmpty {
+                        } else if model.search.results.isEmpty {
                             Text(t("Ничего не найдено", "No files found"))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 18)
                         } else {
-                            ForEach(model.searchResults) { node in
+                            ForEach(model.search.results) { node in
                                 resultRow(node)
                             }
                         }
@@ -295,7 +299,7 @@ struct SearchView: View {
     }
 
     private func selectedNodes() -> [FileNode] {
-        model.searchResults.filter { selection.contains($0.id) }
+        model.search.results.filter { selection.contains($0.id) }
     }
 
     private func buildResultMessage(_ result: TrashOperationResult) -> String {
