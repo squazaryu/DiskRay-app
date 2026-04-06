@@ -77,28 +77,38 @@ struct RootView: View {
     }
 
     private var topNavigation: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(sections) { item in
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) {
-                            model.selectedSection = item.id
-                        }
-                    } label: {
-                        Text(model.localizedSectionTitle(for: item.id))
-                            .font(.system(size: 14, weight: .semibold))
-                            .padding(.horizontal, 2)
-                            .padding(.vertical, 1)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(MinimalGlassButtonStyle(isActive: model.selectedSection == item.id))
-                }
+        ViewThatFits(in: .horizontal) {
+            navigationButtons
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                navigationButtons
+                    .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: 50)
+        .clipped()
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.2, shadowOpacity: 0.08, padding: 8)
+    }
+
+    private var navigationButtons: some View {
+        HStack(spacing: 8) {
+            ForEach(sections) { item in
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        model.selectedSection = item.id
+                    }
+                } label: {
+                    Text(model.localizedSectionTitle(for: item.id))
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 1)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(MinimalGlassButtonStyle(isActive: model.selectedSection == item.id))
+                .accessibilityIdentifier("section-tab-\(item.id.rawValue)")
+            }
+        }
     }
 
     private var permissionsOnboardingCard: some View {

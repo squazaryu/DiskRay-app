@@ -71,7 +71,7 @@ actor AppUninstallerService: UninstallerServicing {
         return remnants.sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) -> UninstallValidationReport {
+    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
         terminateIfRunning(bundleID: app.bundleID)
@@ -89,6 +89,7 @@ actor AppUninstallerService: UninstallerServicing {
                 continue
             }
 
+            var primaryTrashError: Error?
             do {
                 var trashedURL: NSURL?
                 try FileManager.default.trashItem(at: target, resultingItemURL: &trashedURL)
@@ -99,24 +100,70 @@ actor AppUninstallerService: UninstallerServicing {
                     trashedPath: (trashedURL as URL?)?.path,
                     details: nil
                 ))
+                continue
             } catch {
-                if type == .appBundle,
-                   path.hasPrefix("/Applications/"),
-                   isPermissionError(error),
-                   moveToTrashWithAdministratorPrivileges(target: target) {
-                    let userTrash = FileManager.default.homeDirectoryForCurrentUser
-                        .appendingPathComponent(".Trash/\(target.lastPathComponent)").path
+                primaryTrashError = error
+            }
+
+            // Finder-based recycle handles some App Store installed apps better than FileManager.trashItem.
+            let recycleResult = await recycleWithFinder(target: target)
+            if recycleResult.success {
+                results.append(UninstallActionResult(
+                    url: target,
+                    type: type,
+                    status: .removed,
+                    trashedPath: recycleResult.trashedPath,
+                    details: recycleResult.details
+                ))
+                continue
+            }
+
+            let primaryErrorMessage = primaryTrashError?.localizedDescription ?? "Unknown filesystem error"
+            var attempts: [String] = ["FileManager.trashItem: \(primaryErrorMessage)"]
+            if let recycleDetails = recycleResult.details, !recycleDetails.isEmpty {
+                attempts.append("Finder recycle: \(recycleDetails)")
+            } else {
+                attempts.append("Finder recycle failed")
+            }
+
+            if type == .appBundle, path.hasPrefix("/Applications/"), isPermissionError(primaryTrashError ?? NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)) {
+                let adminTrashResult = moveToTrashWithAdministratorPrivileges(target: target)
+                if adminTrashResult.success {
                     results.append(UninstallActionResult(
                         url: target,
                         type: type,
                         status: .removed,
-                        trashedPath: userTrash,
-                        details: "Moved to Trash with administrator authorization."
+                        trashedPath: adminTrashResult.trashedPath,
+                        details: adminTrashResult.details
                     ))
                     continue
                 }
-                results.append(UninstallActionResult(url: target, type: type, status: .failed, trashedPath: nil, details: error.localizedDescription))
+                attempts.append("Admin move to trash: \(adminTrashResult.details)")
+
+                // Last-resort path for App Store bundles when trash APIs are denied by App Management/TCC.
+                let adminRemoveResult = removeWithAdministratorPrivileges(target: target)
+                if adminRemoveResult.success {
+                    results.append(UninstallActionResult(
+                        url: target,
+                        type: type,
+                        status: .removed,
+                        trashedPath: nil,
+                        details: adminRemoveResult.details
+                    ))
+                    continue
+                }
+                attempts.append("Admin hard remove: \(adminRemoveResult.details)")
             }
+
+            results.append(
+                UninstallActionResult(
+                    url: target,
+                    type: type,
+                    status: .failed,
+                    trashedPath: nil,
+                    details: attempts.joined(separator: " | ")
+                )
+            )
         }
 
         return UninstallValidationReport(appName: app.name, createdAt: Date(), results: results)
@@ -221,11 +268,67 @@ actor AppUninstallerService: UninstallerServicing {
         return message.contains("permission") || message.contains("not permitted") || message.contains("operation not permitted")
     }
 
-    private func moveToTrashWithAdministratorPrivileges(target: URL) -> Bool {
+    private func recycleWithFinder(target: URL) async -> (success: Bool, trashedPath: String?, details: String?) {
+        await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                NSWorkspace.shared.recycle([target]) { recycledMap, error in
+                    if let recycled = recycledMap[target] ?? recycledMap.values.first {
+                        continuation.resume(returning: (true, recycled.path, "Moved to Trash via Finder recycle."))
+                        return
+                    }
+                    if !FileManager.default.fileExists(atPath: target.path) {
+                        continuation.resume(returning: (true, nil, "Item removed by Finder recycle fallback."))
+                        return
+                    }
+                    continuation.resume(returning: (false, nil, error?.localizedDescription ?? "Unknown Finder recycle error"))
+                }
+            }
+        }
+    }
+
+    private func moveToTrashWithAdministratorPrivileges(target: URL) -> (success: Bool, trashedPath: String?, details: String) {
+        let trashRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash").path
+        let destination = "\(trashRoot)/\(UUID().uuidString)-\(target.lastPathComponent)"
         let script = """
         on run argv
             set targetPath to item 1 of argv
-            do shell script "/bin/mkdir -p \"$HOME/.Trash\"; /bin/mv " & quoted form of targetPath & " \"$HOME/.Trash/\"" with administrator privileges
+            set destinationPath to item 2 of argv
+            do shell script "/bin/mkdir -p \"$(/usr/bin/dirname " & quoted form of destinationPath & ")\"; /bin/mv -f " & quoted form of targetPath & " " & quoted form of destinationPath with administrator privileges
+            return "ok"
+        end run
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script, target.path, destination]
+        let stderr = Pipe()
+        process.standardOutput = Pipe()
+        process.standardError = stderr
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                return (
+                    true,
+                    destination,
+                    "Moved to Trash with administrator authorization."
+                )
+            }
+
+            let output = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (false, nil, output?.isEmpty == false ? output! : "osascript returned \(process.terminationStatus)")
+        } catch {
+            return (false, nil, error.localizedDescription)
+        }
+    }
+
+    private func removeWithAdministratorPrivileges(target: URL) -> (success: Bool, details: String) {
+        let script = """
+        on run argv
+            set targetPath to item 1 of argv
+            do shell script "/bin/rm -rf " & quoted form of targetPath with administrator privileges
             return "ok"
         end run
         """
@@ -233,15 +336,21 @@ actor AppUninstallerService: UninstallerServicing {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", script, target.path]
+        let stderr = Pipe()
+        process.standardError = stderr
         process.standardOutput = Pipe()
-        process.standardError = Pipe()
 
         do {
             try process.run()
             process.waitUntilExit()
-            return process.terminationStatus == 0
+            if process.terminationStatus == 0 {
+                return (true, "Removed with administrator authorization.")
+            }
+            let output = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (false, output?.isEmpty == false ? output! : "osascript returned \(process.terminationStatus)")
         } catch {
-            return false
+            return (false, error.localizedDescription)
         }
     }
 }
