@@ -71,31 +71,59 @@ struct SearchView: View {
     }
 
     private var searchToolbar: some View {
-        HStack(spacing: 10) {
-            TextField(t("Поиск по имени или пути...", "Search by name or path..."), text: model.binding(\.query))
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(model.searchScopeChoices) { choice in
+                        Button {
+                            model.selectScope(choice)
+                        } label: {
+                            HStack {
+                                Text(choice.title)
+                                Spacer()
+                                if isScopeSelected(choice) {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label(model.activeScopeLabel, systemImage: "externaldrive")
+                        .lineLimit(1)
+                        .frame(maxWidth: 260, alignment: .leading)
+                }
+                .menuStyle(.borderlessButton)
+                .controlSize(.small)
+
+                TextField(t("Поиск по имени или пути...", "Search by name or path..."), text: model.binding(\.query))
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        model.triggerSearch()
+                    }
+
+                Button(t("Поиск", "Search")) {
                     model.triggerSearch()
                 }
-
-            Button(t("Поиск", "Search")) {
-                model.triggerSearch()
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-
-            if model.search.isLiveRunning {
-                Button(t("Стоп", "Stop")) {
-                    model.cancelSearch()
-                }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-            }
 
-            if model.isLoading || model.search.isLiveRunning {
-                ProgressView()
+                if model.search.isLiveRunning {
+                    Button(t("Стоп", "Stop")) {
+                        model.cancelSearch()
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
+                }
+
+                if model.isLoading || model.search.isLiveRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
             }
+            Text(model.activeScopePath)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 
@@ -149,13 +177,19 @@ struct SearchView: View {
                     .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
                 Text("..")
-                TextField("12", value: model.binding(\.depthMax), format: .number)
+                TextField("64", value: model.binding(\.depthMax), format: .number)
                     .frame(width: 52)
                     .textFieldStyle(.roundedBorder)
                 Text(t("Изменён ≤ дней", "Modified ≤ days"))
                 TextField("0", value: model.binding(\.modifiedWithinDays), format: .number)
                     .frame(width: 65)
                     .textFieldStyle(.roundedBorder)
+                Toggle(t("Исключать корзину", "Exclude Trash"), isOn: model.binding(\.excludeTrash))
+                    .toggleStyle(.checkbox)
+                Toggle(t("Скрытые", "Hidden"), isOn: model.binding(\.includeHidden))
+                    .toggleStyle(.checkbox)
+                Toggle(t("Внутри пакетов", "Package Contents"), isOn: model.binding(\.includePackageContents))
+                    .toggleStyle(.checkbox)
                 Picker(t("Тип", "Type"), selection: model.binding(\.nodeType)) {
                     Text(t("Любой", "Any")).tag(QueryEngine.SearchNodeType.any)
                     Text(t("Файлы", "Files")).tag(QueryEngine.SearchNodeType.file)
@@ -180,6 +214,18 @@ struct SearchView: View {
                 Text(t("Найдено: \(model.search.results.count)", "Found: \(model.search.results.count)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Button(t("Выбрать все", "Select All")) {
+                    selection = Set(model.search.results.map(\.id))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.search.results.isEmpty)
+                Button(t("Снять выбор", "Clear Selection")) {
+                    selection.removeAll()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selection.isEmpty)
                 Button(t("Показать", "Reveal")) {
                     guard let first = selectedNodes().first else { return }
                     model.revealInFinder(first)
@@ -197,13 +243,14 @@ struct SearchView: View {
             }
 
             VStack(spacing: 0) {
-                HStack(spacing: 0) {
+                HStack(spacing: 12) {
                     Text(t("Имя", "Name"))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(t("Размер", "Size"))
                         .frame(width: 120, alignment: .trailing)
                     Text(t("Путь", "Path"))
-                        .frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -237,20 +284,17 @@ struct SearchView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.thinMaterial)
-            )
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 0.7)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
             )
         }
     }
 
     private func resultRow(_ node: FileNode) -> some View {
         let isSelected = selection.contains(node.id)
-        return HStack(spacing: 10) {
+        return HStack(spacing: 12) {
             Image(systemName: node.isDirectory ? "folder.fill" : "doc.fill")
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
@@ -265,7 +309,8 @@ struct SearchView: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(minWidth: 360, maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -304,6 +349,17 @@ struct SearchView: View {
 
     private func buildResultMessage(_ result: TrashOperationResult) -> String {
         model.trashResultMessage(result)
+    }
+
+    private func isScopeSelected(_ choice: SearchScopeChoice) -> Bool {
+        switch model.search.scopeMode {
+        case .startupDisk:
+            return choice.mode == .startupDisk
+        case .selectedTarget:
+            return choice.mode == .selectedTarget
+        case .customPath:
+            return choice.mode == .customPath && choice.path == model.search.customScopePath
+        }
     }
 
     private var isRussian: Bool {

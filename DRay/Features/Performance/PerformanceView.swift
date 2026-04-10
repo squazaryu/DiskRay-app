@@ -9,10 +9,6 @@ struct PerformanceView: View {
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     @State private var reliefResultMessage: String?
-    @State private var cpuTrend: [Double] = []
-    @State private var memoryTrend: [Double] = []
-    @State private var batteryTrend: [Double] = []
-    @State private var trendTimestamps: [Date] = []
     @State private var showStartupEntries = false
     @State private var showLiveSummary = false
 
@@ -93,9 +89,6 @@ struct PerformanceView: View {
         }
         .onDisappear {
             monitor.stop()
-        }
-        .onReceive(monitor.$snapshot) { snapshot in
-            appendTrendSample(snapshot)
         }
     }
 
@@ -218,8 +211,6 @@ struct PerformanceView: View {
             if let delta = model.performanceQuickActionDelta {
                 quickActionDeltaPanel(delta)
             }
-
-            trendPanel
 
             if !monitor.snapshot.topCPUConsumers.isEmpty || !monitor.snapshot.topMemoryConsumers.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -522,66 +513,6 @@ struct PerformanceView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private var trendPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(t("Тренды нагрузки", "Load Trends"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 10) {
-                trendCard(
-                    title: "CPU",
-                    color: .blue,
-                    values: cpuTrend,
-                    avg5m: averageForWindow(cpuTrend, seconds: 5 * 60),
-                    avg15m: averageForWindow(cpuTrend, seconds: 15 * 60)
-                )
-                trendCard(
-                    title: t("Память", "Memory"),
-                    color: .purple,
-                    values: memoryTrend,
-                    avg5m: averageForWindow(memoryTrend, seconds: 5 * 60),
-                    avg15m: averageForWindow(memoryTrend, seconds: 15 * 60)
-                )
-                trendCard(
-                    title: t("Батарея", "Battery"),
-                    color: .green,
-                    values: batteryTrend,
-                    avg5m: averageForWindow(batteryTrend, seconds: 5 * 60),
-                    avg15m: averageForWindow(batteryTrend, seconds: 15 * 60)
-                )
-            }
-        }
-    }
-
-    private func trendCard(
-        title: String,
-        color: Color,
-        values: [Double],
-        avg5m: Double?,
-        avg15m: Double?
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("5m \(formatPercent(avg5m))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("15m \(formatPercent(avg15m))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            MiniSparkline(values: values, color: color)
-                .frame(height: 72)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
     private var selectedEntries: [StartupEntry] {
         guard let report = model.performance.report else { return [] }
         return report.startupEntries.filter { selectedPaths.contains($0.url.path) }
@@ -618,37 +549,6 @@ struct PerformanceView: View {
             )
         }
         return charging ? t("\(percent)% · зарядка", "\(percent)% · charging") : "\(percent)%"
-    }
-
-    private func appendTrendSample(_ snapshot: LiveSystemSnapshot) {
-        trendTimestamps.append(snapshot.updatedAt)
-        cpuTrend.append(snapshot.cpuLoadPercent)
-        memoryTrend.append(snapshot.memoryPressurePercent)
-        let batterySample = snapshot.batteryLevelPercent.map(Double.init) ?? batteryTrend.last ?? 0
-        batteryTrend.append(batterySample)
-
-        let maxSamples = 15 * 60
-        if trendTimestamps.count > maxSamples {
-            let overflow = trendTimestamps.count - maxSamples
-            trendTimestamps.removeFirst(overflow)
-            cpuTrend.removeFirst(overflow)
-            memoryTrend.removeFirst(overflow)
-            batteryTrend.removeFirst(overflow)
-        }
-    }
-
-    private func averageForWindow(_ values: [Double], seconds: Int) -> Double? {
-        guard !values.isEmpty else { return nil }
-        let points = min(seconds, values.count)
-        guard points > 0 else { return nil }
-        let subset = values.suffix(points)
-        let sum = subset.reduce(0, +)
-        return sum / Double(points)
-    }
-
-    private func formatPercent(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return "\(Int(value.rounded()))%"
     }
 
     private func relativeTime(_ date: Date) -> String {
@@ -748,42 +648,4 @@ private struct LiveConsumerRow: Identifiable {
     var cpuPercent: Double
     var memoryMB: Double
     var batteryImpactScore: Double
-}
-
-private struct MiniSparkline: View {
-    let values: [Double]
-    let color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            let points = normalizedPoints(in: geo.size)
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(color.opacity(0.08))
-                Path { path in
-                    guard let first = points.first else { return }
-                    path.move(to: first)
-                    for point in points.dropFirst() {
-                        path.addLine(to: point)
-                    }
-                }
-                .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 1.6, lineJoin: .round))
-            }
-        }
-    }
-
-    private func normalizedPoints(in size: CGSize) -> [CGPoint] {
-        guard values.count > 1 else { return [] }
-        let minValue = values.min() ?? 0
-        let maxValue = values.max() ?? 100
-        let span = max(1, maxValue - minValue)
-        let step = size.width / CGFloat(max(1, values.count - 1))
-
-        return values.enumerated().map { index, value in
-            let x = CGFloat(index) * step
-            let normalized = (value - minValue) / span
-            let y = size.height - CGFloat(normalized) * size.height
-            return CGPoint(x: x, y: y)
-        }
-    }
 }

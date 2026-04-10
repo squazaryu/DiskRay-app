@@ -1,5 +1,10 @@
 import Foundation
 
+protocol SearchPresetStoring {
+    func loadPresets() -> [SearchPreset]
+    func savePresets(_ presets: [SearchPreset])
+}
+
 struct SearchPresetDraft {
     let query: String
     let minSizeMB: Double
@@ -13,6 +18,49 @@ struct SearchPresetDraft {
     let modifiedWithinDays: Int?
     let nodeType: QueryEngine.SearchNodeType
     let searchMode: SearchExecutionMode
+    let scopeMode: SearchScopeMode
+    let customScopePath: String
+    let excludeTrash: Bool
+    let includeHidden: Bool
+    let includePackageContents: Bool
+
+    init(
+        query: String,
+        minSizeMB: Double,
+        pathContains: String,
+        ownerContains: String,
+        onlyDirectories: Bool,
+        onlyFiles: Bool,
+        useRegex: Bool,
+        depthMin: Int,
+        depthMax: Int,
+        modifiedWithinDays: Int?,
+        nodeType: QueryEngine.SearchNodeType,
+        searchMode: SearchExecutionMode,
+        scopeMode: SearchScopeMode = .startupDisk,
+        customScopePath: String = "/",
+        excludeTrash: Bool = true,
+        includeHidden: Bool = true,
+        includePackageContents: Bool = true
+    ) {
+        self.query = query
+        self.minSizeMB = minSizeMB
+        self.pathContains = pathContains
+        self.ownerContains = ownerContains
+        self.onlyDirectories = onlyDirectories
+        self.onlyFiles = onlyFiles
+        self.useRegex = useRegex
+        self.depthMin = depthMin
+        self.depthMax = depthMax
+        self.modifiedWithinDays = modifiedWithinDays
+        self.nodeType = nodeType
+        self.searchMode = searchMode
+        self.scopeMode = scopeMode
+        self.customScopePath = customScopePath
+        self.excludeTrash = excludeTrash
+        self.includeHidden = includeHidden
+        self.includePackageContents = includePackageContents
+    }
 }
 
 struct AppliedSearchPreset {
@@ -28,29 +76,22 @@ struct AppliedSearchPreset {
     let modifiedWithinDays: Int
     let nodeType: QueryEngine.SearchNodeType
     let searchMode: SearchExecutionMode
+    let scopeMode: SearchScopeMode
+    let customScopePath: String
+    let excludeTrash: Bool
+    let includeHidden: Bool
+    let includePackageContents: Bool
 }
 
 struct SearchPresetUseCase {
-    private let historyStore: OperationalHistoryStore
-    private let fileName: String
-    private let legacyDefaultsKey: String
+    private let store: any SearchPresetStoring
 
-    init(
-        historyStore: OperationalHistoryStore,
-        fileName: String = "search-presets.json",
-        legacyDefaultsKey: String = "dray.search.presets"
-    ) {
-        self.historyStore = historyStore
-        self.fileName = fileName
-        self.legacyDefaultsKey = legacyDefaultsKey
+    init(store: any SearchPresetStoring) {
+        self.store = store
     }
 
     func loadPresets() -> [SearchPreset] {
-        historyStore.load(
-            [SearchPreset].self,
-            fileName: fileName,
-            legacyDefaultsKey: legacyDefaultsKey
-        ) ?? []
+        store.loadPresets()
     }
 
     func savePreset(
@@ -72,17 +113,22 @@ struct SearchPresetUseCase {
             depthMax: draft.depthMax,
             modifiedWithinDays: draft.modifiedWithinDays,
             nodeType: draft.nodeType,
-            searchMode: draft.searchMode
+            searchMode: draft.searchMode,
+            scopeMode: draft.scopeMode,
+            scopePath: draft.customScopePath,
+            excludeTrash: draft.excludeTrash,
+            includeHidden: draft.includeHidden,
+            includePackageContents: draft.includePackageContents
         )
         var updated = currentPresets
         updated.insert(preset, at: 0)
-        historyStore.save(updated, fileName: fileName)
+        store.savePresets(updated)
         return updated
     }
 
     func deletePreset(_ preset: SearchPreset, from currentPresets: [SearchPreset]) -> [SearchPreset] {
         let updated = currentPresets.filter { $0.id != preset.id }
-        historyStore.save(updated, fileName: fileName)
+        store.savePresets(updated)
         return updated
     }
 
@@ -99,7 +145,12 @@ struct SearchPresetUseCase {
             depthMax: preset.depthMax,
             modifiedWithinDays: preset.modifiedWithinDays ?? 0,
             nodeType: preset.nodeType,
-            searchMode: .live
+            searchMode: .live,
+            scopeMode: preset.scopeMode,
+            customScopePath: preset.scopePath ?? "/",
+            excludeTrash: preset.excludeTrash,
+            includeHidden: preset.includeHidden,
+            includePackageContents: preset.includePackageContents
         )
     }
 }

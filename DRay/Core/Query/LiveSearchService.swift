@@ -13,6 +13,9 @@ struct LiveSearchRequest: Sendable {
     let nodeType: QueryEngine.SearchNodeType
     let onlyDirectories: Bool
     let onlyFiles: Bool
+    let excludeTrash: Bool
+    let includeHidden: Bool
+    let includePackageContents: Bool
     let limit: Int
 }
 
@@ -29,15 +32,30 @@ actor LiveSearchService {
         let rootComponents = rootURL.pathComponents.count
         let fm = FileManager.default
 
+        var options: FileManager.DirectoryEnumerationOptions = []
+        if !request.includeHidden {
+            options.insert(.skipsHiddenFiles)
+        }
+        if !request.includePackageContents {
+            options.insert(.skipsPackageDescendants)
+        }
+
         guard let enumerator = fm.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: options
         ) else { return [] }
 
         var results: [FileNode] = []
         for case let fileURL as URL in enumerator {
             if Task.isCancelled { break }
+
+            if request.excludeTrash && isTrashPath(fileURL.path) {
+                if (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
 
             let depth = max(0, fileURL.pathComponents.count - rootComponents)
             if depth > request.depthMax {
@@ -88,6 +106,14 @@ actor LiveSearchService {
         }
 
         return results.sorted { $0.sizeInBytes > $1.sizeInBytes }
+    }
+
+    private func isTrashPath(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return lower.contains("/.trash/") ||
+            lower.hasSuffix("/.trash") ||
+            lower.contains("/.trashes/") ||
+            lower.hasSuffix("/.trashes")
     }
 
     private func matchesNodeTypeLive(isDirectory: Bool, url: URL, nodeType: QueryEngine.SearchNodeType) -> Bool {

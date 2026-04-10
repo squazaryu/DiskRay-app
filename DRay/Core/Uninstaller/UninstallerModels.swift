@@ -27,6 +27,16 @@ enum UninstallActionStatus: String, Codable, Sendable {
     case failed
 }
 
+enum UninstallFailureCategory: String, Codable, Sendable {
+    case permissionDenied
+    case appStoreManaged
+    case itemLocked
+    case readOnlyVolume
+    case runningProcessLock
+    case protectedBySystem
+    case unknown
+}
+
 struct UninstallActionResult: Identifiable, Codable, Sendable {
     let id = UUID()
     let url: URL
@@ -34,9 +44,29 @@ struct UninstallActionResult: Identifiable, Codable, Sendable {
     let status: UninstallActionStatus
     let trashedPath: String?
     let details: String?
+    let failureCategory: UninstallFailureCategory?
+    let remediationHint: String?
+
+    init(
+        url: URL,
+        type: UninstallItemType,
+        status: UninstallActionStatus,
+        trashedPath: String?,
+        details: String?,
+        failureCategory: UninstallFailureCategory? = nil,
+        remediationHint: String? = nil
+    ) {
+        self.url = url
+        self.type = type
+        self.status = status
+        self.trashedPath = trashedPath
+        self.details = details
+        self.failureCategory = failureCategory
+        self.remediationHint = remediationHint
+    }
 
     enum CodingKeys: String, CodingKey {
-        case url, type, status, trashedPath, details
+        case url, type, status, trashedPath, details, failureCategory, remediationHint
     }
 }
 
@@ -115,14 +145,56 @@ struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
     }
 }
 
+enum UninstallStartupReferenceSource: String, Sendable {
+    case userLaunchAgent
+    case systemLaunchAgent
+    case systemLaunchDaemon
+    case startupItems
+    case loginItems
+    case backgroundItems
+    case unknown
+
+    var title: String {
+        switch self {
+        case .userLaunchAgent: return "User LaunchAgent"
+        case .systemLaunchAgent: return "System LaunchAgent"
+        case .systemLaunchDaemon: return "System LaunchDaemon"
+        case .startupItems: return "Startup Item"
+        case .loginItems: return "Login Item"
+        case .backgroundItems: return "Background Task"
+        case .unknown: return "Startup Reference"
+        }
+    }
+}
+
+struct UninstallStartupReference: Identifiable, Hashable, Sendable {
+    let id = UUID()
+    let source: UninstallStartupReferenceSource
+    let url: URL?
+    let details: String
+    let reason: String
+
+    var displayPath: String {
+        if let url {
+            return url.path
+        }
+        return details
+    }
+}
+
 struct UninstallVerifyReport: Sendable {
     let appName: String
     let createdAt: Date
     let attemptedItems: Int
     let removedItems: Int
     let remaining: [UninstallVerifyIssue]
+    let startupReferences: [UninstallStartupReference]
 
     var remainingCount: Int {
         remaining.count
+    }
+
+    var startupReferenceCount: Int {
+        startupReferences.count
     }
 }

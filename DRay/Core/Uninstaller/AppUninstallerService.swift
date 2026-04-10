@@ -71,6 +71,64 @@ actor AppUninstallerService: UninstallerServicing {
         return remnants.sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
+    func findStartupReferences(for app: InstalledApp) -> [UninstallStartupReference] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let tokens = searchTokens(for: app)
+        var references: [UninstallStartupReference] = []
+        var seen = Set<String>()
+
+        let startupRoots: [(url: URL, source: UninstallStartupReferenceSource, reason: String)] = [
+            (home.appendingPathComponent("Library/LaunchAgents"), .userLaunchAgent, "LaunchAgent can restart app after user login."),
+            (URL(fileURLWithPath: "/Library/LaunchAgents"), .systemLaunchAgent, "System LaunchAgent may restart app at login."),
+            (URL(fileURLWithPath: "/Library/LaunchDaemons"), .systemLaunchDaemon, "LaunchDaemon may restart app in background."),
+            (URL(fileURLWithPath: "/Library/StartupItems"), .startupItems, "Startup item can trigger relaunch during boot.")
+        ]
+
+        for root in startupRoots where FileManager.default.fileExists(atPath: root.url.path) {
+            let urls = matchedURLs(in: root.url, tokens: tokens, maxDepth: 3)
+            for url in urls where seen.insert(url.path).inserted {
+                references.append(
+                    UninstallStartupReference(
+                        source: root.source,
+                        url: url,
+                        details: url.path,
+                        reason: root.reason
+                    )
+                )
+            }
+        }
+
+        let loginItemsPlist = home.appendingPathComponent("Library/Preferences/com.apple.loginitems.plist")
+        if fileContainsAnyToken(loginItemsPlist, tokens: tokens), seen.insert(loginItemsPlist.path).inserted {
+            references.append(
+                UninstallStartupReference(
+                    source: .loginItems,
+                    url: loginItemsPlist,
+                    details: "com.apple.loginitems.plist contains app token",
+                    reason: "Legacy Login Items list may relaunch the app."
+                )
+            )
+        }
+
+        let backgroundItems = home.appendingPathComponent("Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm")
+        if fileContainsAnyToken(backgroundItems, tokens: tokens), seen.insert(backgroundItems.path).inserted {
+            references.append(
+                UninstallStartupReference(
+                    source: .backgroundItems,
+                    url: backgroundItems,
+                    details: "backgrounditems.btm contains app token",
+                    reason: "Background Task Management entry may relaunch app/helper."
+                )
+            )
+        }
+
+        return references.sorted { lhs, rhs in
+            let leftPath = lhs.displayPath
+            let rightPath = rhs.displayPath
+            return leftPath.localizedCaseInsensitiveCompare(rightPath) == .orderedAscending
+        }
+    }
+
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
@@ -80,7 +138,17 @@ actor AppUninstallerService: UninstallerServicing {
             let path = target.path
 
             if SystemPathProtection.isProtected(path) {
-                results.append(UninstallActionResult(url: target, type: type, status: .skippedProtected, trashedPath: nil, details: "Protected system path"))
+                results.append(
+                    UninstallActionResult(
+                        url: target,
+                        type: type,
+                        status: .skippedProtected,
+                        trashedPath: nil,
+                        details: "Protected system path",
+                        failureCategory: .protectedBySystem,
+                        remediationHint: "System files protected by SIP/TCC cannot be removed."
+                    )
+                )
                 continue
             }
 
@@ -155,13 +223,21 @@ actor AppUninstallerService: UninstallerServicing {
                 attempts.append("Admin hard remove: \(adminRemoveResult.details)")
             }
 
+            let diagnosis = diagnoseDeleteFailure(
+                target: target,
+                type: type,
+                initialError: primaryTrashError,
+                appBundleID: app.bundleID
+            )
             results.append(
                 UninstallActionResult(
                     url: target,
                     type: type,
                     status: .failed,
                     trashedPath: nil,
-                    details: attempts.joined(separator: " | ")
+                    details: attempts.joined(separator: " | "),
+                    failureCategory: diagnosis.category,
+                    remediationHint: diagnosis.remediation
                 )
             )
         }
@@ -173,6 +249,22 @@ actor AppUninstallerService: UninstallerServicing {
         let sanitizedName = app.name.lowercased().replacingOccurrences(of: " ", with: "")
         return [app.bundleID.lowercased(), app.name.lowercased(), sanitizedName]
             .filter { !$0.isEmpty }
+    }
+
+    private func fileContainsAnyToken(_ url: URL, tokens: [String]) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        guard let data = try? Data(contentsOf: url) else { return false }
+        guard !data.isEmpty else { return false }
+
+        let text = String(decoding: data, as: UTF8.self).lowercased()
+        if tokens.contains(where: { text.contains($0) }) {
+            return true
+        }
+
+        return tokens.contains { token in
+            guard let tokenData = token.data(using: .utf8), !tokenData.isEmpty else { return false }
+            return data.range(of: tokenData) != nil
+        }
     }
 
     private func matchedURLs(in root: URL, tokens: [String], maxDepth: Int) -> [URL] {
@@ -352,5 +444,90 @@ actor AppUninstallerService: UninstallerServicing {
         } catch {
             return (false, error.localizedDescription)
         }
+    }
+
+    private func diagnoseDeleteFailure(
+        target: URL,
+        type: UninstallItemType,
+        initialError: Error?,
+        appBundleID: String
+    ) -> (category: UninstallFailureCategory, remediation: String) {
+        if SystemPathProtection.isProtected(target.path) {
+            return (
+                .protectedBySystem,
+                "Path is protected by SIP/TCC. Exclude it from uninstall or remove manually from recovery environment."
+            )
+        }
+
+        if isRunningAppBundle(path: target.path, bundleID: appBundleID) {
+            return (
+                .runningProcessLock,
+                "Quit app and related helpers, then retry uninstall."
+            )
+        }
+
+        if isImmutable(path: target.path) {
+            return (
+                .itemLocked,
+                "Item is locked/immutable. Unlock in Finder (Get Info) or clear immutable flag, then retry."
+            )
+        }
+
+        if isOnReadOnlyVolume(target) {
+            return (
+                .readOnlyVolume,
+                "Item is on a read-only volume. Move it to writable storage or remount writable."
+            )
+        }
+
+        if type == .appBundle, hasAppStoreReceipt(in: target) {
+            return (
+                .appStoreManaged,
+                "App Store bundle may require administrator authorization/App Management access. Keep DRay in Full Disk Access and retry."
+            )
+        }
+
+        if let initialError, isPermissionError(initialError) {
+            return (
+                .permissionDenied,
+                "Access denied by permissions/ownership/ACL. Re-check Full Disk Access and target write permissions, then retry."
+            )
+        }
+
+        return (
+            .unknown,
+            "Unknown removal failure. Reveal path and inspect ACL/owner/flags, then retry."
+        )
+    }
+
+    private func hasAppStoreReceipt(in appURL: URL) -> Bool {
+        let receipt = appURL.appendingPathComponent("Contents/_MASReceipt/receipt")
+        return FileManager.default.fileExists(atPath: receipt.path)
+    }
+
+    private func isOnReadOnlyVolume(_ url: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [.volumeIsReadOnlyKey]
+        guard let values = try? url.resourceValues(forKeys: keys) else { return false }
+        return values.volumeIsReadOnly == true
+    }
+
+    private func isImmutable(path: String) -> Bool {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return false }
+        let immutableValue = attrs[.immutable]
+        if let boolValue = immutableValue as? Bool {
+            return boolValue
+        }
+        if let number = immutableValue as? NSNumber {
+            return number.boolValue
+        }
+        return false
+    }
+
+    private func isRunningAppBundle(path: String, bundleID: String) -> Bool {
+        guard path.hasSuffix(".app") else { return false }
+        if !bundleID.isEmpty {
+            return !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        }
+        return false
     }
 }

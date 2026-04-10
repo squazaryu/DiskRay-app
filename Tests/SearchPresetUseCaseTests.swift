@@ -25,7 +25,9 @@ struct SearchPresetUseCaseTests {
             userDefaults: userDefaults,
             directoryURL: tempDir
         )
-        let useCase = SearchPresetUseCase(historyStore: historyStore)
+        let useCase = SearchPresetUseCase(
+            store: SearchPresetStore(historyStore: historyStore)
+        )
 
         let loaded = useCase.loadPresets()
 
@@ -40,7 +42,9 @@ struct SearchPresetUseCaseTests {
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let useCase = SearchPresetUseCase(
-            historyStore: OperationalHistoryStore(directoryURL: tempDir)
+            store: SearchPresetStore(
+                historyStore: OperationalHistoryStore(directoryURL: tempDir)
+            )
         )
         let existing = [makePreset(name: "Older")]
         let draft = SearchPresetDraft(
@@ -77,7 +81,9 @@ struct SearchPresetUseCaseTests {
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         let useCase = SearchPresetUseCase(
-            historyStore: OperationalHistoryStore(directoryURL: tempDir)
+            store: SearchPresetStore(
+                historyStore: OperationalHistoryStore(directoryURL: tempDir)
+            )
         )
         let keep = useCase.savePreset(
             named: "Keep",
@@ -103,7 +109,11 @@ struct SearchPresetUseCaseTests {
 
     @Test
     func applyPresetMapsValuesAndForcesLiveMode() {
-        let useCase = SearchPresetUseCase(historyStore: OperationalHistoryStore(directoryURL: FileManager.default.temporaryDirectory))
+        let useCase = SearchPresetUseCase(
+            store: SearchPresetStore(
+                historyStore: OperationalHistoryStore(directoryURL: FileManager.default.temporaryDirectory)
+            )
+        )
         let preset = SearchPreset(
             id: UUID(),
             name: "Saved",

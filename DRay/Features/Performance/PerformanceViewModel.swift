@@ -4,17 +4,23 @@ import Combine
 @MainActor
 final class PerformanceViewModel: ObservableObject {
     private let root: RootViewModel
+    private let performanceController: PerformanceFeatureController
     private var rootChangeCancellable: AnyCancellable?
+    private var performanceChangeCancellable: AnyCancellable?
 
     init(root: RootViewModel) {
         self.root = root
+        self.performanceController = root.performanceController
         self.rootChangeCancellable = root.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        self.performanceChangeCancellable = performanceController.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
     }
 
     var performance: PerformanceFeatureState {
-        root.performance
+        performanceController.state
     }
 
     var appLanguage: AppLanguage {
@@ -26,11 +32,11 @@ final class PerformanceViewModel: ObservableObject {
     }
 
     func runPerformanceScan() {
-        root.runPerformanceScan()
+        performanceController.runDiagnostics()
     }
 
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
-        root.cleanupStartupEntries(entries)
+        performanceController.cleanupStartupEntries(entries)
     }
 
     func reduceCPULoad(consumers: [ProcessConsumer], limit: Int = 3) -> LoadReliefResult {

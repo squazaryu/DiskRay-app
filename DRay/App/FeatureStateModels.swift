@@ -15,10 +15,15 @@ struct SearchFeatureState {
     var onlyFiles = false
     var useRegex = false
     var depthMin = 0
-    var depthMax = 12
+    var depthMax = 64
     var modifiedWithinDays = 0
     var nodeType: QueryEngine.SearchNodeType = .any
     var mode: SearchExecutionMode = .live
+    var scopeMode: SearchScopeMode = .startupDisk
+    var customScopePath = "/"
+    var excludeTrash = true
+    var includeHidden = true
+    var includePackageContents = true
     var isLiveRunning = false
     var liveResults: [FileNode] = []
     var presets: [SearchPreset] = []
@@ -46,4 +51,34 @@ struct PerformanceFeatureState {
     var isScanRunning = false
     var startupCleanupReport: StartupCleanupReport?
     var activeLoadReliefAdjustments = 0
+    var quickActionDelta: QuickActionDeltaReport?
+}
+
+struct PrivacyFeatureState {
+    var categories: [PrivacyCategoryState] = []
+    var isScanRunning = false
+    var cleanReport: PrivacyCleanReport?
+    var quickActionDelta: QuickActionDeltaReport?
+}
+
+struct RecoveryFeatureState {
+    var recentlyDeleted: [RecentlyDeletedItem] = []
+    var quickActionRollbackSessions: [QuickActionRollbackSession] = []
+}
+
+struct UninstallerFeatureState {
+    var installedApps: [InstalledApp] = []
+    var remnants: [AppRemnant] = []
+    var isLoading = false
+    var uninstallReport: UninstallValidationReport?
+    var verifyReport: UninstallVerifyReport?
+    var isVerifyRunning = false
+    var sessions: [UninstallSession] = []
+}
+
+struct RepairFeatureState {
+    var artifacts: [AppRemnant] = []
+    var isLoading = false
+    var report: UninstallValidationReport?
+    var sessions: [UninstallSession] = []
 }

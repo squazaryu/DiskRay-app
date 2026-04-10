@@ -227,7 +227,7 @@ struct RootView: View {
         case .performance:
             PerformanceView(rootModel: model)
         case .privacy:
-            PrivacyView(model: model)
+            PrivacyView(rootModel: model)
         case .recovery:
             RecoveryView(model: model)
         case .settings:

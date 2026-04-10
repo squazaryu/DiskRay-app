@@ -11,16 +11,40 @@ struct RepairView: View {
     @State private var repairStrategy: AppRepairStrategy = .safeReset
     @State private var showDeepResetConfirm = false
 
+    private var installedApps: [InstalledApp] {
+        model.uninstaller.state.installedApps
+    }
+
+    private var repairState: RepairFeatureState {
+        model.repair.state
+    }
+
+    private var repairArtifacts: [AppRemnant] {
+        repairState.artifacts
+    }
+
+    private var isRepairLoading: Bool {
+        repairState.isLoading
+    }
+
+    private var repairReport: UninstallValidationReport? {
+        repairState.report
+    }
+
+    private var repairSessions: [UninstallSession] {
+        repairState.sessions
+    }
+
     private var selectedApp: InstalledApp? {
         guard let selectedAppPath else { return nil }
-        return model.installedApps.first { $0.appURL.path == selectedAppPath }
+        return installedApps.first { $0.appURL.path == selectedAppPath }
     }
 
     private var filteredApps: [InstalledApp] {
         let query = appSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.installedApps }
+        guard !query.isEmpty else { return installedApps }
         let lower = query.lowercased()
-        return model.installedApps.filter {
+        return installedApps.filter {
             $0.name.lowercased().contains(lower)
             || $0.bundleID.lowercased().contains(lower)
             || $0.appURL.path.lowercased().contains(lower)
@@ -29,7 +53,7 @@ struct RepairView: View {
 
     private var selectedArtifacts: [AppRemnant] {
         let selected = selectedArtifactPaths
-        return model.repairArtifacts.filter { selected.contains($0.url.path) }
+        return repairArtifacts.filter { selected.contains($0.url.path) }
     }
 
     private var reclaimedSizeText: String {
@@ -38,7 +62,7 @@ struct RepairView: View {
     }
 
     private var strategyPreviewArtifacts: [AppRemnant] {
-        model.recommendedRepairArtifacts(for: repairStrategy)
+        model.repair.recommendedArtifacts(for: repairStrategy)
     }
 
     private var strategyPreviewSizeText: String {
@@ -48,7 +72,7 @@ struct RepairView: View {
 
     private var strategyRiskCounts: (low: Int, medium: Int, high: Int) {
         strategyPreviewArtifacts.reduce(into: (low: 0, medium: 0, high: 0)) { partial, artifact in
-            switch model.repairRisk(for: artifact) {
+            switch model.repair.repairRisk(for: artifact) {
             case .low:
                 partial.low += 1
             case .medium:
@@ -108,18 +132,22 @@ struct RepairView: View {
                             }
                             Spacer()
                             Button("Rescan Artifacts") {
-                                model.loadRepairArtifacts(for: selectedApp)
+                                model.repair.loadArtifacts(for: selectedApp)
                             }
                             .buttonStyle(.bordered)
                             Button("Repair") {
-                                model.runAppRepair(
+                                model.repair.runRepair(
                                     app: selectedApp,
-                                    artifacts: selectedArtifacts.isEmpty ? model.repairArtifacts : selectedArtifacts,
-                                    relaunchAfterRepair: relaunchAfterRepair
-                                )
+                                    artifacts: selectedArtifacts.isEmpty ? repairArtifacts : selectedArtifacts
+                                ) { _ in
+                                    model.repair.loadArtifacts(for: selectedApp)
+                                    if relaunchAfterRepair {
+                                        relaunch(selectedApp)
+                                    }
+                                }
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(model.repairArtifacts.isEmpty || model.isRepairLoading)
+                            .disabled(repairArtifacts.isEmpty || isRepairLoading)
                         }
                         .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
 
@@ -163,7 +191,7 @@ struct RepairView: View {
 
                     ScrollView {
                         LazyVStack(spacing: 6) {
-                            ForEach(model.repairArtifacts) { artifact in
+                            ForEach(repairArtifacts) { artifact in
                                 repairArtifactRow(artifact)
                             }
                         }
@@ -171,12 +199,12 @@ struct RepairView: View {
                     }
                     .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 0)
                     .overlay {
-                        if model.isRepairLoading {
+                        if isRepairLoading {
                             ProgressView("Repair scan in progress...")
                         }
                     }
 
-                    if let report = model.repairReport {
+                    if let report = repairReport {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Repair report")
                                 .font(.headline)
@@ -190,13 +218,13 @@ struct RepairView: View {
                         .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
                     }
 
-                    if !model.repairSessions.isEmpty {
+                    if !repairSessions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Repair rollback sessions")
                                 .font(.headline)
                             ScrollView {
                                 LazyVStack(spacing: 8) {
-                                    ForEach(Array(model.repairSessions.prefix(10))) { session in
+                                    ForEach(Array(repairSessions.prefix(10))) { session in
                                         repairRollbackSessionCard(session)
                                     }
                                 }
@@ -220,27 +248,27 @@ struct RepairView: View {
         }
         .padding(12)
         .onAppear {
-            if model.installedApps.isEmpty {
-                model.loadInstalledApps()
+            if installedApps.isEmpty {
+                model.uninstaller.loadInstalledApps()
             }
             if selectedAppPath == nil {
-                selectedAppPath = model.installedApps.first?.appURL.path
+                selectedAppPath = installedApps.first?.appURL.path
             }
         }
         .onChange(of: selectedAppPath) {
             guard let selectedApp else { return }
             selectedArtifactPaths = []
-            model.loadRepairArtifacts(for: selectedApp)
+            model.repair.loadArtifacts(for: selectedApp)
         }
-        .onChange(of: model.installedApps) {
+        .onChange(of: installedApps) {
             guard selectedAppPath == nil else { return }
-            selectedAppPath = model.installedApps.first?.appURL.path
+            selectedAppPath = installedApps.first?.appURL.path
         }
-        .onChange(of: model.repairArtifacts) {
-            let available = Set(model.repairArtifacts.map { $0.url.path })
+        .onChange(of: repairArtifacts) {
+            let available = Set(repairArtifacts.map { $0.url.path })
             selectedArtifactPaths = selectedArtifactPaths.intersection(available)
             if selectedArtifactPaths.isEmpty {
-                selectedArtifactPaths = Set(model.recommendedRepairArtifacts(for: repairStrategy).map { $0.url.path })
+                selectedArtifactPaths = Set(model.repair.recommendedArtifacts(for: repairStrategy).map { $0.url.path })
             }
         }
         .confirmationDialog(
@@ -265,11 +293,11 @@ struct RepairView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                    GlassPillBadge(title: "\(model.repairArtifacts.count) artifacts", tint: .orange)
+                    GlassPillBadge(title: "\(repairArtifacts.count) artifacts", tint: .orange)
                     GlassPillBadge(title: "Selected \(selectedArtifacts.count)", tint: .green)
 
                     Button("Rescan Apps") {
-                        model.loadInstalledApps()
+                        model.uninstaller.loadInstalledApps()
                     }
                     .buttonStyle(.bordered)
                 }
@@ -314,7 +342,7 @@ struct RepairView: View {
 
     private func repairArtifactRow(_ artifact: AppRemnant) -> some View {
         let isSelected = selectedArtifactPaths.contains(artifact.url.path)
-        let risk = model.repairRisk(for: artifact)
+        let risk = model.repair.repairRisk(for: artifact)
         return Button {
             toggleArtifactSelection(artifact.url.path)
         } label: {
@@ -364,10 +392,10 @@ struct RepairView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("Restore All") {
-                    let restored = model.restoreFromRepairSession(session)
-                    if restored > 0 {
+                    let restored = model.repair.restoreFromSession(session)
+                    if restored.restoredCount > 0 {
                         if let selectedApp {
-                            model.loadRepairArtifacts(for: selectedApp)
+                            model.repair.loadArtifacts(for: selectedApp)
                         }
                     }
                 }
@@ -381,10 +409,10 @@ struct RepairView: View {
                         .lineLimit(1)
                     Spacer()
                     Button("Restore") {
-                        let restored = model.restoreFromRepairSession(session, item: item)
-                        if restored > 0 {
+                        let restored = model.repair.restoreFromSession(session, item: item)
+                        if restored.restoredCount > 0 {
                             if let selectedApp {
-                                model.loadRepairArtifacts(for: selectedApp)
+                                model.repair.loadArtifacts(for: selectedApp)
                             }
                         }
                     }
@@ -427,6 +455,12 @@ struct RepairView: View {
             return
         }
         selectedArtifactPaths = Set(strategyPreviewArtifacts.map { $0.url.path })
+    }
+
+    private func relaunch(_ app: InstalledApp) {
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID)
+        running.forEach { $0.terminate() }
+        _ = NSWorkspace.shared.open(app.appURL)
     }
 
     private func riskBadge(_ label: String, color: Color) -> some View {

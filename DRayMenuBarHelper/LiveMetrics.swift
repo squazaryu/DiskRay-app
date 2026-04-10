@@ -128,7 +128,8 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             }
         }
 
-        snapshot = LiveSystemSnapshot(
+        publishSnapshotIfChanged(
+            LiveSystemSnapshot(
             updatedAt: now,
             cpuLoadPercent: cpu.totalLoad,
             cpuUserPercent: cpu.user,
@@ -147,6 +148,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             topCPUConsumers: cachedCPUConsumers,
             topMemoryConsumers: cachedMemoryConsumers,
             topBatteryConsumers: cachedBatteryConsumers
+            )
         )
     }
 
@@ -157,7 +159,8 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             source: .event,
             now: now
         )
-        snapshot = LiveSystemSnapshot(
+        publishSnapshotIfChanged(
+            LiveSystemSnapshot(
             updatedAt: now,
             cpuLoadPercent: snapshot.cpuLoadPercent,
             cpuUserPercent: snapshot.cpuUserPercent,
@@ -176,7 +179,13 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             topCPUConsumers: snapshot.topCPUConsumers,
             topMemoryConsumers: snapshot.topMemoryConsumers,
             topBatteryConsumers: snapshot.topBatteryConsumers
+            )
         )
+    }
+
+    private func publishSnapshotIfChanged(_ candidate: LiveSystemSnapshot) {
+        guard snapshot.hasMeaningfulDifference(comparedTo: candidate) else { return }
+        snapshot = candidate
     }
 
     private func cpuSample() -> (totalLoad: Double, user: Double, system: Double) {
@@ -371,6 +380,49 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return NetworkCounters(timestamp: now, inboundBytes: inbound, outboundBytes: outbound)
     }
 
+}
+
+private extension LiveSystemSnapshot {
+    func hasMeaningfulDifference(comparedTo other: LiveSystemSnapshot) -> Bool {
+        if batteryLevelPercent != other.batteryLevelPercent { return true }
+        if batteryIsCharging != other.batteryIsCharging { return true }
+        if batteryMinutesRemaining != other.batteryMinutesRemaining { return true }
+
+        if !approximatelyEqual(cpuLoadPercent, other.cpuLoadPercent, epsilon: 0.30) { return true }
+        if !approximatelyEqual(cpuUserPercent, other.cpuUserPercent, epsilon: 0.30) { return true }
+        if !approximatelyEqual(cpuSystemPercent, other.cpuSystemPercent, epsilon: 0.30) { return true }
+        if !approximatelyEqual(memoryPressurePercent, other.memoryPressurePercent, epsilon: 0.40) { return true }
+
+        if abs(memoryUsedBytes - other.memoryUsedBytes) >= 16 * 1_024 * 1_024 { return true }
+        if memoryTotalBytes != other.memoryTotalBytes { return true }
+        if abs(diskFreeBytes - other.diskFreeBytes) >= 4 * 1_024 * 1_024 { return true }
+        if diskTotalBytes != other.diskTotalBytes { return true }
+
+        if !approximatelyEqual(networkDownBytesPerSecond, other.networkDownBytesPerSecond, epsilon: 1_024) { return true }
+        if !approximatelyEqual(networkUpBytesPerSecond, other.networkUpBytesPerSecond, epsilon: 1_024) { return true }
+        if !approximatelyEqual(uptimeSeconds, other.uptimeSeconds, epsilon: 2.0) { return true }
+
+        if consumersChanged(topCPUConsumers, other.topCPUConsumers) { return true }
+        if consumersChanged(topMemoryConsumers, other.topMemoryConsumers) { return true }
+        if consumersChanged(topBatteryConsumers, other.topBatteryConsumers) { return true }
+
+        return false
+    }
+
+    private func approximatelyEqual(_ lhs: Double, _ rhs: Double, epsilon: Double) -> Bool {
+        abs(lhs - rhs) <= epsilon
+    }
+
+    private func consumersChanged(_ lhs: [ProcessConsumer], _ rhs: [ProcessConsumer]) -> Bool {
+        guard lhs.count == rhs.count else { return true }
+        for (left, right) in zip(lhs, rhs) {
+            if left.pid != right.pid || left.name != right.name { return true }
+            if abs(left.cpuPercent - right.cpuPercent) > 0.8 { return true }
+            if abs(left.memoryMB - right.memoryMB) > 16 { return true }
+            if abs(left.batteryImpactScore - right.batteryImpactScore) > 2.0 { return true }
+        }
+        return false
+    }
 }
 
 private struct CPUCounters {

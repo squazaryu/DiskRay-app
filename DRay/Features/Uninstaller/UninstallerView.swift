@@ -8,21 +8,53 @@ struct UninstallerView: View {
     @State private var appSearchQuery = ""
     @State private var showUninstallPreview = false
 
+    private var uninstallerState: UninstallerFeatureState {
+        model.uninstaller.state
+    }
+
+    private var installedApps: [InstalledApp] {
+        uninstallerState.installedApps
+    }
+
+    private var remnants: [AppRemnant] {
+        uninstallerState.remnants
+    }
+
+    private var isUninstallerLoading: Bool {
+        uninstallerState.isLoading
+    }
+
+    private var uninstallReport: UninstallValidationReport? {
+        uninstallerState.uninstallReport
+    }
+
+    private var uninstallVerifyReport: UninstallVerifyReport? {
+        uninstallerState.verifyReport
+    }
+
+    private var isUninstallVerifyRunning: Bool {
+        uninstallerState.isVerifyRunning
+    }
+
+    private var uninstallSessions: [UninstallSession] {
+        uninstallerState.sessions
+    }
+
     private var remnantTotalSizeText: String {
-        let total = model.uninstallerRemnants.reduce(Int64(0)) { $0 + $1.sizeInBytes }
+        let total = remnants.reduce(Int64(0)) { $0 + $1.sizeInBytes }
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
     }
 
     private var selectedApp: InstalledApp? {
         guard let selectedAppPath else { return nil }
-        return model.installedApps.first { $0.appURL.path == selectedAppPath }
+        return installedApps.first { $0.appURL.path == selectedAppPath }
     }
 
     private var filteredApps: [InstalledApp] {
         let query = appSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.installedApps }
+        guard !query.isEmpty else { return installedApps }
         let lower = query.lowercased()
-        return model.installedApps.filter {
+        return installedApps.filter {
             $0.name.lowercased().contains(lower)
             || $0.bundleID.lowercased().contains(lower)
             || $0.appURL.path.lowercased().contains(lower)
@@ -58,7 +90,7 @@ struct UninstallerView: View {
                 .padding(10)
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
                 .overlay {
-                    if model.isUninstallerLoading {
+                    if isUninstallerLoading {
                         ProgressView("Loading apps...")
                     }
                 }
@@ -87,9 +119,9 @@ struct UninstallerView: View {
                         .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
 
                         HStack(spacing: 8) {
-                            GlassPillBadge(title: "Detected remnants: \(model.uninstallerRemnants.count)", tint: .orange)
+                            GlassPillBadge(title: "Detected remnants: \(remnants.count)", tint: .orange)
                             GlassPillBadge(title: "Size \(remnantTotalSizeText)", tint: .blue)
-                            if let report = model.uninstallReport {
+                            if let report = uninstallReport {
                                 GlassPillBadge(title: "Removed \(report.removedCount)", tint: .green)
                                 GlassPillBadge(title: "Failed \(report.failedCount)", tint: .red)
                             }
@@ -97,7 +129,7 @@ struct UninstallerView: View {
 
                         ScrollView {
                             LazyVStack(spacing: 6) {
-                                ForEach(model.uninstallerRemnants) { remnant in
+                                ForEach(remnants) { remnant in
                                     remnantRow(remnant)
                                 }
                             }
@@ -105,7 +137,7 @@ struct UninstallerView: View {
                         }
                         .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
                         .overlay {
-                            if model.uninstallerRemnants.isEmpty && !model.isUninstallerLoading {
+                            if remnants.isEmpty && !isUninstallerLoading {
                                 ContentUnavailableView(
                                     "No remnants found",
                                     systemImage: "checkmark.seal",
@@ -114,7 +146,7 @@ struct UninstallerView: View {
                             }
                         }
 
-                        if let report = model.uninstallReport {
+                        if let report = uninstallReport {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Validation report")
                                     .font(.headline)
@@ -126,7 +158,7 @@ struct UninstallerView: View {
                             .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
                         }
 
-                        if model.isUninstallVerifyRunning {
+                        if isUninstallVerifyRunning {
                             HStack(spacing: 8) {
                                 ProgressView()
                                 Text("Post-uninstall verify pass in progress...")
@@ -135,17 +167,17 @@ struct UninstallerView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
-                        } else if let verify = model.uninstallVerifyReport {
+                        } else if let verify = uninstallVerifyReport {
                             uninstallVerifyPanel(verify, app: selectedApp)
                         }
 
-                        if !model.uninstallSessions.isEmpty {
+                        if !uninstallSessions.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Rollback sessions")
                                     .font(.headline)
                                 ScrollView {
                                     LazyVStack(spacing: 8) {
-                                        ForEach(Array(model.uninstallSessions.prefix(10))) { session in
+                                        ForEach(Array(uninstallSessions.prefix(10))) { session in
                                             rollbackSessionCard(session)
                                         }
                                     }
@@ -165,28 +197,35 @@ struct UninstallerView: View {
         }
         .padding(12)
         .onAppear {
-            if model.installedApps.isEmpty {
-                model.loadInstalledApps()
+            if installedApps.isEmpty {
+                model.uninstaller.loadInstalledApps()
             }
             if selectedAppPath == nil {
-                selectedAppPath = model.installedApps.first?.appURL.path
+                selectedAppPath = installedApps.first?.appURL.path
             }
         }
         .onChange(of: selectedAppPath) {
             guard let selectedApp else { return }
-            model.loadRemnants(for: selectedApp)
+            model.uninstaller.loadRemnants(for: selectedApp)
         }
-        .onChange(of: model.installedApps) {
+        .onChange(of: installedApps) {
             guard selectedAppPath == nil else { return }
-            selectedAppPath = model.installedApps.first?.appURL.path
+            selectedAppPath = installedApps.first?.appURL.path
         }
         .sheet(isPresented: $showUninstallPreview) {
             if let selectedApp {
                 UninstallPreviewSheet(
                     app: selectedApp,
-                    previewItems: model.uninstallPreview(for: selectedApp),
+                    previewItems: model.uninstaller.uninstallPreview(for: selectedApp),
                     onConfirm: { selectedItems in
-                        model.uninstall(app: selectedApp, selectedItems: selectedItems)
+                        let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: selectedApp.bundleID).isEmpty
+                        model.uninstaller.uninstall(
+                            app: selectedApp,
+                            selectedItems: selectedItems,
+                            isAppRunning: isRunning
+                        ) { _ in
+                            model.uninstaller.loadInstalledApps()
+                        }
                         showUninstallPreview = false
                     }
                 )
@@ -202,10 +241,10 @@ struct UninstallerView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                    GlassPillBadge(title: "\(model.uninstallerRemnants.count) remnants", tint: .orange)
+                    GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
 
                     Button("Rescan Apps") {
-                        model.loadInstalledApps()
+                        model.uninstaller.loadInstalledApps()
                     }
                     .buttonStyle(.bordered)
 
@@ -285,7 +324,10 @@ struct UninstallerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("Restore All") {
-                    _ = model.restoreFromUninstallSession(session)
+                    let restored = model.uninstaller.restoreFromSession(session)
+                    if restored.restoredCount > 0, let selectedApp {
+                        model.uninstaller.loadRemnants(for: selectedApp)
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -297,7 +339,10 @@ struct UninstallerView: View {
                         .lineLimit(1)
                     Spacer()
                     Button("Restore") {
-                        _ = model.restoreFromUninstallSession(session, item: item)
+                        let restored = model.uninstaller.restoreFromSession(session, item: item)
+                        if restored.restoredCount > 0, let selectedApp {
+                            model.uninstaller.loadRemnants(for: selectedApp)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -328,7 +373,8 @@ struct UninstallerView: View {
                     .font(.headline)
                 Spacer()
                 Button("Re-run Verify") {
-                    model.runUninstallVerifyPass(for: app)
+                    let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
+                    model.uninstaller.runVerifyPass(for: app, isAppRunning: isRunning)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -337,6 +383,12 @@ struct UninstallerView: View {
             Text("Attempted \(verify.attemptedItems) · Removed \(verify.removedItems) · Remaining \(verify.remainingCount)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+            if verify.startupReferenceCount > 0 {
+                Text("Startup references detected: \(verify.startupReferenceCount)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
 
             if verify.remaining.isEmpty {
                 Label("No leftovers detected after verification.", systemImage: "checkmark.seal.fill")
@@ -353,6 +405,43 @@ struct UninstallerView: View {
                     .padding(8)
                 }
                 .frame(minHeight: 160, maxHeight: 260)
+            }
+
+            if !verify.startupReferences.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Potential relaunch sources")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(verify.startupReferences) { reference in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(reference.source.title)
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Color.orange.opacity(0.14), in: Capsule())
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(reference.displayPath)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Text(reference.reason)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 8)
+                            if let url = reference.url {
+                                Button("Reveal") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
             }
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
@@ -423,6 +512,16 @@ struct UninstallerView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
+                            if let category = row.failureCategory {
+                                Text("Category: \(failureCategoryTitle(category))")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.orange)
+                            }
+                            if let remediation = row.remediationHint, !remediation.isEmpty {
+                                Text("Fix: \(remediation)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         Spacer()
                         Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([row.url]) }
@@ -472,6 +571,18 @@ struct UninstallerView: View {
         case .removed: return .green
         case .skippedProtected, .missing: return .orange
         case .failed: return .red
+        }
+    }
+
+    private func failureCategoryTitle(_ category: UninstallFailureCategory) -> String {
+        switch category {
+        case .permissionDenied: return "Permission Denied"
+        case .appStoreManaged: return "App Store Managed"
+        case .itemLocked: return "Locked/Immutable"
+        case .readOnlyVolume: return "Read-only Volume"
+        case .runningProcessLock: return "Running Process Lock"
+        case .protectedBySystem: return "SIP/TCC Protected"
+        case .unknown: return "Unknown"
         }
     }
 }

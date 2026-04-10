@@ -10,16 +10,19 @@ struct RootViewModelDependencies {
     let duplicateFinderService: DuplicateFinderService
     let performanceService: PerformanceService
     let privacyService: PrivacyService
-    let queryEngine: QueryEngine
     let liveSearchService: LiveSearchService
     let menuBarLoginAgentService: MenuBarLoginAgentService
     let indexStore: SQLiteIndexStore?
     let safeFileOperations: SafeFileOperationService
     let processPriorityService: ProcessPriorityService
     let historyStore: OperationalHistoryStore
+    let searchPresetStore: any SearchPresetStoring
+    let recoveryStore: any RecoveryStoring
+    let uiSettingsStore: any UISettingsStoring
 
     static var live: RootViewModelDependencies {
-        RootViewModelDependencies(
+        let historyStore = OperationalHistoryStore()
+        return RootViewModelDependencies(
             permissions: AppPermissionService(),
             operationLogs: OperationLogStore(),
             scanner: FileScanner(),
@@ -28,13 +31,15 @@ struct RootViewModelDependencies {
             duplicateFinderService: DuplicateFinderService(),
             performanceService: PerformanceService(),
             privacyService: PrivacyService(),
-            queryEngine: QueryEngine(),
             liveSearchService: LiveSearchService(),
             menuBarLoginAgentService: MenuBarLoginAgentService(),
             indexStore: SQLiteIndexStore(),
             safeFileOperations: SafeFileOperationService(),
             processPriorityService: ProcessPriorityService(),
-            historyStore: OperationalHistoryStore()
+            historyStore: historyStore,
+            searchPresetStore: SearchPresetStore(historyStore: historyStore),
+            recoveryStore: RecoveryStore(historyStore: historyStore),
+            uiSettingsStore: UISettingsStore()
         )
     }
 }

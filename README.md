@@ -53,12 +53,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 1.1.0 1
+./scripts/install_app.sh 1.2.0-beta 1
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 1.1.0
+./scripts/package_release.sh 1.2.0-beta
 ```
 Artifacts are created in `dist`.
 
@@ -74,7 +74,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 1.1.0`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 1.2.0-beta`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -88,4 +88,4 @@ Optional:
 - Past notes: `docs/releases`
 
 ## Current Channel
-`v1.1.0` is the active stable channel with architecture stabilization, safer file-operation orchestration, and expanded deterministic test coverage.
+`v1.2.0-beta` is the active beta channel with feature-controller decomposition, safer uninstall/search operations, and menu-bar helper stability improvements.

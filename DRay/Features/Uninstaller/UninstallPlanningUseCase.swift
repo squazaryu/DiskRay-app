@@ -22,6 +22,7 @@ struct UninstallPlanningUseCase {
         previewItems: [UninstallPreviewItem],
         validation: UninstallValidationReport?,
         remaining: [AppRemnant],
+        startupReferences: [UninstallStartupReference] = [],
         isProtectedPath: (String) -> Bool,
         isAppRunning: Bool
     ) -> UninstallVerifyReport {
@@ -38,7 +39,9 @@ struct UninstallPlanningUseCase {
                 case .skippedProtected:
                     reason = "Skipped: system-protected path (SIP/TCC)."
                 case .failed:
-                    if let details = action.details, !details.isEmpty {
+                    if let remediation = action.remediationHint, !remediation.isEmpty {
+                        reason = "Failed to remove: \(action.details ?? "unknown error"). Fix: \(remediation)"
+                    } else if let details = action.details, !details.isEmpty {
                         reason = "Failed to remove: \(details)"
                     } else {
                         reason = "Failed to remove: unknown filesystem error."
@@ -75,7 +78,8 @@ struct UninstallPlanningUseCase {
             createdAt: Date(),
             attemptedItems: attemptedPaths.count,
             removedItems: validation?.removedCount ?? 0,
-            remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes }
+            remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes },
+            startupReferences: startupReferences
         )
     }
 

@@ -116,6 +116,44 @@ struct SafeFileOperationServiceTests {
         #expect(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
+    @Test
+    func moveToTrashIgnoresChildWhenParentAlsoSelected() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let parentURL = tempDir.appendingPathComponent("parent", isDirectory: true)
+        try FileManager.default.createDirectory(at: parentURL, withIntermediateDirectories: true)
+        let childURL = parentURL.appendingPathComponent("child.txt")
+        try Data("payload".utf8).write(to: childURL)
+
+        let parentNode = FileNode(
+            url: parentURL,
+            name: "parent",
+            isDirectory: true,
+            sizeInBytes: 0,
+            children: []
+        )
+        let childNode = FileNode(
+            url: childURL,
+            name: "child.txt",
+            isDirectory: false,
+            sizeInBytes: 7,
+            children: []
+        )
+
+        let service = SafeFileOperationService()
+        let outcome = service.moveToTrash(
+            nodes: [childNode, parentNode],
+            actionName: "Move to Trash",
+            canModify: { _, _ in true },
+            permissionHint: { nil }
+        )
+
+        #expect(outcome.moved.count == 1)
+        #expect(outcome.failures.isEmpty)
+        #expect(outcome.skippedProtected.isEmpty)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let root = FileManager.default.temporaryDirectory
         let url = root.appendingPathComponent("dray-tests-\(UUID().uuidString)", isDirectory: true)

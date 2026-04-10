@@ -62,14 +62,22 @@ final class SafeFileOperationService {
         var failures: [SafeTrashFailure] = []
         var blockedPermissionHint: String?
 
-        for node in nodes {
-            let path = node.url.path
+        for node in normalizedTrashNodes(nodes) {
+            let path = node.url.standardizedFileURL.path
+            let targetURL = URL(fileURLWithPath: path)
+
+            // If parent directory has already been moved, children should be
+            // silently ignored instead of reported as permission failures.
+            guard fileManager.fileExists(atPath: path) else {
+                continue
+            }
+
             if isProtectedPath(path) {
                 skippedProtected.append(path)
                 continue
             }
 
-            if !canModify([node.url], actionName) {
+            if !canModify([targetURL], actionName) {
                 failures.append(
                     SafeTrashFailure(
                         path: path,
@@ -85,7 +93,7 @@ final class SafeFileOperationService {
 
             do {
                 var trashedURL: NSURL?
-                try fileManager.trashItem(at: node.url, resultingItemURL: &trashedURL)
+                try fileManager.trashItem(at: targetURL, resultingItemURL: &trashedURL)
                 if let trashedPath = (trashedURL as URL?)?.path {
                     moved.append(
                         SafeTrashMove(
@@ -111,6 +119,39 @@ final class SafeFileOperationService {
             failures: failures,
             blockedPermissionHint: blockedPermissionHint
         )
+    }
+
+    private func normalizedTrashNodes(_ nodes: [FileNode]) -> [FileNode] {
+        var uniqueByPath: [String: FileNode] = [:]
+        for node in nodes {
+            let path = node.url.standardizedFileURL.path
+            if uniqueByPath[path] == nil {
+                uniqueByPath[path] = node
+            }
+        }
+
+        let sorted = uniqueByPath.values.sorted { lhs, rhs in
+            let leftPath = lhs.url.standardizedFileURL.path
+            let rightPath = rhs.url.standardizedFileURL.path
+            let leftDepth = leftPath.split(separator: "/").count
+            let rightDepth = rightPath.split(separator: "/").count
+            if leftDepth != rightDepth {
+                return leftDepth < rightDepth
+            }
+            return leftPath < rightPath
+        }
+
+        var acceptedRoots: [String] = []
+        var filtered: [FileNode] = []
+        for node in sorted {
+            let path = node.url.standardizedFileURL.path
+            if acceptedRoots.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
+                continue
+            }
+            acceptedRoots.append(path)
+            filtered.append(node)
+        }
+        return filtered
     }
 
     func restore(_ requests: [SafeRestoreRequest]) -> SafeRestoreOutcome {

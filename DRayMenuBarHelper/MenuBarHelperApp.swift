@@ -113,9 +113,6 @@ final class MenuBarHelperAppDelegate: NSObject, NSApplicationDelegate {
 
     private func dismissTransientUI() {
         NotificationCenter.default.post(name: .helperDismissTransientUI, object: nil)
-        for window in NSApp.windows where window.isVisible {
-            window.orderOut(nil)
-        }
     }
 }
 
@@ -128,7 +125,7 @@ struct DRayMenuBarHelperApp: App {
 
     init() {
         let config = HelperConfig(arguments: CommandLine.arguments)
-        let liveMonitor = LiveSystemMetricsMonitor(updateInterval: 0.5, heavySamplePeriod: 4.0)
+        let liveMonitor = LiveSystemMetricsMonitor(updateInterval: 1.0, heavySamplePeriod: 4.0)
         _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
         _monitor = StateObject(wrappedValue: liveMonitor)
         AppBundleIconThemeSynchronizer.shared.start(appPath: config.appPath)
@@ -145,7 +142,11 @@ struct DRayMenuBarHelperApp: App {
         } label: {
             MenuBarStatusIcon(monitor: monitor)
         }
+        #if DRAY_HELPER_MENU_STYLE_MENU
+        .menuBarExtraStyle(.menu)
+        #else
         .menuBarExtraStyle(.window)
+        #endif
     }
 }
 
@@ -188,7 +189,7 @@ private struct MenuBarPopupView: View {
     @State private var suppressBatteryDetailsOpenUntil = Date.distantPast
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
-    private let batteryRefreshTimer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
+    private let batteryRefreshTimer = Timer.publish(every: 5.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -212,24 +213,18 @@ private struct MenuBarPopupView: View {
             showReliefConfirm = false
             pendingReliefAction = nil
         }
+        .onDisappear {
+            showHealthDetails = false
+            showBatteryDetails = false
+            showReliefConfirm = false
+            pendingReliefAction = nil
+        }
         .onChange(of: showBatteryDetails) {
             if !showBatteryDetails {
                 suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
             }
         }
         .onReceive(batteryRefreshTimer) { _ in
-            guard showBatteryDetails else { return }
-            loadBatteryDetails()
-        }
-        .onChange(of: monitor.snapshot.batteryLevelPercent) {
-            guard showBatteryDetails else { return }
-            loadBatteryDetails()
-        }
-        .onChange(of: monitor.snapshot.batteryIsCharging) {
-            guard showBatteryDetails else { return }
-            loadBatteryDetails()
-        }
-        .onChange(of: monitor.snapshot.batteryMinutesRemaining) {
             guard showBatteryDetails else { return }
             loadBatteryDetails()
         }
@@ -245,6 +240,26 @@ private struct MenuBarPopupView: View {
             if showReliefConfirm {
                 reliefConfirmOverlay
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .overlay {
+            if showBatteryDetails {
+                ZStack {
+                    Color.black.opacity(colorScheme == .dark ? 0.34 : 0.18)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(true)
+
+                    BatteryDetailsSheetView(
+                        snapshot: batterySnapshot,
+                        isLoading: isBatteryDetailsLoading,
+                        errorText: batteryDetailsError,
+                        onRefresh: loadBatteryDetails,
+                        onClose: { closeBatteryDetails() }
+                    )
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.14), radius: 16, y: 8)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                .zIndex(10)
             }
         }
     }
@@ -504,45 +519,6 @@ private struct MenuBarPopupView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                if showBatteryDetails {
-                    Button {
-                        closeBatteryDetails()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(closeTintColor)
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                        BatteryDetailsSheetView(
-                            snapshot: batterySnapshot,
-                            isLoading: isBatteryDetailsLoading,
-                            errorText: batteryDetailsError,
-                            onRefresh: loadBatteryDetails,
-                            onClose: { closeBatteryDetails() }
-                        )
-                        .padding(8)
-                    }
-                } else {
-                    Button {
-                        openBatteryDetails()
-                    } label: {
-                        Image(systemName: "chevron.right.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(tintColor)
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $showBatteryDetails, attachmentAnchor: .point(.bottom), arrowEdge: .top) {
-                        BatteryDetailsSheetView(
-                            snapshot: batterySnapshot,
-                            isLoading: isBatteryDetailsLoading,
-                            errorText: batteryDetailsError,
-                            onRefresh: loadBatteryDetails,
-                            onClose: { closeBatteryDetails() }
-                        )
-                        .padding(8)
-                    }
-                }
             }
             Text(batteryStateText)
                 .font(.caption)
@@ -558,13 +534,13 @@ private struct MenuBarPopupView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(health >= 80 ? .green : .orange)
                 } else {
-                    Text("Tap arrow for details")
+                    Text("Tap Details for diagnostics")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Details") {
-                    model.open(section: .performance, action: .runPerformanceScan)
+                    openBatteryDetails()
                 }
                 .controlSize(.small)
                 .buttonStyle(.bordered)
@@ -643,10 +619,6 @@ private struct MenuBarPopupView: View {
 
     private var tintColor: Color {
         colorScheme == .dark ? Color.cyan : Color.blue
-    }
-
-    private var closeTintColor: Color {
-        Color(red: 1.0, green: 0.42, blue: 0.18)
     }
 
     private var borderColor: Color {
@@ -934,22 +906,20 @@ private struct MenuBarPopupView: View {
     }
 
     private func openBatteryDetails() {
+        guard !showBatteryDetails else { return }
         let now = Date()
         if now < suppressBatteryDetailsOpenUntil {
             return
         }
 
-        withAnimation(.easeInOut(duration: 0.16)) {
-            showBatteryDetails = true
-        }
+        showBatteryDetails = true
         loadBatteryDetails()
     }
 
     private func closeBatteryDetails() {
-        suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
-        withAnimation(.easeInOut(duration: 0.16)) {
-            showBatteryDetails = false
-        }
+        guard showBatteryDetails else { return }
+        suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.8)
+        showBatteryDetails = false
     }
 
     private func loadBatteryDetails() {
@@ -1023,29 +993,31 @@ private struct BatteryDetailsSheetView: View {
     let onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Battery Details")
-                    .font(.title3.weight(.bold))
+                    .font(.title3.weight(.semibold))
                 Spacer()
                 Button("Refresh") { onRefresh() }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 Button("Close") { onClose() }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
             }
 
             if let snapshot {
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(snapshot.deviceName)
-                            .font(.headline)
+                            .font(.headline.weight(.semibold))
                             .lineLimit(1)
                         Text("Identifier: \(snapshot.machineIdentifier)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    .padding(12)
+                    .padding(10)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                     BatteryProgressCard(
@@ -1072,13 +1044,13 @@ private struct BatteryDetailsSheetView: View {
                             GridItem(.flexible(), spacing: 10, alignment: .leading)
                         ],
                         alignment: .leading,
-                        spacing: 8
+                        spacing: 6
                     ) {
                         ForEach(secondaryDetails(snapshot), id: \.0) { row in
                             detailMetricCell(title: row.0, value: row.1)
                         }
                     }
-                    .padding(12)
+                    .padding(10)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             } else if isLoading {
@@ -1100,13 +1072,13 @@ private struct BatteryDetailsSheetView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .padding(16)
-        .frame(width: 408, height: 540)
+        .padding(12)
+        .frame(width: 340)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.20), lineWidth: 1)
+                .stroke(Color.white.opacity(0.16), lineWidth: 0.9)
         )
     }
 
@@ -1116,11 +1088,12 @@ private struct BatteryDetailsSheetView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func primaryDurationCard(_ snapshot: BatteryDiagnosticsSnapshot) -> some View {
@@ -1134,7 +1107,7 @@ private struct BatteryDetailsSheetView: View {
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 7)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -1143,10 +1116,8 @@ private struct BatteryDetailsSheetView: View {
             ("Power", formattedPower(snapshot.powerWatts)),
             ("Temperature", formattedTemperature(snapshot.temperatureCelsius)),
             ("Charge Cycles", formattedInt(snapshot.cycleCount)),
-            ("Design Cycles", formattedInt(snapshot.designCycleCount)),
             ("Voltage", formattedVoltage(snapshot.voltageVolts)),
             ("Amperage", formattedAmperage(snapshot.amperageAmps)),
-            ("Low Power Mode", snapshot.lowPowerModeEnabled ? "Enabled" : "Disabled"),
             ("Updated", snapshot.updatedAt.formatted(date: .omitted, time: .shortened))
         ]
     }
@@ -1233,10 +1204,10 @@ private struct BatteryProgressCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(valueText)
-                    .font(.headline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1259,9 +1230,9 @@ private struct BatteryProgressCard: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .frame(height: 22)
+            .frame(height: 18)
         }
-        .padding(12)
+        .padding(8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

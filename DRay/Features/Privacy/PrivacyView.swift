@@ -7,22 +7,26 @@ private enum PrivacyCleanMode {
 }
 
 struct PrivacyView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: PrivacyViewModel
     @State private var expanded = Set<String>()
     @State private var showConfirm = false
     @State private var pendingCleanMode: PrivacyCleanMode = .selected
+
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: PrivacyViewModel(root: rootModel))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            if model.isPrivacyScanRunning {
+            if model.state.isScanRunning {
                 ProgressView("Scanning privacy artifacts...")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
             }
 
-            if let cleanReport = model.privacyCleanReport {
+            if let cleanReport = model.state.cleanReport {
                 HStack(spacing: 8) {
                     GlassPillBadge(title: "Moved \(cleanReport.moved)", tint: .green)
                     GlassPillBadge(title: "Failed \(cleanReport.failed)", tint: .red)
@@ -36,7 +40,7 @@ struct PrivacyView: View {
                 .padding(.horizontal, 4)
             }
 
-            if let delta = model.privacyQuickActionDelta {
+            if let delta = model.state.quickActionDelta {
                 HStack(spacing: 8) {
                     GlassPillBadge(title: "Action \(delta.actionTitle)", tint: .blue)
                     GlassPillBadge(title: "Items \(delta.beforeItems) -> \(delta.afterItems)", tint: .green)
@@ -54,7 +58,7 @@ struct PrivacyView: View {
             }
 
             Group {
-                if model.privacyCategories.isEmpty, !model.isPrivacyScanRunning {
+                if model.state.categories.isEmpty, !model.state.isScanRunning {
                     ContentUnavailableView(
                         "No Privacy Scan Results",
                         systemImage: "lock.shield",
@@ -89,7 +93,7 @@ struct PrivacyView: View {
         ) {
             VStack(alignment: .trailing, spacing: 8) {
                 HStack(spacing: 8) {
-                    GlassPillBadge(title: "Categories \(model.privacyCategories.count)", tint: .blue)
+                    GlassPillBadge(title: "Categories \(model.state.categories.count)", tint: .blue)
                     GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
                     GlassPillBadge(
                         title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
@@ -99,28 +103,28 @@ struct PrivacyView: View {
 
                 HStack(spacing: 8) {
                     Button("Scan Privacy Traces") {
-                        model.runPrivacyScan()
+                        model.runScan()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .disabled(model.isPrivacyScanRunning)
+                    .disabled(model.state.isScanRunning)
 
                     Button("Select Low Risk") {
-                        model.selectRecommendedPrivacyCategories(includeMediumRisk: false)
+                        model.selectRecommended(includeMediumRisk: false)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(model.privacyCategories.isEmpty)
+                    .disabled(model.state.categories.isEmpty)
 
                     Button("Select Recommended") {
-                        model.selectRecommendedPrivacyCategories(includeMediumRisk: true)
+                        model.selectRecommended(includeMediumRisk: true)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(model.privacyCategories.isEmpty)
+                    .disabled(model.state.categories.isEmpty)
 
                     Button("Clear") {
-                        model.clearPrivacySelection()
+                        model.clearSelection()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -142,7 +146,7 @@ struct PrivacyView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(model.privacyCategories.isEmpty)
+                    .disabled(model.state.categories.isEmpty)
 
                     Button("Quick Clean Recommended") {
                         pendingCleanMode = .recommended
@@ -150,7 +154,7 @@ struct PrivacyView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(model.privacyCategories.isEmpty)
+                    .disabled(model.state.categories.isEmpty)
                 }
             }
         }
@@ -164,7 +168,7 @@ struct PrivacyView: View {
                 Text("Estimated reclaim: \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))")
             }
 
-            ForEach(model.privacyCategories) { row in
+            ForEach(model.state.categories) { row in
                 Section {
                     categoryRow(row)
                     if expanded.contains(row.id) {
@@ -193,7 +197,7 @@ struct PrivacyView: View {
         HStack(alignment: .top, spacing: 10) {
             Toggle("", isOn: Binding(
                 get: { row.isSelected },
-                set: { _ in model.togglePrivacyCategory(row.id) }
+                set: { _ in model.toggleCategory(row.id) }
             ))
             .labelsHidden()
 
@@ -247,24 +251,24 @@ struct PrivacyView: View {
     private func executePendingClean() {
         switch pendingCleanMode {
         case .selected:
-            model.cleanSelectedPrivacyCategories()
+            model.cleanSelected()
         case .safeLowRisk:
-            model.cleanRecommendedPrivacyCategories(includeMediumRisk: false)
+            model.cleanRecommended(includeMediumRisk: false)
         case .recommended:
-            model.cleanRecommendedPrivacyCategories(includeMediumRisk: true)
+            model.cleanRecommended(includeMediumRisk: true)
         }
     }
 
     private var selectedCount: Int {
-        model.privacyCategories.filter(\.isSelected).count
+        model.state.categories.filter(\.isSelected).count
     }
 
     private var selectedArtifactsCount: Int {
-        model.privacyCategories.filter(\.isSelected).reduce(0) { $0 + $1.category.artifacts.count }
+        model.state.categories.filter(\.isSelected).reduce(0) { $0 + $1.category.artifacts.count }
     }
 
     private var selectedBytes: Int64 {
-        model.privacyCategories.filter(\.isSelected).reduce(0) { $0 + $1.category.totalBytes }
+        model.state.categories.filter(\.isSelected).reduce(0) { $0 + $1.category.totalBytes }
     }
 
     private func riskLabel(_ risk: PrivacyRisk) -> String {

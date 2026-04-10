@@ -29,6 +29,11 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Space Lens index-map build moved off main thread (selection panel no longer blocks UI on large trees).
 - [x] Space Lens bubble overlap relaxation + smoother animated relayout.
 - [x] Space Lens list/bubble hover sync + multi-selection hardening.
+- [ ] Search parity vs FindAnyFile:
+  - [x] include hidden + package contents controls (enabled by default, no silent skipping)
+  - [x] relax default depth limit and increase result cap
+  - [x] surface search scope clearly (startup disk vs selected target / mounted volumes)
+  - [x] fix search table header spacing and border artifacts
 
 ## Milestone M4: Uninstaller + Repair Module (in progress)
 - [x] App bundle artifact discovery.
@@ -42,6 +47,14 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] App Repair tab with artifact scan, selective repair and optional relaunch.
 - [x] App Repair rollback sessions.
 - [x] Add "repair strategy presets" (`Safe Reset`, `Deep Reset`) with explicit risk hints.
+- [ ] Add uninstall diagnostics for `permission denied` despite granted Full Disk Access:
+  - [ ] classify failure source (`ACL`, `flags`, ownership, TCC scope, running-process lock, App Store protection specifics)
+  - [ ] show actionable reason in UI before/after uninstall attempt
+  - [ ] add guided remediation flow (quit app/processes, re-check FDA, retry with same plan)
+- [ ] Add deep leftover/startup-origin verification for "app relaunches after reboot" cases (e.g. `Ollama`):
+  - [ ] scan and correlate all startup vectors: Login Items, LaunchAgents/LaunchDaemons, SMAppService/Background Items
+  - [ ] include helper/tools, config references and executable paths even if app bundle artifacts are absent
+  - [ ] produce post-uninstall "what can still relaunch and why" report
 
 ## Milestone M5: Performance Module (in progress)
 - [x] Login items management baseline.
@@ -50,6 +63,9 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Live load cards (CPU/RAM/Network/Battery).
 - [x] In-app load reduction actions (de-prioritize heavy processes + restore priorities).
 - [x] Add sustained-load detection windows (5m/15m) and trend sparkline.
+- [ ] Decide on trend history persistence:
+  - [ ] persist last N samples across restarts (lightweight store)
+  - [x] remove trends from UI if no meaningful history is kept (live metrics only)
 
 ## Milestone M6: Privacy & Security Module (done baseline)
 - [x] Browser traces and local artifact review.
@@ -76,6 +92,10 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [x] Runtime permission status checker with clear degraded-mode warnings per module.
 - [x] One-click permission recovery (`Restore permissions`) for rebuild/update scenarios.
 - [x] Pre-action permission validation for scan/delete/repair operations with actionable remediation hints.
+- [ ] Add permission preflight detail panel for delete operations:
+  - [ ] show exact blocker category (no generic "grant access" when access is already granted)
+  - [ ] include target path, owning principal, and next-step fix recommendation
+  - [ ] avoid full-disk prompt when failure is due to SIP/protected paths (report and skip instead)
 
 ## Milestone M10: UX Parity + Hardening (in progress)
 - [x] Runtime split hardening: helper startup/quit handoff/open-section flows covered by smoke checks.
@@ -120,6 +140,49 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
   - [x] permission gates
   - [x] uninstall verify pass
   - [x] incremental scan merge
+
+## Milestone M13: RootViewModel Decomposition (in progress)
+- [ ] PR1 Shell/Coordinator boundary:
+  - [ ] keep only app-level orchestration in `RootViewModel`
+  - [ ] route feature-local async/persistence into feature controllers
+- [x] PR2 Search extraction:
+  - [x] `SearchFeatureController` introduced with `SearchFeatureState`
+  - [x] Search live task lifecycle moved out of `RootViewModel`
+  - [x] preset operations (`load/save/apply/delete`) moved into controller
+  - [x] `SearchViewModel` switched to controller-backed bindings/actions
+  - [x] added unit tests for controller orchestration (`SearchFeatureControllerTests`)
+- [x] PR3 Privacy extraction (`PrivacyFeatureController`)
+  - [x] privacy scan/clean orchestration moved out of `RootViewModel`
+  - [x] context-driven permission gating and logging wired through `FeatureContext`
+  - [x] controller tests added (`PrivacyFeatureControllerTests`)
+- [x] PR4 Recovery extraction (`RecoveryFeatureController`)
+  - [x] recently deleted history + rollback sessions moved out of `RootViewModel`
+  - [x] restore/remove/rollback orchestration delegated to controller
+  - [x] controller tests added (`RecoveryFeatureControllerTests`)
+- [x] PR5 Uninstaller + Repair controller split
+  - [x] `UninstallerFeatureController` introduced (apps/remnants/uninstall/verify/sessions)
+  - [x] `RepairFeatureController` introduced (artifacts/strategy/repair/sessions)
+  - [x] rollback restore delegated via feature controllers
+  - [x] controller tests added (`UninstallerFeatureControllerTests`, `RepairFeatureControllerTests`)
+- [x] PR6 Performance extraction (`PerformanceFeatureController`)
+  - [x] diagnostics/startup-cleanup/load-relief orchestration moved out of `RootViewModel`
+  - [x] quick-action delta state ownership moved into controller
+  - [x] context-driven permission gating/logging applied in controller actions
+  - [x] controller tests added (`PerformanceFeatureControllerTests`)
+- [x] PR7 Persistence normalization (`Store` contracts, no direct feature writes to `UserDefaults`)
+  - [x] `SearchPresetStoring` + `SearchPresetStore` introduced
+  - [x] `RecoveryStoring` + `RecoveryStore` introduced
+  - [x] `UISettingsStoring` + `UISettingsStore` introduced
+  - [x] `RootViewModel` no longer reads/writes raw `UserDefaults` for language/appearance/target-bookmark
+- [x] PR8 Cleanup + architecture contract lock (`docs/ARCHITECTURE.md`, remove temporary root proxies)
+  - [x] architecture invariants fixed in `docs/ARCHITECTURE.md`
+  - [x] `PrivacyView` migrated to `PrivacyViewModel` with direct `PrivacyFeatureController` actions/state access
+  - [x] removed root privacy action proxies (`toggle/clear/select/clean`) now owned by privacy controller + feature VM
+  - [x] removed root startup-cleanup proxy in favor of direct `PerformanceFeatureController` call from `PerformanceViewModel`
+  - [x] `UninstallerView` / `RepairView` switched to direct `uninstaller` / `repair` controller API for load/preview/risk operations
+  - [x] removed root uninstaller/repair temporary proxies (`loadInstalledApps`, `loadRemnants`, `loadRepairArtifacts`, `recommendedRepairArtifacts`, `repairRisk`, `uninstallPreview`)
+  - [x] remove remaining temporary root proxy API where feature view models can call controllers directly
+  - [x] `UninstallerView` / `RepairView` switched from root proxy state access to direct `FeatureController.state` reads
 
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.

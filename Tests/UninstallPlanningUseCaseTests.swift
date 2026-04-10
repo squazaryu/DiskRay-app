@@ -100,4 +100,61 @@ struct UninstallPlanningUseCaseTests {
         #expect(byPath[failedURL.path]?.contains("Permission denied") == true)
         #expect(byPath[notSelectedURL.path]?.contains("Not selected for removal") == true)
     }
+
+    @Test
+    func verifyReportIncludesStartupReferencesAndRemediationHint() {
+        let useCase = UninstallPlanningUseCase()
+        let app = InstalledApp(
+            name: "Demo",
+            bundleID: "com.example.demo",
+            appURL: URL(fileURLWithPath: "/Applications/Demo.app")
+        )
+        let failedURL = URL(fileURLWithPath: "/Applications/Demo.app")
+        let preview = [
+            UninstallPreviewItem(
+                url: failedURL,
+                type: .appBundle,
+                sizeInBytes: 0,
+                risk: .high,
+                reason: "Main app bundle will be moved to Trash"
+            )
+        ]
+        let validation = UninstallValidationReport(
+            appName: app.name,
+            createdAt: Date(),
+            results: [
+                UninstallActionResult(
+                    url: failedURL,
+                    type: .appBundle,
+                    status: .failed,
+                    trashedPath: nil,
+                    details: "permission denied",
+                    failureCategory: .appStoreManaged,
+                    remediationHint: "Retry with administrator authorization."
+                )
+            ]
+        )
+        let startupReferences = [
+            UninstallStartupReference(
+                source: .backgroundItems,
+                url: URL(fileURLWithPath: "/Users/test/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm"),
+                details: "backgrounditems.btm contains app token",
+                reason: "Background task can relaunch app."
+            )
+        ]
+
+        let report = useCase.buildVerifyReport(
+            app: app,
+            previewItems: preview,
+            validation: validation,
+            remaining: [AppRemnant(url: failedURL, sizeInBytes: 0)],
+            startupReferences: startupReferences,
+            isProtectedPath: { _ in false },
+            isAppRunning: false
+        )
+
+        #expect(report.startupReferenceCount == 1)
+        #expect(report.startupReferences.first?.source == .backgroundItems)
+        #expect(report.remaining.first?.reason.contains("Fix: Retry with administrator authorization.") == true)
+    }
 }
