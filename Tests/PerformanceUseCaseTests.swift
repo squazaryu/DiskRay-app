@@ -15,7 +15,8 @@ struct PerformanceUseCaseTests {
         let useCase = PerformanceUseCase(
             performanceService: performance,
             processPriorityService: priorities,
-            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport())
+            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport()),
+            networkSpeedTestService: NetworkSpeedTestServiceStub(result: makeNetworkSpeedResult())
         )
 
         let report = await useCase.runDiagnostics()
@@ -36,7 +37,8 @@ struct PerformanceUseCaseTests {
         let useCase = PerformanceUseCase(
             performanceService: performance,
             processPriorityService: priorities,
-            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport())
+            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport()),
+            networkSpeedTestService: NetworkSpeedTestServiceStub(result: makeNetworkSpeedResult())
         )
         let entries = [
             StartupEntry(
@@ -71,7 +73,8 @@ struct PerformanceUseCaseTests {
         let useCase = PerformanceUseCase(
             performanceService: performance,
             processPriorityService: priorities,
-            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport())
+            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport()),
+            networkSpeedTestService: NetworkSpeedTestServiceStub(result: makeNetworkSpeedResult())
         )
         let consumers = [
             ProcessConsumer(pid: 123, name: "Test", cpuPercent: 90, memoryMB: 512, batteryImpactScore: 42)
@@ -105,13 +108,38 @@ struct PerformanceUseCaseTests {
         let useCase = PerformanceUseCase(
             performanceService: performance,
             processPriorityService: priorities,
-            batteryEnergyService: battery
+            batteryEnergyService: battery,
+            networkSpeedTestService: NetworkSpeedTestServiceStub(result: makeNetworkSpeedResult())
         )
 
         let report = await useCase.loadBatteryEnergyReport()
 
         #expect(report.consumers.count == expected.consumers.count)
         #expect(await battery.callCount() == 1)
+    }
+
+    @Test
+    @MainActor
+    func networkSpeedTestDelegatesToService() async {
+        let expected = makeNetworkSpeedResult()
+        let performance = PerformanceServiceStub(
+            report: makeReport(startupCount: 0),
+            cleanupReport: StartupCleanupReport(moved: 0, failed: 0, skippedProtected: 0)
+        )
+        let priorities = ProcessPriorityServiceStub()
+        let network = NetworkSpeedTestServiceStub(result: expected)
+        let useCase = PerformanceUseCase(
+            performanceService: performance,
+            processPriorityService: priorities,
+            batteryEnergyService: BatteryEnergyReportServiceStub(report: makeBatteryEnergyReport()),
+            networkSpeedTestService: network
+        )
+
+        let result = await useCase.runNetworkSpeedTest()
+
+        #expect(result.downlinkMbps == expected.downlinkMbps)
+        #expect(result.uplinkMbps == expected.uplinkMbps)
+        #expect(await network.callCount() == 1)
     }
 
     private func makeReport(startupCount: Int) -> PerformanceReport {
@@ -170,6 +198,18 @@ struct PerformanceUseCaseTests {
             estimatedMetricExplanation: "estimate"
         )
     }
+
+    private func makeNetworkSpeedResult() -> NetworkSpeedTestResult {
+        NetworkSpeedTestResult(
+            measuredAt: Date(timeIntervalSince1970: 1_726_000_000),
+            interfaceName: "en0",
+            downlinkMbps: 240.3,
+            uplinkMbps: 55.7,
+            responsivenessMs: 112.2,
+            baseRTTMs: 32.1,
+            errorMessage: nil
+        )
+    }
 }
 
 private actor PerformanceServiceStub: PerformanceServicing {
@@ -208,6 +248,22 @@ private actor BatteryEnergyReportServiceStub: BatteryEnergyReportBuilding {
     func buildBatteryEnergyReport() async -> BatteryEnergyReport {
         calls += 1
         return report
+    }
+
+    func callCount() -> Int { calls }
+}
+
+private actor NetworkSpeedTestServiceStub: NetworkSpeedTesting {
+    private let result: NetworkSpeedTestResult
+    private var calls = 0
+
+    init(result: NetworkSpeedTestResult) {
+        self.result = result
+    }
+
+    func runSpeedTest() async -> NetworkSpeedTestResult {
+        calls += 1
+        return result
     }
 
     func callCount() -> Int { calls }

@@ -75,6 +75,32 @@ final class PerformanceFeatureController: ObservableObject {
         }
     }
 
+    func runNetworkSpeedTest() {
+        guard !state.isNetworkSpeedTestRunning else { return }
+        state.isNetworkSpeedTestRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await useCase.runNetworkSpeedTest()
+            await MainActor.run {
+                state.networkSpeedTestResult = result
+                state.isNetworkSpeedTestRunning = false
+                if result.isSuccess {
+                    let down = result.downlinkMbps.map { String(format: "%.1f", $0) } ?? "n/a"
+                    let up = result.uplinkMbps.map { String(format: "%.1f", $0) } ?? "n/a"
+                    context?.log(
+                        category: "performance",
+                        message: "Network speed test done: down \(down) Mbps, up \(up) Mbps"
+                    )
+                } else {
+                    context?.log(
+                        category: "performance",
+                        message: "Network speed test failed: \(result.errorMessage ?? "unknown")"
+                    )
+                }
+            }
+        }
+    }
+
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
         guard !entries.isEmpty else { return }
         guard context?.allowModify(

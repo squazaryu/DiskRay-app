@@ -200,7 +200,7 @@ struct PerformanceView: View {
                     subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) of \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
                 )
                 loadCard(
-                    title: t("Сеть", "Network"),
+                    title: t("Сеть (live)", "Network (live)"),
                     value: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond))",
                     subtitle: "↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))"
                 )
@@ -210,6 +210,8 @@ struct PerformanceView: View {
                     subtitle: batterySecondaryText
                 )
             }
+
+            networkSpeedTestPanel
 
             batteryEnergyPanel
 
@@ -246,6 +248,89 @@ struct PerformanceView: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
+    }
+
+    @ViewBuilder
+    private var networkSpeedTestPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t("Тест скорости интернета", "Internet Speed Test"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(t(
+                        "По запросу запускает macOS networkQuality. Это не фоновый мониторинг канала.",
+                        "Runs macOS networkQuality on demand. This is not background link monitoring."
+                    ))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(t("Запустить тест", "Run Test")) {
+                    model.runNetworkSpeedTest()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.performance.isNetworkSpeedTestRunning)
+            }
+
+            if model.performance.isNetworkSpeedTestRunning {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(t(
+                        "Измеряем скорость (может занять до 10–15 секунд)...",
+                        "Measuring network speed (can take up to 10–15 seconds)..."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.top, 2)
+            } else if let speed = model.performance.networkSpeedTestResult {
+                if let error = speed.errorMessage {
+                    Text(t(
+                        "Тест не выполнен: \(error)",
+                        "Speed test failed: \(error)"
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                } else {
+                    HStack(spacing: 8) {
+                        batteryMetricCard(
+                            t("Скачивание", "Download"),
+                            value: optionalMbps(speed.downlinkMbps),
+                            subtitle: speed.interfaceName.map { t("Интерфейс \($0)", "Interface \($0)") } ?? "n/a"
+                        )
+                        batteryMetricCard(
+                            t("Отдача", "Upload"),
+                            value: optionalMbps(speed.uplinkMbps),
+                            subtitle: t(
+                                "Обновлено \(relativeTime(speed.measuredAt))",
+                                "Updated \(relativeTime(speed.measuredAt))"
+                            )
+                        )
+                        batteryMetricCard(
+                            t("Отклик", "Responsiveness"),
+                            value: optionalMilliseconds(speed.responsivenessMs),
+                            subtitle: t("networkQuality", "networkQuality")
+                        )
+                        batteryMetricCard(
+                            t("Base RTT", "Base RTT"),
+                            value: optionalMilliseconds(speed.baseRTTMs),
+                            subtitle: t("Задержка базовой сети", "Baseline network latency")
+                        )
+                    }
+                }
+            } else {
+                Text(t(
+                    "Нажми «Запустить тест», чтобы получить измерение download/upload и отклика.",
+                    "Tap \"Run Test\" to measure download/upload and responsiveness."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
@@ -741,8 +826,18 @@ struct PerformanceView: View {
     private func networkSpeedText(_ bytesPerSecond: Double) -> String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
-        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB]
         return "\(formatter.string(fromByteCount: Int64(bytesPerSecond)))/s"
+    }
+
+    private func optionalMbps(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f Mbps", value)
+    }
+
+    private func optionalMilliseconds(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f ms", value)
     }
 
     private var batteryPrimaryText: String {

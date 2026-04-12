@@ -66,6 +66,22 @@ struct PerformanceFeatureState {
     var quickActionDelta: QuickActionDeltaReport?
     var batteryEnergyReport: BatteryEnergyReport?
     var isBatteryEnergyLoading = false
+    var networkSpeedTestResult: NetworkSpeedTestResult?
+    var isNetworkSpeedTestRunning = false
+}
+
+struct NetworkSpeedTestResult: Sendable {
+    let measuredAt: Date
+    let interfaceName: String?
+    let downlinkMbps: Double?
+    let uplinkMbps: Double?
+    let responsivenessMs: Double?
+    let baseRTTMs: Double?
+    let errorMessage: String?
+
+    var isSuccess: Bool {
+        errorMessage == nil
+    }
 }
 
 struct PrivacyFeatureState {

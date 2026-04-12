@@ -10,6 +10,7 @@ struct RootViewModelDependencies {
     let duplicateFinderService: DuplicateFinderService
     let performanceService: PerformanceService
     let batteryDiagnosticsService: BatteryDiagnosticsService
+    let networkSpeedTestService: any NetworkSpeedTesting
     let privacyService: PrivacyService
     let liveSearchService: LiveSearchService
     let menuBarLoginAgentService: MenuBarLoginAgentService
@@ -32,6 +33,7 @@ struct RootViewModelDependencies {
             duplicateFinderService: DuplicateFinderService(),
             performanceService: PerformanceService(),
             batteryDiagnosticsService: BatteryDiagnosticsService(),
+            networkSpeedTestService: NetworkSpeedTestService(),
             privacyService: PrivacyService(),
             liveSearchService: LiveSearchService(),
             menuBarLoginAgentService: MenuBarLoginAgentService(),

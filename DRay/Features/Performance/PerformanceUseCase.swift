@@ -18,6 +18,7 @@ struct PerformanceUseCase {
     let performanceService: any PerformanceServicing
     let processPriorityService: any ProcessPriorityServicing
     let batteryEnergyService: any BatteryEnergyReportBuilding
+    let networkSpeedTestService: any NetworkSpeedTesting
 
     var activeAdjustmentsCount: Int {
         processPriorityService.activeAdjustmentsCount
@@ -45,5 +46,9 @@ struct PerformanceUseCase {
 
     func loadBatteryEnergyReport() async -> BatteryEnergyReport {
         await batteryEnergyService.buildBatteryEnergyReport()
+    }
+
+    func runNetworkSpeedTest() async -> NetworkSpeedTestResult {
+        await networkSpeedTestService.runSpeedTest()
     }
 }

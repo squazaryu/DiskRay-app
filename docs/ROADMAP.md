@@ -205,10 +205,12 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
   - [x] load/refresh battery-energy report
   - [x] refresh battery-energy data during diagnostics run
 - [x] Integrate Battery & Energy section into existing `Performance` view only (no top-level section changes, no helper changes).
+- [x] Add on-demand internet speed test in `Performance` via macOS `networkQuality` (no background polling, explicit user action).
 - [x] Add deterministic tests for:
   - [x] report assembly + unavailable metrics handling
   - [x] estimated attribution math/sorting
   - [x] controller state updates after battery-energy load
+  - [x] network speed test parsing + failure handling
 - [ ] Validate UX polish on low-width windows (consumer row wrapping/alignment).
 - [ ] Optional: add lightweight sampling persistence window (if we decide to keep longer-term trending in-app).
 

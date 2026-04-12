@@ -132,7 +132,8 @@ struct PerformanceFeatureControllerTests {
         let useCase = PerformanceUseCase(
             performanceService: service,
             processPriorityService: priorities,
-            batteryEnergyService: BatteryEnergyControllerServiceStub(reports: [makeBatteryEnergyReport(consumers: 0)])
+            batteryEnergyService: BatteryEnergyControllerServiceStub(reports: [makeBatteryEnergyReport(consumers: 0)]),
+            networkSpeedTestService: NetworkSpeedControllerServiceStub(results: [])
         )
         let controller = PerformanceFeatureController(useCase: useCase)
         controller.attachContext(
@@ -164,12 +165,14 @@ struct PerformanceFeatureControllerTests {
     private func makeController(
         service: PerformanceControllerServiceStub,
         priorityService: ProcessPriorityControllerServiceStub = ProcessPriorityControllerServiceStub(),
-        batteryService: BatteryEnergyControllerServiceStub = BatteryEnergyControllerServiceStub(reports: [])
+        batteryService: BatteryEnergyControllerServiceStub = BatteryEnergyControllerServiceStub(reports: []),
+        networkService: NetworkSpeedControllerServiceStub = NetworkSpeedControllerServiceStub(results: [])
     ) -> PerformanceFeatureController {
         let useCase = PerformanceUseCase(
             performanceService: service,
             processPriorityService: priorityService,
-            batteryEnergyService: batteryService
+            batteryEnergyService: batteryService,
+            networkSpeedTestService: networkService
         )
         return PerformanceFeatureController(useCase: useCase)
     }
@@ -183,7 +186,8 @@ struct PerformanceFeatureControllerTests {
         let useCase = PerformanceUseCase(
             performanceService: service,
             processPriorityService: ProcessPriorityControllerServiceStub(),
-            batteryEnergyService: battery
+            batteryEnergyService: battery,
+            networkSpeedTestService: NetworkSpeedControllerServiceStub(results: [])
         )
         let controller = PerformanceFeatureController(useCase: useCase)
 
@@ -195,6 +199,54 @@ struct PerformanceFeatureControllerTests {
 
         #expect(controller.state.batteryEnergyReport?.consumers.count == 3)
         #expect(await battery.callCount() == 1)
+    }
+
+    @Test
+    func runNetworkSpeedTestUpdatesState() async throws {
+        let expected = makeNetworkSpeedResult(
+            down: 199.3,
+            up: 46.2,
+            error: nil
+        )
+        let network = NetworkSpeedControllerServiceStub(results: [expected])
+        let controller = makeController(
+            service: PerformanceControllerServiceStub(reports: []),
+            networkService: network
+        )
+
+        controller.runNetworkSpeedTest()
+
+        try await waitUntil("network speed test finished") {
+            !controller.state.isNetworkSpeedTestRunning && controller.state.networkSpeedTestResult != nil
+        }
+
+        #expect(controller.state.networkSpeedTestResult?.errorMessage == nil)
+        #expect(controller.state.networkSpeedTestResult?.downlinkMbps == 199.3)
+        #expect(await network.callCount() == 1)
+    }
+
+    @Test
+    func runNetworkSpeedTestStoresFailureResult() async throws {
+        let failed = makeNetworkSpeedResult(
+            down: nil,
+            up: nil,
+            error: "networkQuality timeout"
+        )
+        let network = NetworkSpeedControllerServiceStub(results: [failed])
+        let controller = makeController(
+            service: PerformanceControllerServiceStub(reports: []),
+            networkService: network
+        )
+
+        controller.runNetworkSpeedTest()
+
+        try await waitUntil("network speed failure finished") {
+            !controller.state.isNetworkSpeedTestRunning && controller.state.networkSpeedTestResult != nil
+        }
+
+        #expect(controller.state.networkSpeedTestResult?.isSuccess == false)
+        #expect(controller.state.networkSpeedTestResult?.errorMessage == "networkQuality timeout")
+        #expect(await network.callCount() == 1)
     }
 
     private func makeReport(startupCount: Int) -> PerformanceReport {
@@ -255,6 +307,22 @@ struct PerformanceFeatureControllerTests {
         )
     }
 
+    private func makeNetworkSpeedResult(
+        down: Double?,
+        up: Double?,
+        error: String?
+    ) -> NetworkSpeedTestResult {
+        NetworkSpeedTestResult(
+            measuredAt: Date(),
+            interfaceName: "en0",
+            downlinkMbps: down,
+            uplinkMbps: up,
+            responsivenessMs: 118.4,
+            baseRTTMs: 32.5,
+            errorMessage: error
+        )
+    }
+
     private func makeReport(startupEntries: [StartupEntry]) -> PerformanceReport {
         PerformanceReport(
             generatedAt: Date(),
@@ -311,6 +379,33 @@ private actor BatteryEnergyControllerServiceStub: BatteryEnergyReportBuilding {
             consumers: [],
             estimatedMetricTitle: "Estimated Drain Share",
             estimatedMetricExplanation: "estimate"
+        )
+    }
+
+    func callCount() -> Int { calls }
+}
+
+private actor NetworkSpeedControllerServiceStub: NetworkSpeedTesting {
+    private var queuedResults: [NetworkSpeedTestResult]
+    private var calls = 0
+
+    init(results: [NetworkSpeedTestResult]) {
+        self.queuedResults = results
+    }
+
+    func runSpeedTest() async -> NetworkSpeedTestResult {
+        calls += 1
+        if !queuedResults.isEmpty {
+            return queuedResults.removeFirst()
+        }
+        return NetworkSpeedTestResult(
+            measuredAt: Date(),
+            interfaceName: nil,
+            downlinkMbps: nil,
+            uplinkMbps: nil,
+            responsivenessMs: nil,
+            baseRTTMs: nil,
+            errorMessage: "no data"
         )
     }
 

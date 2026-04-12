@@ -307,7 +307,8 @@ final class RootViewModel: ObservableObject {
                 batteryDiagnosticsService: dependencies.batteryDiagnosticsService,
                 energyConsumersService: EnergyConsumersService(),
                 attributionEstimator: BatteryAttributionEstimator()
-            )
+            ),
+            networkSpeedTestService: dependencies.networkSpeedTestService
         )
         self.performanceController = PerformanceFeatureController(useCase: performanceUseCase)
         self.privacyService = dependencies.privacyService

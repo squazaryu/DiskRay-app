@@ -39,6 +39,10 @@ final class PerformanceViewModel: ObservableObject {
         performanceController.loadBatteryEnergyReport(force: force)
     }
 
+    func runNetworkSpeedTest() {
+        performanceController.runNetworkSpeedTest()
+    }
+
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
         performanceController.cleanupStartupEntries(entries)
     }
