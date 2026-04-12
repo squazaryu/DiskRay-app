@@ -17,34 +17,38 @@ struct PerformanceView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            loadPanel
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                loadPanel
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
 
-            if model.performance.report == nil && !model.performance.isScanRunning {
-                ContentUnavailableView(
-                    t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
-                    systemImage: "speedometer",
-                    description: Text(t(
-                        "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
-                        "Run diagnostics to inspect startup pressure and maintenance opportunities."
+                if model.performance.report == nil && !model.performance.isScanRunning {
+                    ContentUnavailableView(
+                        t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
+                        systemImage: "speedometer",
+                        description: Text(t(
+                            "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
+                            "Run diagnostics to inspect startup pressure and maintenance opportunities."
+                        ))
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 280)
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
+                } else if let cleanup = model.performance.startupCleanupReport {
+                    Text(t(
+                        "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
+                        "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
                     ))
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
-            } else if let cleanup = model.performance.startupCleanupReport {
-                Text(t(
-                    "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
-                    "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
-                ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
             }
+            .padding(.top, 6)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(12)
         .confirmationDialog(
             t("Отключить выбранные элементы автозапуска?", "Disable selected startup entries?"),
             isPresented: $showCleanupConfirm,
@@ -85,6 +89,9 @@ struct PerformanceView: View {
             monitor.start()
             if model.performance.report == nil {
                 model.runPerformanceScan()
+            }
+            if model.performance.batteryEnergyReport == nil {
+                model.loadBatteryEnergyReport()
             }
         }
         .onDisappear {
@@ -204,6 +211,8 @@ struct PerformanceView: View {
                 )
             }
 
+            batteryEnergyPanel
+
             if let report = model.performance.report {
                 diagnosticsSummary(report)
             }
@@ -267,6 +276,217 @@ struct PerformanceView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private var batteryEnergyPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t("Battery & Energy", "Battery & Energy"))
+                        .font(.headline)
+                    Text(t(
+                        "Оценка расхода строится по энергометрикам macOS и активности процессов.",
+                        "Estimated drain share is derived from macOS energy telemetry and recent process activity."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(t("Обновить", "Refresh")) {
+                    model.loadBatteryEnergyReport(force: true)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.performance.isBatteryEnergyLoading)
+            }
+
+            if model.performance.isBatteryEnergyLoading && model.performance.batteryEnergyReport == nil {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(t("Считываем battery и energy телеметрию...", "Loading battery and energy telemetry..."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+            } else if let report = model.performance.batteryEnergyReport {
+                VStack(alignment: .leading, spacing: 8) {
+                    batterySummaryGrid(report.battery)
+                    consumersTable(report)
+                }
+            } else {
+                Text(t(
+                    "Battery/energy данные пока недоступны на этом Mac.",
+                    "Battery/energy data is currently unavailable on this Mac."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func batterySummaryGrid(_ snapshot: BatteryEnergySnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                batteryMetricCard(
+                    t("Заряд", "Charge"),
+                    value: optionalPercent(snapshot.chargePercent),
+                    subtitle: batteryStateText(snapshot)
+                )
+                batteryMetricCard(
+                    t("Health", "Health"),
+                    value: optionalPercent(snapshot.healthPercent),
+                    subtitle: t("Циклы \(snapshot.cycleCount.map(String.init) ?? "n/a")", "Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")")
+                )
+                batteryMetricCard(
+                    t("Power Draw", "Power Draw"),
+                    value: optionalWatts(snapshot.powerDrawWatts),
+                    subtitle: timeEstimateText(snapshot)
+                )
+                batteryMetricCard(
+                    t("Температура", "Temperature"),
+                    value: optionalTemperature(snapshot.temperatureCelsius),
+                    subtitle: t("V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))", "V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))")
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func batteryMetricCard(_ title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.bold())
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func consumersTable(_ report: BatteryEnergyReport) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(t("Power Consumers", "Power Consumers"))
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(report.estimatedMetricTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
+            Text(report.estimatedMetricExplanation)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            if report.consumers.isEmpty {
+                Text(t("Активные high-impact процессы не обнаружены.", "No high-impact processes detected right now."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 6)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(report.consumers.prefix(8)) { consumer in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(consumer.displayName)
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(t(
+                                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%",
+                                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%"
+                                ))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                            }
+                            HStack(spacing: 10) {
+                                Text("EI \(String(format: "%.1f", consumer.currentEnergyImpact))")
+                                Text(t("Avg \(String(format: "%.1f", consumer.averageEnergyImpact))", "Avg \(String(format: "%.1f", consumer.averageEnergyImpact))"))
+                                Text("CPU \(Int(consumer.cpuPercent))%")
+                                Text(t("MEM \(Int(consumer.memoryMB)) MB", "MEM \(Int(consumer.memoryMB)) MB"))
+                                Text(consumer.preventingSleep ? t("Sleep: blocked", "Sleep: blocked") : t("Sleep: normal", "Sleep: normal"))
+                                if let estimated12hWh = consumer.estimatedPower12hWh {
+                                    Text(t("12h \(String(format: "%.2f", estimated12hWh)) Wh", "12h \(String(format: "%.2f", estimated12hWh)) Wh"))
+                                } else {
+                                    Text(t("12h n/a", "12h n/a"))
+                                }
+                                if let gpu = consumer.highPowerGPUUsage {
+                                    Text(gpu ? t("GPU: high", "GPU: high") : t("GPU: normal", "GPU: normal"))
+                                } else {
+                                    Text(t("GPU n/a", "GPU n/a"))
+                                }
+                                if let appNap = consumer.appNapStatus {
+                                    Text(appNap ? t("App Nap: on", "App Nap: on") : t("App Nap: off", "App Nap: off"))
+                                } else {
+                                    Text(t("App Nap n/a", "App Nap n/a"))
+                                }
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private func optionalPercent(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value)%"
+    }
+
+    private func optionalWatts(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f W", value)
+    }
+
+    private func optionalTemperature(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f °C", value)
+    }
+
+    private func optionalVolts(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f", value)
+    }
+
+    private func optionalAmps(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f", value)
+    }
+
+    private func batteryStateText(_ snapshot: BatteryEnergySnapshot) -> String {
+        guard let isCharging = snapshot.isCharging else {
+            return t("Статус n/a", "Status n/a")
+        }
+        return isCharging ? t("Заряжается", "Charging") : t("Разряжается", "Discharging")
+    }
+
+    private func timeEstimateText(_ snapshot: BatteryEnergySnapshot) -> String {
+        if snapshot.isCharging == true {
+            guard let minutes = snapshot.minutesToFull else { return t("До 100% n/a", "To full n/a") }
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return t("До 100% \(hours)ч \(mins)м", "To full \(hours)h \(mins)m")
+        }
+        guard let minutes = snapshot.minutesToEmpty else { return t("До разрядки n/a", "To empty n/a") }
+        let hours = minutes / 60
+        let mins = minutes % 60
+        return t("До разрядки \(hours)ч \(mins)м", "To empty \(hours)h \(mins)m")
     }
 
     private var consumerRows: [LiveConsumerRow] {

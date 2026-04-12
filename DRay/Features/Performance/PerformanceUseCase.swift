@@ -17,6 +17,7 @@ protocol ProcessPriorityServicing: AnyObject {
 struct PerformanceUseCase {
     let performanceService: any PerformanceServicing
     let processPriorityService: any ProcessPriorityServicing
+    let batteryEnergyService: any BatteryEnergyReportBuilding
 
     var activeAdjustmentsCount: Int {
         processPriorityService.activeAdjustmentsCount
@@ -40,5 +41,9 @@ struct PerformanceUseCase {
 
     func restoreAdjustedPriorities(limit: Int) -> LoadReliefResult {
         processPriorityService.restoreAdjustedPriorities(limit: limit)
+    }
+
+    func loadBatteryEnergyReport() async -> BatteryEnergyReport {
+        await batteryEnergyService.buildBatteryEnergyReport()
     }
 }

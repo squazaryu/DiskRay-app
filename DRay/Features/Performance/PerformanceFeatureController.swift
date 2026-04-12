@@ -20,16 +20,25 @@ final class PerformanceFeatureController: ObservableObject {
         guard !state.isScanRunning else { return }
         guard context?.allowProtectedModule("Performance Diagnostics") ?? false else { return }
         state.isScanRunning = true
+        state.isBatteryEnergyLoading = true
         Task { [weak self] in
             guard let self else { return }
-            let report = await useCase.runDiagnostics()
+            async let diagnosticsTask = useCase.runDiagnostics()
+            async let batteryTask = useCase.loadBatteryEnergyReport()
+            let (report, batteryReport) = await (diagnosticsTask, batteryTask)
             await MainActor.run {
                 state.report = report
+                state.batteryEnergyReport = batteryReport
                 state.startupCleanupReport = nil
                 state.isScanRunning = false
+                state.isBatteryEnergyLoading = false
                 context?.log(
                     category: "performance",
                     message: "Diagnostics done: startup entries \(report.startupEntries.count)"
+                )
+                context?.log(
+                    category: "performance",
+                    message: "Battery & energy updated: consumers \(batteryReport.consumers.count)"
                 )
             }
         }
@@ -46,6 +55,24 @@ final class PerformanceFeatureController: ObservableObject {
             state.quickActionDelta = nil
         }
         state.activeLoadReliefAdjustments = useCase.activeAdjustmentsCount
+    }
+
+    func loadBatteryEnergyReport(force: Bool = false) {
+        if !force, state.batteryEnergyReport != nil { return }
+        guard !state.isBatteryEnergyLoading else { return }
+        state.isBatteryEnergyLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            let report = await useCase.loadBatteryEnergyReport()
+            await MainActor.run {
+                state.batteryEnergyReport = report
+                state.isBatteryEnergyLoading = false
+                context?.log(
+                    category: "performance",
+                    message: "Battery & energy loaded: consumers \(report.consumers.count)"
+                )
+            }
+        }
     }
 
     func cleanupStartupEntries(_ entries: [StartupEntry]) {

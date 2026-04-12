@@ -143,7 +143,7 @@ struct SmartCareView: View {
                 Text("Min size MB")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("1", value: model.binding(\.minCleanSizeMB), format: .number)
+                TextField("1", value: model.minCleanSizeMBBinding, format: .number)
                     .frame(width: 80)
                     .textFieldStyle(.roundedBorder)
                 TextField("/path/to/exclude", text: $newExclusion)

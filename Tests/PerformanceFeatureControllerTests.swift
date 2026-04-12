@@ -30,7 +30,10 @@ struct PerformanceFeatureControllerTests {
     @Test
     func runDiagnosticsUpdatesState() async throws {
         let service = PerformanceControllerServiceStub(reports: [makeReport(startupCount: 2)])
-        let controller = makeController(service: service)
+        let battery = BatteryEnergyControllerServiceStub(
+            reports: [makeBatteryEnergyReport(consumers: 2)]
+        )
+        let controller = makeController(service: service, batteryService: battery)
         controller.attachContext(
             FeatureContext(
                 canRunProtectedModule: { _ in .allowed },
@@ -47,6 +50,7 @@ struct PerformanceFeatureControllerTests {
         }
 
         #expect(controller.state.report?.startupEntries.count == 2)
+        #expect(controller.state.batteryEnergyReport?.consumers.count == 2)
         #expect(controller.state.startupCleanupReport == nil)
         #expect(await service.buildReportCallCount() == 1)
     }
@@ -127,7 +131,8 @@ struct PerformanceFeatureControllerTests {
 
         let useCase = PerformanceUseCase(
             performanceService: service,
-            processPriorityService: priorities
+            processPriorityService: priorities,
+            batteryEnergyService: BatteryEnergyControllerServiceStub(reports: [makeBatteryEnergyReport(consumers: 0)])
         )
         let controller = PerformanceFeatureController(useCase: useCase)
         controller.attachContext(
@@ -158,13 +163,38 @@ struct PerformanceFeatureControllerTests {
 
     private func makeController(
         service: PerformanceControllerServiceStub,
-        priorityService: ProcessPriorityControllerServiceStub = ProcessPriorityControllerServiceStub()
+        priorityService: ProcessPriorityControllerServiceStub = ProcessPriorityControllerServiceStub(),
+        batteryService: BatteryEnergyControllerServiceStub = BatteryEnergyControllerServiceStub(reports: [])
     ) -> PerformanceFeatureController {
         let useCase = PerformanceUseCase(
             performanceService: service,
-            processPriorityService: priorityService
+            processPriorityService: priorityService,
+            batteryEnergyService: batteryService
         )
         return PerformanceFeatureController(useCase: useCase)
+    }
+
+    @Test
+    func loadBatteryEnergyReportUpdatesState() async throws {
+        let service = PerformanceControllerServiceStub(reports: [])
+        let battery = BatteryEnergyControllerServiceStub(
+            reports: [makeBatteryEnergyReport(consumers: 3)]
+        )
+        let useCase = PerformanceUseCase(
+            performanceService: service,
+            processPriorityService: ProcessPriorityControllerServiceStub(),
+            batteryEnergyService: battery
+        )
+        let controller = PerformanceFeatureController(useCase: useCase)
+
+        controller.loadBatteryEnergyReport(force: true)
+
+        try await waitUntil("battery report finished") {
+            !controller.state.isBatteryEnergyLoading && controller.state.batteryEnergyReport != nil
+        }
+
+        #expect(controller.state.batteryEnergyReport?.consumers.count == 3)
+        #expect(await battery.callCount() == 1)
     }
 
     private func makeReport(startupCount: Int) -> PerformanceReport {
@@ -176,6 +206,53 @@ struct PerformanceFeatureControllerTests {
                 sizeInBytes: Int64(idx + 1) * 100
             )
         })
+    }
+
+    private func makeBatteryEnergyReport(consumers: Int) -> BatteryEnergyReport {
+        var rows: [EnergyConsumerSnapshot] = []
+        rows.reserveCapacity(consumers)
+        for idx in 0..<consumers {
+            let index = idx + 1
+            let indexDouble = Double(index)
+            rows.append(
+                EnergyConsumerSnapshot(
+                    id: "proc-\(idx)",
+                    pid: Int32(index),
+                    displayName: "Proc \(idx)",
+                    currentEnergyImpact: indexDouble * 10.0,
+                    averageEnergyImpact: indexDouble * 8.0,
+                    estimatedDrainShare: indexDouble * 5.0,
+                    estimatedPower12hWh: indexDouble * 2.0,
+                    preventingSleep: idx.isMultiple(of: 2),
+                    highPowerGPUUsage: nil,
+                    appNapStatus: nil,
+                    cpuPercent: indexDouble,
+                    memoryMB: indexDouble * 120.0
+                )
+            )
+        }
+
+        return BatteryEnergyReport(
+            generatedAt: Date(),
+            battery: BatteryEnergySnapshot(
+                updatedAt: Date(),
+                deviceName: "Mac",
+                machineIdentifier: "Mac16,8",
+                chargePercent: 77,
+                healthPercent: 98,
+                cycleCount: 80,
+                isCharging: false,
+                powerDrawWatts: 19.2,
+                minutesToEmpty: 140,
+                minutesToFull: nil,
+                temperatureCelsius: 31.1,
+                voltageVolts: 12.3,
+                amperageAmps: -1.2
+            ),
+            consumers: rows,
+            estimatedMetricTitle: "Estimated Drain Share",
+            estimatedMetricExplanation: "estimate"
+        )
     }
 
     private func makeReport(startupEntries: [StartupEntry]) -> PerformanceReport {
@@ -199,6 +276,45 @@ struct PerformanceFeatureControllerTests {
         }
         #expect(condition(), "\(description) timed out")
     }
+}
+
+private actor BatteryEnergyControllerServiceStub: BatteryEnergyReportBuilding {
+    private var queuedReports: [BatteryEnergyReport]
+    private var calls = 0
+
+    init(reports: [BatteryEnergyReport]) {
+        self.queuedReports = reports
+    }
+
+    func buildBatteryEnergyReport() async -> BatteryEnergyReport {
+        calls += 1
+        if !queuedReports.isEmpty {
+            return queuedReports.removeFirst()
+        }
+        return BatteryEnergyReport(
+            generatedAt: Date(),
+            battery: BatteryEnergySnapshot(
+                updatedAt: Date(),
+                deviceName: "Mac",
+                machineIdentifier: "Mac16,8",
+                chargePercent: nil,
+                healthPercent: nil,
+                cycleCount: nil,
+                isCharging: nil,
+                powerDrawWatts: nil,
+                minutesToEmpty: nil,
+                minutesToFull: nil,
+                temperatureCelsius: nil,
+                voltageVolts: nil,
+                amperageAmps: nil
+            ),
+            consumers: [],
+            estimatedMetricTitle: "Estimated Drain Share",
+            estimatedMetricExplanation: "estimate"
+        )
+    }
+
+    func callCount() -> Int { calls }
 }
 
 private actor PerformanceControllerServiceStub: PerformanceServicing {

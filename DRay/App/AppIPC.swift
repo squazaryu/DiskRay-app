@@ -74,7 +74,7 @@ final class AppIPCReceiver {
         case .runPerformanceScan:
             model.runPerformanceScan()
         case .scanDuplicatesHome:
-            model.scanDuplicatesInHome()
+            model.duplicatesController.scanDuplicatesInHome()
         case .runSpaceLensScan:
             model.scanSelected()
         }

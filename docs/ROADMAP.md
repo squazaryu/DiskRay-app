@@ -141,10 +141,11 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
   - [x] uninstall verify pass
   - [x] incremental scan merge
 
-## Milestone M13: RootViewModel Decomposition (in progress)
-- [ ] PR1 Shell/Coordinator boundary:
-  - [ ] keep only app-level orchestration in `RootViewModel`
-  - [ ] route feature-local async/persistence into feature controllers
+## Milestone M13: RootViewModel Decomposition (completed 2026-04-11)
+- [x] PR1 Shell/Coordinator boundary:
+  - [x] move Smart Care and Duplicates feature-local state/task ownership out of `RootViewModel`
+  - [x] attach Smart Care / Duplicates to shared `FeatureContext` contract (permission gate + logging)
+  - [x] remove remaining temporary root-level compatibility proxies after `ClutterViewModel` extraction
 - [x] PR2 Search extraction:
   - [x] `SearchFeatureController` introduced with `SearchFeatureState`
   - [x] Search live task lifecycle moved out of `RootViewModel`
@@ -183,6 +184,33 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
   - [x] removed root uninstaller/repair temporary proxies (`loadInstalledApps`, `loadRemnants`, `loadRepairArtifacts`, `recommendedRepairArtifacts`, `repairRisk`, `uninstallPreview`)
   - [x] remove remaining temporary root proxy API where feature view models can call controllers directly
   - [x] `UninstallerView` / `RepairView` switched from root proxy state access to direct `FeatureController.state` reads
+- [x] PR9 Smart Care + Duplicates extraction
+  - [x] `SmartCareFeatureController` introduced with `SmartCareFeatureState` ownership
+  - [x] Smart Care orchestration moved out of `RootViewModel` (`scan/select/clean/profile/exclusions`)
+  - [x] `DuplicatesFeatureController` introduced with `DuplicatesFeatureState` + scan task ownership
+  - [x] Duplicates orchestration moved out of `RootViewModel` (scan/cancel/clear/cleanup flow)
+  - [x] `ClutterViewModel` introduced; `ClutterView` now talks to `DuplicatesFeatureController` via feature VM (not root proxies)
+  - [x] `runUnifiedScan` uses Smart Care controller snapshot path
+  - [x] removed remaining root-level Smart Care compatibility accessors (`smartCare`, `smartAnalyzerOptions`, `applySmartScanResult`) and dead permission helper (`ensureCanModify`)
+  - [x] added deterministic controller tests (`SmartCareFeatureControllerTests`, `DuplicatesFeatureControllerTests`)
+
+## Milestone M14: Performance Battery & Energy Analytics (in progress)
+- [x] Add `BatteryEnergyReport` domain models for device + process energy telemetry.
+- [x] Introduce dedicated services:
+  - [x] `BatteryEnergyService` (report assembly)
+  - [x] `EnergyConsumersService` (process-level energy sampling + rolling averages)
+  - [x] `BatteryAttributionEstimator` (honest estimated drain share model)
+- [x] Extend `PerformanceFeatureState` with `batteryEnergyReport` and loading state.
+- [x] Extend `PerformanceFeatureController`:
+  - [x] load/refresh battery-energy report
+  - [x] refresh battery-energy data during diagnostics run
+- [x] Integrate Battery & Energy section into existing `Performance` view only (no top-level section changes, no helper changes).
+- [x] Add deterministic tests for:
+  - [x] report assembly + unavailable metrics handling
+  - [x] estimated attribution math/sorting
+  - [x] controller state updates after battery-energy load
+- [ ] Validate UX polish on low-width windows (consumer row wrapping/alignment).
+- [ ] Optional: add lightweight sampling persistence window (if we decide to keep longer-term trending in-app).
 
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.

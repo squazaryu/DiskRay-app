@@ -250,19 +250,11 @@ final class RootViewModel: ObservableObject {
     let search: SearchFeatureController
     let recovery: RecoveryFeatureController
     @Published var hoveredPath: String?
-    @Published var smartCare = SmartCareFeatureState()
+    let smartCareController: SmartCareFeatureController
     let uninstaller: UninstallerFeatureController
     let repair: RepairFeatureController
     let performanceController: PerformanceFeatureController
-    @Published private(set) var duplicateGroups: [DuplicateGroup] = []
-    @Published private(set) var isDuplicateScanRunning = false
-    @Published private(set) var duplicateScanProgress = DuplicateScanProgress(
-        phase: "Idle",
-        currentPath: "",
-        visitedFiles: 0,
-        candidateGroups: 0
-    )
-    @Published var duplicateMinSizeMB: Double = 10
+    let duplicatesController: DuplicatesFeatureController
     let privacy: PrivacyFeatureController
     @Published private(set) var lastExportedOperationLogURL: URL?
     @Published private(set) var isUnifiedScanRunning = false
@@ -287,27 +279,13 @@ final class RootViewModel: ObservableObject {
     private let scanner: FileScanner
     private let incrementalTreeMergeUseCase: IncrementalTreeMergeUseCase
     private let permissionGateUseCase: PermissionGateUseCase
-    private let duplicateFinderService: DuplicateFinderService
-    private let smartCareUseCase: SmartCareUseCase
-    private let smartExclusionUseCase: SmartExclusionUseCase
     private let privacyService: PrivacyService
     private let menuBarLoginAgentService: MenuBarLoginAgentService
     private let indexStore: SQLiteIndexStore?
     private let safeFileOperations: SafeFileOperationService
     private let uiSettingsStore: any UISettingsStoring
     private var scanTask: Task<Void, Never>?
-    private var duplicateScanTask: Task<Void, Never>?
     private var featureStateCancellables = Set<AnyCancellable>()
-    let smartAnalyzerOptions: [SmartAnalyzerOption] = [
-        .init(key: "user_logs", title: "User Logs", description: "Old files in ~/Library/Logs"),
-        .init(key: "user_caches", title: "User Caches", description: "Rebuildable cache files"),
-        .init(key: "old_downloads", title: "Old Downloads", description: "Downloads older than 30 days"),
-        .init(key: "xcode_derived_data", title: "Xcode DerivedData", description: "Build artifacts"),
-        .init(key: "ios_backups", title: "iOS Backups", description: "MobileSync local backups"),
-        .init(key: "mail_downloads", title: "Mail Downloads", description: "Saved mail attachments"),
-        .init(key: "language_files", title: "Language Files", description: ".lproj localized resources"),
-        .init(key: "orphan_preferences", title: "Orphan Preferences", description: "Unused app preference files")
-    ]
 
     init(initialSection: AppSection? = nil, dependencies: RootViewModelDependencies = .live) {
         self.permissions = dependencies.permissions
@@ -316,12 +294,20 @@ final class RootViewModel: ObservableObject {
         self.incrementalTreeMergeUseCase = IncrementalTreeMergeUseCase()
         self.permissionGateUseCase = PermissionGateUseCase(service: dependencies.permissions)
         let uninstallerUseCase = UninstallerUseCase(service: dependencies.uninstallerService)
-        self.duplicateFinderService = dependencies.duplicateFinderService
-        self.smartCareUseCase = SmartCareUseCase(service: dependencies.smartScanService)
-        self.smartExclusionUseCase = SmartExclusionUseCase()
+        let smartCareUseCase = SmartCareUseCase(service: dependencies.smartScanService)
+        let smartExclusionUseCase = SmartExclusionUseCase()
+        self.smartCareController = SmartCareFeatureController(
+            smartCareUseCase: smartCareUseCase,
+            smartExclusionUseCase: smartExclusionUseCase
+        )
         let performanceUseCase = PerformanceUseCase(
             performanceService: dependencies.performanceService,
-            processPriorityService: dependencies.processPriorityService
+            processPriorityService: dependencies.processPriorityService,
+            batteryEnergyService: BatteryEnergyService(
+                batteryDiagnosticsService: dependencies.batteryDiagnosticsService,
+                energyConsumersService: EnergyConsumersService(),
+                attributionEstimator: BatteryAttributionEstimator()
+            )
         )
         self.performanceController = PerformanceFeatureController(useCase: performanceUseCase)
         self.privacyService = dependencies.privacyService
@@ -329,6 +315,10 @@ final class RootViewModel: ObservableObject {
         self.indexStore = dependencies.indexStore
         self.safeFileOperations = dependencies.safeFileOperations
         self.uiSettingsStore = dependencies.uiSettingsStore
+        self.duplicatesController = DuplicatesFeatureController(
+            duplicateFinderService: dependencies.duplicateFinderService,
+            safeFileOperations: dependencies.safeFileOperations
+        )
         let searchPresetUseCase = SearchPresetUseCase(store: dependencies.searchPresetStore)
         self.search = SearchFeatureController(
             selectedTargetURL: URL(fileURLWithPath: "/"),
@@ -365,9 +355,9 @@ final class RootViewModel: ObservableObject {
         }
         restoreLastTargetIfPossible()
         search.setSelectedTargetURL(selectedTarget.url)
-        loadSearchPresets()
+        search.loadPresets()
         recovery.loadHistory()
-        loadSmartExclusions()
+        smartCareController.loadExclusions()
         uninstaller.loadSessions()
         repair.loadSessions()
         refreshLaunchAtLoginStatus()
@@ -377,6 +367,12 @@ final class RootViewModel: ObservableObject {
         }
 
         search.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &featureStateCancellables)
+        smartCareController.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &featureStateCancellables)
+        duplicatesController.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &featureStateCancellables)
         privacy.objectWillChange
@@ -419,45 +415,12 @@ final class RootViewModel: ObservableObject {
                 self?.operationLogs.add(category: category, message: message)
             }
         )
+        smartCareController.attachContext(context)
+        duplicatesController.attachContext(context)
         privacy.attachContext(context)
         performanceController.attachContext(context)
         uninstaller.attachContext(context)
         repair.attachContext(context)
-    }
-
-    private var smartScanCategories: [SmartCategoryState] {
-        get { smartCare.categories }
-        set { smartCare.categories = newValue }
-    }
-
-    private var isSmartScanRunning: Bool {
-        get { smartCare.isScanRunning }
-        set { smartCare.isScanRunning = newValue }
-    }
-
-    private var smartExclusions: [String] {
-        get { smartCare.exclusions }
-        set { smartCare.exclusions = newValue }
-    }
-
-    private var smartExcludedAnalyzerKeys: [String] {
-        get { smartCare.excludedAnalyzerKeys }
-        set { smartCare.excludedAnalyzerKeys = newValue }
-    }
-
-    private var smartAnalyzerTelemetry: [CleanupAnalyzerTelemetry] {
-        get { smartCare.analyzerTelemetry }
-        set { smartCare.analyzerTelemetry = newValue }
-    }
-
-    private var smartMinCleanSizeMB: Double {
-        get { smartCare.minCleanSizeMB }
-        set { smartCare.minCleanSizeMB = newValue }
-    }
-
-    private var smartProfile: SmartCleanProfile {
-        get { smartCare.profile }
-        set { smartCare.profile = newValue }
     }
 
     var performance: PerformanceFeatureState {
@@ -635,273 +598,9 @@ final class RootViewModel: ObservableObject {
         scan(at: selectedTarget.url, maxDepth: 7)
     }
 
-    func runSmartScan() {
-        guard !isSmartScanRunning else { return }
-        guard ensureCanRunProtectedModule(actionName: "Smart Scan") else { return }
-        isSmartScanRunning = true
-        Task { [weak self] in
-            guard let self else { return }
-            let result = await smartCareUseCase.runScan(
-                excludedPrefixes: smartExclusions,
-                excludedAnalyzerKeys: smartExcludedAnalyzerKeys
-            )
-            await MainActor.run {
-                self.applySmartScanResult(result)
-                self.isSmartScanRunning = false
-                self.operationLogs.add(category: "smartcare", message: "Smart scan done: categories \(result.categories.count), bytes \(result.totalBytes)")
-            }
-        }
-    }
-
-    func toggleSmartCategorySelection(_ id: String) {
-        guard let index = smartScanCategories.firstIndex(where: { $0.id == id }) else { return }
-        smartScanCategories[index].isSelected.toggle()
-    }
-
-    func cleanSelectedSmartCategories() {
-        let items = smartScanCategories
-            .filter(\.isSelected)
-            .flatMap { $0.result.items }
-
-        guard !items.isEmpty else { return }
-        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-            // Manual category selection should clean exactly what user selected,
-            // without hidden size threshold filtering.
-            let cleanupResult = await smartCareUseCase.clean(items: items, minSizeBytes: 0)
-            await MainActor.run {
-                AppLogger.actions.info("Smart clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
-                self.operationLogs.add(category: "smartcare", message: "Smart clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
-                self.runSmartScan()
-            }
-        }
-    }
-
-    func cleanRecommendedSmartCategories() {
-        selectRecommendedSmartCategories()
-        let items = smartScanCategories
-            .filter(\.isSelected)
-            .flatMap { $0.result.items }
-
-        guard !items.isEmpty else { return }
-        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-            // Keep min-size threshold for auto-recommended cleanup flow.
-            let cleanupResult = await smartCareUseCase.clean(
-                items: items,
-                minSizeBytes: Int64(smartMinCleanSizeMB * 1_048_576)
-            )
-            await MainActor.run {
-                AppLogger.actions.info("Smart recommended clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
-                self.operationLogs.add(category: "smartcare", message: "Smart recommended clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
-                self.runSmartScan()
-            }
-        }
-    }
-
-    func cleanSmartItems(_ items: [CleanupItem]) {
-        guard !items.isEmpty else { return }
-        guard ensureCanModify(urls: items.map(\.url), actionName: "Smart Clean") else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            // Manual item selection should clean exact picks, regardless of min size.
-            let cleanupResult = await smartCareUseCase.clean(items: items, minSizeBytes: 0)
-            await MainActor.run {
-                AppLogger.actions.info("Smart item clean moved: \(cleanupResult.moved), failed: \(cleanupResult.failed)")
-                self.operationLogs.add(category: "smartcare", message: "Smart item clean moved \(cleanupResult.moved), failed \(cleanupResult.failed)")
-                self.runSmartScan()
-            }
-        }
-    }
-
-    func selectRecommendedSmartCategories() {
-        smartScanCategories = smartCareUseCase.applyRecommendations(
-            to: smartScanCategories,
-            profile: smartProfile
-        )
-    }
-
-    func applySmartProfile(_ profile: SmartCleanProfile) {
-        smartProfile = profile
-        switch profile {
-        case .conservative: smartMinCleanSizeMB = 8
-        case .balanced: smartMinCleanSizeMB = 1
-        case .aggressive: smartMinCleanSizeMB = 0.1
-        }
-        selectRecommendedSmartCategories()
-    }
-
-    func addSmartExclusion(_ path: String) {
-        smartExclusions = smartExclusionUseCase.addPath(path, to: smartExclusions)
-    }
-
-    func toggleSmartExclusion(_ path: String) {
-        smartExclusions = smartExclusionUseCase.togglePath(path, currentPaths: smartExclusions)
-    }
-
-    func removeSmartExclusion(_ path: String) {
-        smartExclusions = smartExclusionUseCase.removePath(path, from: smartExclusions)
-    }
-
-    func toggleSmartAnalyzerExclusion(_ analyzerKey: String) {
-        let previouslyExcluded = smartExcludedAnalyzerKeys.contains(analyzerKey)
-        smartExcludedAnalyzerKeys = smartExclusionUseCase.toggleAnalyzer(
-            analyzerKey,
-            currentAnalyzerKeys: smartExcludedAnalyzerKeys
-        )
-        if analyzerKey.isEmpty {
-            return
-        }
-        if previouslyExcluded {
-            operationLogs.add(category: "smartcare", message: "Analyzer enabled: \(analyzerKey)")
-        } else {
-            operationLogs.add(category: "smartcare", message: "Analyzer excluded: \(analyzerKey)")
-        }
-    }
-
-    func applySmartScanResult(_ result: SmartScanResult) {
-        smartScanCategories = result.categories.map {
-            SmartCategoryState(id: $0.key, result: $0, isSelected: $0.isSafeByDefault)
-        }
-        smartAnalyzerTelemetry = result.analyzerTelemetry
-        selectRecommendedSmartCategories()
-    }
-
-
-    func scanDuplicatesInSelectedTarget() {
-        scanDuplicates(roots: [selectedTarget.url], targetDescription: selectedTarget.url.path)
-    }
-
-    func scanDuplicatesInHome() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        scanDuplicates(roots: [home], targetDescription: home.path)
-    }
-
-    func cancelDuplicateScan() {
-        duplicateScanTask?.cancel()
-        isDuplicateScanRunning = false
-        duplicateScanProgress = DuplicateScanProgress(
-            phase: "Canceled",
-            currentPath: duplicateScanProgress.currentPath,
-            visitedFiles: duplicateScanProgress.visitedFiles,
-            candidateGroups: duplicateScanProgress.candidateGroups
-        )
-        operationLogs.add(category: "clutter", message: "Duplicate scan canceled")
-    }
-
-    func clearDuplicateResults() {
-        duplicateGroups = []
-    }
-
-    func moveDuplicatePathsToTrash(_ paths: [String]) -> TrashOperationResult {
-        var nodes: [FileNode] = []
-        var missingPaths: [String] = []
-        for path in paths {
-            if let node = nodeForPath(path) {
-                nodes.append(node)
-            } else {
-                missingPaths.append(path)
-            }
-        }
-
-        let baseResult = moveToTrash(nodes: nodes)
-        let result: TrashOperationResult
-        if missingPaths.isEmpty {
-            result = baseResult
-        } else {
-            result = TrashOperationResult(
-                moved: baseResult.moved,
-                skippedProtected: baseResult.skippedProtected,
-                failed: baseResult.failed + missingPaths
-            )
-        }
-        let attempted = Set(paths)
-        let skipped = Set(result.skippedProtected)
-        let failed = Set(result.failed)
-        let movedPaths = attempted.subtracting(skipped).subtracting(failed)
-        if !movedPaths.isEmpty {
-            duplicateGroups = duplicateGroups.compactMap { group in
-                let remaining = group.files.filter { !movedPaths.contains($0.url.path) }
-                guard remaining.count > 1 else { return nil }
-                return DuplicateGroup(
-                    signature: group.signature,
-                    files: remaining,
-                    sizeInBytes: group.sizeInBytes
-                )
-            }
-            operationLogs.add(
-                category: "clutter",
-                message: "Duplicate cleanup moved \(movedPaths.count) file(s), failed \(result.failed.count), skipped \(result.skippedProtected.count)"
-            )
-        }
-        return result
-    }
-
     func runPerformanceScan() {
         guard !isPerformanceScanRunning else { return }
         performanceController.runDiagnostics()
-    }
-
-    private func scanDuplicates(roots: [URL], targetDescription: String) {
-        duplicateScanTask?.cancel()
-        isDuplicateScanRunning = true
-        duplicateGroups = []
-        let minSizeBytes = Int64(max(1, duplicateMinSizeMB) * 1_048_576)
-        duplicateScanProgress = DuplicateScanProgress(
-            phase: "Starting",
-            currentPath: targetDescription,
-            visitedFiles: 0,
-            candidateGroups: 0
-        )
-        operationLogs.add(
-            category: "clutter",
-            message: "Duplicate scan started for \(targetDescription), min size \(Int(duplicateMinSizeMB)) MB"
-        )
-
-        duplicateScanTask = Task { [weak self] in
-            guard let self else { return }
-            let groups = await duplicateFinderService.scan(
-                roots: roots,
-                minFileSizeBytes: minSizeBytes
-            ) { [weak self] progress in
-                Task { @MainActor in
-                    self?.duplicateScanProgress = progress
-                }
-            }
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self.duplicateGroups = groups
-                self.isDuplicateScanRunning = false
-                self.duplicateScanProgress = DuplicateScanProgress(
-                    phase: "Completed",
-                    currentPath: targetDescription,
-                    visitedFiles: self.duplicateScanProgress.visitedFiles,
-                    candidateGroups: groups.count
-                )
-                self.operationLogs.add(
-                    category: "clutter",
-                    message: "Duplicate scan completed for \(targetDescription): groups \(groups.count)"
-                )
-            }
-        }
-    }
-
-    private func nodeForPath(_ path: String) -> FileNode? {
-        let url = URL(fileURLWithPath: path)
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
-        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-        return FileNode(
-            url: url,
-            name: url.lastPathComponent,
-            isDirectory: isDirectory.boolValue,
-            sizeInBytes: size,
-            children: []
-        )
     }
 
     func runPrivacyScan() {
@@ -916,17 +615,14 @@ final class RootViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            async let smartResult = smartCareUseCase.runScan(
-                excludedPrefixes: smartExclusions,
-                excludedAnalyzerKeys: smartExcludedAnalyzerKeys
-            )
+            async let smartResult = smartCareController.runScanSnapshot()
             async let privacyResult = privacyService.runScan()
             async let performanceResult = performanceController.runDiagnosticsSnapshot()
 
             let (smart, privacy, performance) = await (smartResult, privacyResult, performanceResult)
 
             await MainActor.run {
-                self.applySmartScanResult(smart)
+                self.smartCareController.applySmartScanResult(smart)
 
                 self.privacy.applyScanResult(privacy)
 
@@ -960,16 +656,6 @@ final class RootViewModel: ObservableObject {
 
     private func ensureCanRunProtectedModule(actionName: String) -> Bool {
         applyPermissionDecision(permissionGateUseCase.canRunProtectedModule(actionName: actionName))
-    }
-
-    private func ensureCanModify(urls: [URL], actionName: String, requiresFullDisk: Bool = false) -> Bool {
-        applyPermissionDecision(
-            permissionGateUseCase.canModify(
-                urls: urls,
-                actionName: actionName,
-                requiresFullDisk: requiresFullDisk
-            )
-        )
     }
 
     private func applyPermissionDecision(_ decision: PermissionGateDecision) -> Bool {
@@ -1016,7 +702,7 @@ final class RootViewModel: ObservableObject {
                     finishedAt: $0.finishedAt
                 )
             },
-            smartCareCategoryCount: smartScanCategories.count,
+            smartCareCategoryCount: smartCareController.state.categories.count,
             privacyCategoryCount: privacyCategories.count,
             startupEntryCount: performanceReport?.startupEntries.count ?? 0,
             operationLogs: Array(operationLogs.entries.prefix(300))
@@ -1323,16 +1009,6 @@ final class RootViewModel: ObservableObject {
 
     private func clearSavedTargetBookmark() {
         uiSettingsStore.clearSelectedTargetBookmark()
-    }
-
-    private func loadSearchPresets() {
-        search.loadPresets()
-    }
-
-    private func loadSmartExclusions() {
-        let state = smartExclusionUseCase.loadState()
-        smartExclusions = state.excludedPaths
-        smartExcludedAnalyzerKeys = state.excludedAnalyzerKeys
     }
 
     private func appendQuickActionRollbackSession(_ session: QuickActionRollbackSession) {

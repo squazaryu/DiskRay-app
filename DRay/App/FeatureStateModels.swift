@@ -46,12 +46,26 @@ struct SmartCareFeatureState {
     var profile: SmartCleanProfile = .balanced
 }
 
+struct DuplicatesFeatureState {
+    var groups: [DuplicateGroup] = []
+    var isScanRunning = false
+    var progress = DuplicateScanProgress(
+        phase: "Idle",
+        currentPath: "",
+        visitedFiles: 0,
+        candidateGroups: 0
+    )
+    var minSizeMB: Double = 10
+}
+
 struct PerformanceFeatureState {
     var report: PerformanceReport?
     var isScanRunning = false
     var startupCleanupReport: StartupCleanupReport?
     var activeLoadReliefAdjustments = 0
     var quickActionDelta: QuickActionDeltaReport?
+    var batteryEnergyReport: BatteryEnergyReport?
+    var isBatteryEnergyLoading = false
 }
 
 struct PrivacyFeatureState {

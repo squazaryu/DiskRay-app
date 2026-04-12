@@ -2,13 +2,17 @@ import SwiftUI
 import AppKit
 
 struct ClutterView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: ClutterViewModel
 
     @State private var selectedPaths = Set<String>()
     @State private var pendingTrashPaths: [String] = []
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
     @State private var cleanupDiagnostics: [CleanupDiagnosticRow] = []
+
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: ClutterViewModel(root: rootModel))
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -112,7 +116,7 @@ struct ClutterView: View {
                 }
 
                 HStack(spacing: 8) {
-                    Stepper(value: $model.duplicateMinSizeMB, in: 1...2_048, step: 1) {
+                    Stepper(value: duplicateMinSizeBinding, in: 1...2_048, step: 1) {
                         Text(t("Мин \(Int(model.duplicateMinSizeMB)) МБ", "Min \(Int(model.duplicateMinSizeMB)) MB"))
                             .frame(minWidth: 120, alignment: .trailing)
                     }
@@ -313,6 +317,13 @@ struct ClutterView: View {
         .controlSize(.small)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var duplicateMinSizeBinding: Binding<Double> {
+        Binding(
+            get: { model.duplicateMinSizeMB },
+            set: { model.duplicateMinSizeMB = $0 }
+        )
     }
 
     private var cleanupDiagnosticsPanel: some View {

@@ -9,6 +9,7 @@ struct RootViewModelDependencies {
     let uninstallerService: AppUninstallerService
     let duplicateFinderService: DuplicateFinderService
     let performanceService: PerformanceService
+    let batteryDiagnosticsService: BatteryDiagnosticsService
     let privacyService: PrivacyService
     let liveSearchService: LiveSearchService
     let menuBarLoginAgentService: MenuBarLoginAgentService
@@ -30,6 +31,7 @@ struct RootViewModelDependencies {
             uninstallerService: AppUninstallerService(),
             duplicateFinderService: DuplicateFinderService(),
             performanceService: PerformanceService(),
+            batteryDiagnosticsService: BatteryDiagnosticsService(),
             privacyService: PrivacyService(),
             liveSearchService: LiveSearchService(),
             menuBarLoginAgentService: MenuBarLoginAgentService(),

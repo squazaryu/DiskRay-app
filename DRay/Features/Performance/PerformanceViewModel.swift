@@ -35,6 +35,10 @@ final class PerformanceViewModel: ObservableObject {
         performanceController.runDiagnostics()
     }
 
+    func loadBatteryEnergyReport(force: Bool = false) {
+        performanceController.loadBatteryEnergyReport(force: force)
+    }
+
     func cleanupStartupEntries(_ entries: [StartupEntry]) {
         performanceController.cleanupStartupEntries(entries)
     }
@@ -64,6 +68,6 @@ final class PerformanceViewModel: ObservableObject {
     }
 
     func runSmartScan() {
-        root.runSmartScan()
+        root.smartCareController.runSmartScan()
     }
 }

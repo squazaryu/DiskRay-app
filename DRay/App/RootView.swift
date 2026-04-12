@@ -212,7 +212,7 @@ struct RootView: View {
         case .smartCare:
             SmartCareView(rootModel: model)
         case .clutter:
-            ClutterView(model: model)
+            ClutterView(rootModel: model)
         case .uninstaller:
             UninstallerView(model: model)
         case .repair:

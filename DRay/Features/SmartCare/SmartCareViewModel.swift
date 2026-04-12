@@ -4,17 +4,23 @@ import Combine
 @MainActor
 final class SmartCareViewModel: ObservableObject {
     private let root: RootViewModel
+    private let smartCareController: SmartCareFeatureController
     private var rootChangeCancellable: AnyCancellable?
+    private var smartCareChangeCancellable: AnyCancellable?
 
     init(root: RootViewModel) {
         self.root = root
+        self.smartCareController = root.smartCareController
         self.rootChangeCancellable = root.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        self.smartCareChangeCancellable = smartCareController.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
     }
 
     var smartCare: SmartCareFeatureState {
-        root.smartCare
+        smartCareController.state
     }
 
     var appLanguage: AppLanguage {
@@ -22,7 +28,7 @@ final class SmartCareViewModel: ObservableObject {
     }
 
     var smartAnalyzerOptions: [SmartAnalyzerOption] {
-        root.smartAnalyzerOptions
+        smartCareController.smartAnalyzerOptions
     }
 
     var unifiedScanSummary: UnifiedScanSummary? {
@@ -33,21 +39,19 @@ final class SmartCareViewModel: ObservableObject {
         root.isUnifiedScanRunning
     }
 
-    func binding<Value>(_ keyPath: WritableKeyPath<SmartCareFeatureState, Value>) -> Binding<Value> {
+    var minCleanSizeMBBinding: Binding<Double> {
         Binding(
             get: { [weak self] in
-                guard let self else { return SmartCareFeatureState()[keyPath: keyPath] }
-                return self.root.smartCare[keyPath: keyPath]
+                self?.smartCareController.state.minCleanSizeMB ?? 1
             },
             set: { [weak self] newValue in
-                guard let self else { return }
-                self.root.smartCare[keyPath: keyPath] = newValue
+                self?.smartCareController.updateMinCleanSizeMB(newValue)
             }
         )
     }
 
     func runSmartScan() {
-        root.runSmartScan()
+        smartCareController.runSmartScan()
     }
 
     func runUnifiedScan() {
@@ -55,42 +59,42 @@ final class SmartCareViewModel: ObservableObject {
     }
 
     func toggleSmartCategorySelection(_ id: String) {
-        root.toggleSmartCategorySelection(id)
+        smartCareController.toggleSmartCategorySelection(id)
     }
 
     func cleanSelectedSmartCategories() {
-        root.cleanSelectedSmartCategories()
+        smartCareController.cleanSelectedSmartCategories()
     }
 
     func cleanRecommendedSmartCategories() {
-        root.cleanRecommendedSmartCategories()
+        smartCareController.cleanRecommendedSmartCategories()
     }
 
     func cleanSmartItems(_ items: [CleanupItem]) {
-        root.cleanSmartItems(items)
+        smartCareController.cleanSmartItems(items)
     }
 
     func selectRecommendedSmartCategories() {
-        root.selectRecommendedSmartCategories()
+        smartCareController.selectRecommendedSmartCategories()
     }
 
     func applySmartProfile(_ profile: SmartCleanProfile) {
-        root.applySmartProfile(profile)
+        smartCareController.applySmartProfile(profile)
     }
 
     func addSmartExclusion(_ path: String) {
-        root.addSmartExclusion(path)
+        smartCareController.addSmartExclusion(path)
     }
 
     func removeSmartExclusion(_ path: String) {
-        root.removeSmartExclusion(path)
+        smartCareController.removeSmartExclusion(path)
     }
 
     func toggleSmartExclusion(_ path: String) {
-        root.toggleSmartExclusion(path)
+        smartCareController.toggleSmartExclusion(path)
     }
 
     func toggleSmartAnalyzerExclusion(_ analyzerKey: String) {
-        root.toggleSmartAnalyzerExclusion(analyzerKey)
+        smartCareController.toggleSmartAnalyzerExclusion(analyzerKey)
     }
 }

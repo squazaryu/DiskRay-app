@@ -7,6 +7,7 @@ This document defines hard boundaries while `RootViewModel` is being decomposed 
 - `RootViewModel` is the app-shell coordinator.
 - Feature-local business logic should live in dedicated feature controllers.
 - Views should read feature state from feature controllers (directly or via thin feature view models).
+- Current extracted controllers: `Search`, `Privacy`, `Recovery`, `Uninstaller`, `Repair`, `Performance`, `SmartCare`, `Duplicates`.
 
 ## Invariants
 1. Feature-local state lives in feature controller/state types.
@@ -24,6 +25,8 @@ This document defines hard boundaries while `RootViewModel` is being decomposed 
 ## Feature Boundaries (target)
 - Search: query/filters/live task/presets/results.
 - Privacy: scan/select/clean/report/delta.
+- Smart Care: smart scan orchestration, profile/recommendation selection, exclusions, clean actions.
+- Duplicates: duplicate scan lifecycle (start/progress/cancel), result groups, duplicate cleanup flow.
 - Recovery: recently deleted + rollback/history.
 - Uninstaller: app/remnant discovery, uninstall, verify, sessions.
 - Repair: artifact strategy + repair execution + sessions.
@@ -39,3 +42,6 @@ This document defines hard boundaries while `RootViewModel` is being decomposed 
 - Migrations are incremental and behavior-preserving.
 - During migration, root proxy methods are allowed temporarily.
 - Proxy methods must be removed when the owning feature controller is fully wired.
+- If a feature has a dedicated feature view model, it must call the feature controller directly instead of root proxy actions.
+- `ClutterView` uses `ClutterViewModel` and no longer relies on root-level duplicates action proxies.
+- Root-level Smart Care compatibility accessors/proxies have been removed; unified scan calls `SmartCareFeatureController` directly.
