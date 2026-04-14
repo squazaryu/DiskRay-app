@@ -1,14 +1,54 @@
 import SwiftUI
 
+enum PremiumTheme {
+    static func appBackground(_ scheme: ColorScheme) -> [Color] {
+        scheme == .dark
+        ? [Color(red: 0.05, green: 0.07, blue: 0.11), Color(red: 0.08, green: 0.11, blue: 0.17)]
+        : [Color(red: 0.95, green: 0.97, blue: 1.00), Color(red: 0.90, green: 0.93, blue: 0.98)]
+    }
+
+    static func sidebarBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
+        scheme == .dark
+        ? AnyShapeStyle(Color.white.opacity(0.03))
+        : AnyShapeStyle(Color.white.opacity(0.35))
+    }
+
+    static func contentBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
+        scheme == .dark
+        ? AnyShapeStyle(.thinMaterial)
+        : AnyShapeStyle(.regularMaterial)
+    }
+
+    static func cardBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
+        scheme == .dark
+        ? AnyShapeStyle(Color.white.opacity(0.04))
+        : AnyShapeStyle(Color.white.opacity(0.44))
+    }
+
+    static func border(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.10)
+    }
+
+    static func accent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.cyan : Color.blue
+    }
+
+    static func secondaryAccent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.indigo.opacity(0.8) : Color.indigo.opacity(0.7)
+    }
+
+    static let success = Color.green
+    static let warning = Color.orange
+    static let danger = Color.red
+}
+
 struct GlassShellBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: colorScheme == .dark
-                ? [Color(red: 0.05, green: 0.07, blue: 0.12), Color(red: 0.10, green: 0.13, blue: 0.20)]
-                : [Color(red: 0.94, green: 0.97, blue: 1.00), Color(red: 0.87, green: 0.91, blue: 0.98)],
+                colors: PremiumTheme.appBackground(colorScheme),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -24,7 +64,7 @@ struct GlassShellBackground: View {
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [accent.opacity(colorScheme == .dark ? 0.30 : 0.23), .clear],
+                colors: [PremiumTheme.accent(colorScheme).opacity(colorScheme == .dark ? 0.26 : 0.18), .clear],
                 center: .topLeading,
                 startRadius: 40,
                 endRadius: 560
@@ -32,7 +72,7 @@ struct GlassShellBackground: View {
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [secondaryAccent.opacity(colorScheme == .dark ? 0.16 : 0.14), .clear],
+                colors: [PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.14 : 0.11), .clear],
                 center: .bottomTrailing,
                 startRadius: 20,
                 endRadius: 520
@@ -51,13 +91,6 @@ struct GlassShellBackground: View {
         }
     }
 
-    private var accent: Color {
-        colorScheme == .dark ? Color.cyan : Color.blue
-    }
-
-    private var secondaryAccent: Color {
-        colorScheme == .dark ? Color.purple : Color.indigo
-    }
 }
 
 struct GlassSurfaceModifier: ViewModifier {
@@ -127,9 +160,7 @@ struct GlassSurfaceModifier: ViewModifier {
     }
 
     private var borderColor: Color {
-        colorScheme == .dark
-        ? Color.white.opacity(0.30)
-        : Color.white.opacity(0.66)
+        PremiumTheme.border(colorScheme)
     }
 }
 
@@ -169,6 +200,77 @@ struct ModuleHeaderCard<Actions: View>: View {
             }
         }
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
+    }
+}
+
+struct PremiumSidebarItem: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    var isCollapsed: Bool = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: isCollapsed ? 0 : 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 20)
+                if !isCollapsed {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: isCollapsed ? .center : .leading)
+            .padding(.horizontal, isCollapsed ? 0 : 10)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected
+                          ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: [
+                                    PremiumTheme.accent(colorScheme).opacity(colorScheme == .dark ? 0.30 : 0.20),
+                                    PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.24 : 0.16)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                          )
+                          : PremiumTheme.sidebarBackground(colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(PremiumTheme.border(colorScheme).opacity(isSelected ? 0.4 : 0.18), lineWidth: 0.8)
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+    }
+}
+
+struct WorkspaceSegmentBar<Selection: Hashable>: View {
+    let title: String
+    @Binding var selection: Selection
+    let segments: [(Selection, String)]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.headline)
+            Spacer(minLength: 8)
+            Picker("", selection: $selection) {
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    Text(segment.1).tag(segment.0)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 560)
+        }
     }
 }
 

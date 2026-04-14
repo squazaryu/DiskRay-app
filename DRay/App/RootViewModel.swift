@@ -604,6 +604,14 @@ final class RootViewModel: ObservableObject {
         performanceController.runDiagnostics()
     }
 
+    func runSmartScan() {
+        smartCareController.runSmartScan()
+    }
+
+    func scanDuplicatesInSelectedTarget() {
+        duplicatesController.scanDuplicatesInSelectedTarget(selectedTarget.url)
+    }
+
     func runPrivacyScan() {
         privacy.runScan()
     }

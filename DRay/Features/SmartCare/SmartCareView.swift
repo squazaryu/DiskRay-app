@@ -5,6 +5,7 @@ struct SmartCareView: View {
     @State private var expandedCategories = Set<String>()
     @State private var selectedItemPaths = Set<String>()
     @State private var newExclusion = ""
+    @State private var workspaceTab: SmartCareWorkspaceTab = .overview
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: SmartCareViewModel(root: rootModel))
@@ -13,28 +14,102 @@ struct SmartCareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            exclusionsPanel
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
+            WorkspaceSegmentBar(
+                title: "Workspace",
+                selection: $workspaceTab,
+                segments: [
+                    (.overview, "Overview"),
+                    (.categories, "Categories"),
+                    (.exclusions, "Exclusions")
+                ]
+            )
+            .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 10)
+
+            if model.smartCare.isScanRunning {
+                scanProgressBanner
+            }
 
             Group {
-                if model.smartCare.isScanRunning {
-                    scanProgressBanner
-                }
-
-                if model.smartCare.categories.isEmpty, !model.smartCare.isScanRunning {
-                    ContentUnavailableView(
-                        "No Scan Results",
-                        systemImage: "sparkles",
-                        description: Text("Run Smart Scan to build a cleanup plan.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    categoriesList
+                switch workspaceTab {
+                case .overview:
+                    smartOverview
+                case .categories:
+                    categoriesWorkspace
+                case .exclusions:
+                    exclusionsPanel
                 }
             }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : 12)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(12)
+    }
+
+    @ViewBuilder
+    private var categoriesWorkspace: some View {
+        if model.smartCare.categories.isEmpty, !model.smartCare.isScanRunning {
+            ContentUnavailableView(
+                "No Scan Results",
+                systemImage: "sparkles",
+                description: Text("Run Smart Scan to build a cleanup plan.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            categoriesList
+        }
+    }
+
+    private var smartOverview: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                summaryCard(
+                    title: "Categories",
+                    value: "\(model.smartCare.categories.count)",
+                    subtitle: "Active cleanup groups"
+                )
+                summaryCard(
+                    title: "Selected",
+                    value: "\(selectedCategoryCount)",
+                    subtitle: "Categories selected"
+                )
+                summaryCard(
+                    title: "Items",
+                    value: "\(selectedItemPaths.count)",
+                    subtitle: "Explicit item selection"
+                )
+                summaryCard(
+                    title: "Profile",
+                    value: model.smartCare.profile.title,
+                    subtitle: "Risk threshold strategy"
+                )
+            }
+            .frame(maxWidth: .infinity)
+
+            if !model.smartCare.analyzerTelemetry.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Analyzer telemetry")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(model.smartCare.analyzerTelemetry.prefix(6)) { item in
+                        HStack(spacing: 8) {
+                            Text(item.title)
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            if item.skipped {
+                                GlassPillBadge(title: "Excluded", tint: .orange)
+                            } else {
+                                Text("\(item.itemCount) items")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                GlassPillBadge(title: durationText(item.durationMs), tint: .blue)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+            }
+        }
     }
 
     private var scanProgressBanner: some View {
@@ -55,6 +130,24 @@ struct SmartCareView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(.thinMaterial)
         )
+    }
+
+    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var header: some View {
@@ -83,7 +176,8 @@ struct SmartCareView: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 116)
+            .frame(width: 230)
+            .fixedSize(horizontal: true, vertical: false)
 
             Button("Run") {
                 selectedItemPaths.removeAll()
@@ -465,4 +559,10 @@ struct SmartCareView: View {
         if ms < 1000 { return "\(ms) ms" }
         return String(format: "%.1f s", Double(ms) / 1000.0)
     }
+}
+
+private enum SmartCareWorkspaceTab: Hashable {
+    case overview
+    case categories
+    case exclusions
 }

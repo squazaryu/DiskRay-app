@@ -214,6 +214,35 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
 - [ ] Validate UX polish on low-width windows (consumer row wrapping/alignment).
 - [ ] Optional: add lightweight sampling persistence window (if we decide to keep longer-term trending in-app).
 
+## Milestone M15: Version 2.0.0 UI & Information Architecture Redesign
+- [x] Keep redesign isolated in dedicated branch `feature/v2-ui-architecture-refresh` (no direct work in `main`).
+- [x] Premium shell baseline:
+  - [x] Sidebar + content workspace composition with semantic glass surfaces.
+  - [x] Adaptive sidebar behavior: automatic icon-only mode on narrow windows.
+  - [x] Sidebar width tuning to free horizontal space for data-heavy modules.
+  - [x] Sidebar width is now adaptive (window-ratio based) with automatic compact fallback when labels would become unreadable.
+- [x] Performance workspace structure preserved in 2.0 layout:
+  - [x] `Overview`
+  - [x] `System Load`
+  - [x] `Battery & Energy` (factual metrics + clearly labeled estimates)
+  - [x] `Startup & Network`
+- [x] Space Lens layout pass for compact/medium windows:
+  - [x] narrower left rail bounds
+  - [x] larger detail canvas priority
+  - [x] controls width tuning to reduce header crowding
+- [x] Smart Care / App Repair readability pass:
+  - [x] profile/strategy picker width and fixed-size behavior updated to avoid aggressive truncation.
+  - [x] long localized option captions remain readable at medium widths.
+- [x] Menu bar helper popup redesign (companion, not app clone):
+  - [x] compact hierarchy: top health summary → status cards → recommendation → consumers preview.
+  - [x] bottom action hierarchy with one primary action + secondary actions + utility menu.
+  - [x] explicit bridge from popup preview to full `Performance` workspace.
+- [x] App icon refresh for 2.0:
+  - [x] new light/dark source masters
+  - [x] regenerated iconsets + icns with corrected visual footprint.
+  - [x] replaced masters with external 2.0 concept art and regenerated full `iconset` + `icns` pipeline.
+- [x] Final 2.0 visual QA pass (all sections, both themes, narrow-window edge cases).
+
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.
 - Review/clean UX with safe defaults and confirmations.

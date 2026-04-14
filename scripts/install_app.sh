@@ -8,7 +8,7 @@ VERSION="${1:-1.2.2}"
 BUILD_NUMBER="${2:-1}"
 
 ICON_BASENAME="DRay"
-ICON_THEME="${DRAY_ICON_THEME:-light}"
+ICON_THEME="${DRAY_ICON_THEME:-auto}"
 if [[ "$ICON_THEME" == "auto" ]]; then
   if [[ "$(defaults read -g AppleInterfaceStyle 2>/dev/null || true)" == "Dark" ]]; then
     ICON_THEME="dark"

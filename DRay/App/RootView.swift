@@ -5,6 +5,7 @@ struct RootView: View {
     @ObservedObject var model: RootViewModel
     @State private var isFolderPickerPresented = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     private let sections: [RootSectionItem] = [
         .init(id: .smartCare, icon: "sparkles"),
@@ -20,22 +21,36 @@ struct RootView: View {
     ]
 
     var body: some View {
-        ZStack {
-            GlassShellBackground()
+        GeometryReader { proxy in
+            let adaptiveSidebarWidth = min(172, max(68, proxy.size.width * 0.118))
+            let compactSidebar = adaptiveSidebarWidth < 132
+            let sidebarWidth: CGFloat = compactSidebar ? 74 : adaptiveSidebarWidth
 
-            VStack(spacing: 12) {
-                topNavigation
-                    .zIndex(100)
-                if model.permissions.firstLaunchNeedsSetup {
-                    permissionsOnboardingCard
-                        .glassSurface(cornerRadius: 18, strokeOpacity: 0.16, shadowOpacity: 0.12, padding: 12)
+            ZStack {
+                GlassShellBackground()
+
+                HStack(spacing: 12) {
+                    sidebarNavigation(isCompact: compactSidebar)
+                        .frame(width: sidebarWidth)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .glassSurface(cornerRadius: 20, strokeOpacity: 0.18, shadowOpacity: 0.10, padding: 10)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader
+
+                        if model.permissions.firstLaunchNeedsSetup {
+                            permissionsOnboardingCard
+                                .glassSurface(cornerRadius: 16, strokeOpacity: 0.14, shadowOpacity: 0.08, padding: 12)
+                        }
+
+                        sectionView(for: model.selectedSection)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .glassSurface(cornerRadius: 22, strokeOpacity: 0.14, shadowOpacity: 0.14, padding: 0)
+                            .zIndex(1)
+                    }
                 }
-                sectionView(for: model.selectedSection)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .glassSurface(cornerRadius: 24, strokeOpacity: 0.16, shadowOpacity: 0.18, padding: 0)
-                    .zIndex(1)
+                .padding(14)
             }
-            .padding(14)
         }
         .fileImporter(
             isPresented: $isFolderPickerPresented,
@@ -76,38 +91,95 @@ struct RootView: View {
         }
     }
 
-    private var topNavigation: some View {
-        ViewThatFits(in: .horizontal) {
-            navigationButtons
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                navigationButtons
-                    .padding(.horizontal, 4)
+    private func sidebarNavigation(isCompact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if isCompact {
+                VStack(spacing: 4) {
+                    Image(systemName: "bolt.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(PremiumTheme.accent(colorScheme))
+                    Text("2.0")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("DiskRay")
+                        .font(.title3.weight(.bold))
+                    Text(model.appVersionDisplay)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.top, 4)
             }
+
+            Divider()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(sections) { item in
+                        PremiumSidebarItem(
+                            icon: item.icon,
+                            title: model.localizedSectionTitle(for: item.id),
+                            isSelected: model.selectedSection == item.id,
+                            isCollapsed: isCompact
+                        ) {
+                            withAnimation(.snappy(duration: 0.18)) {
+                                model.selectedSection = item.id
+                            }
+                        }
+                        .accessibilityIdentifier("section-tab-\(item.id.rawValue)")
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 4)
+            }
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.shield.fill" : "exclamationmark.shield")
+                    .foregroundStyle(model.permissions.hasFullDiskAccess ? PremiumTheme.success : PremiumTheme.warning)
+                if !isCompact {
+                    Text(model.permissions.hasFullDiskAccess ? "Full Disk Access: On" : "Full Disk Access: Required")
+                        .font(.caption)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
+            .padding(.horizontal, isCompact ? 0 : 6)
+            .padding(.bottom, 4)
+            .help(model.permissions.hasFullDiskAccess ? "Full Disk Access: On" : "Full Disk Access: Required")
         }
-        .frame(height: 50)
-        .clipped()
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.2, shadowOpacity: 0.08, padding: 8)
     }
 
-    private var navigationButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(sections) { item in
-                Button {
-                    withAnimation(.snappy(duration: 0.2)) {
-                        model.selectedSection = item.id
-                    }
-                } label: {
-                    Text(model.localizedSectionTitle(for: item.id))
-                        .font(.system(size: 14, weight: .semibold))
-                        .padding(.horizontal, 2)
-                        .padding(.vertical, 1)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(MinimalGlassButtonStyle(isActive: model.selectedSection == item.id))
-                .accessibilityIdentifier("section-tab-\(item.id.rawValue)")
-            }
+    private var sectionHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(model.localizedSectionTitle(for: model.selectedSection))
+                .font(.title2.bold())
+            Text(sectionSubtitle(for: model.selectedSection))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
+    }
+
+    private func sectionSubtitle(for section: AppSection) -> String {
+        switch section {
+        case .smartCare: return "Guided cleanup recommendations with risk-aware controls."
+        case .clutter: return "Duplicate detection and reclaimable storage management."
+        case .uninstaller: return "Remove apps and verify leftover artifacts."
+        case .repair: return "Reset app state by cleaning low-risk supporting artifacts."
+        case .spaceLens: return "Visual disk map and direct folder-level cleanup actions."
+        case .search: return "Live file discovery with targeted cleanup workflows."
+        case .performance: return "System diagnostics, load relief, battery and energy analytics."
+        case .privacy: return "Review and clean privacy-sensitive cached artifacts."
+        case .recovery: return "Rollback and restore items moved through DiskRay actions."
+        case .settings: return "Language, appearance and permission control center."
         }
     }
 

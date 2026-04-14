@@ -206,7 +206,7 @@ private struct MenuBarPopupView: View {
                 .stroke(borderColor.opacity(0.9), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .frame(width: 452)
+        .frame(width: 432)
         .onReceive(NotificationCenter.default.publisher(for: .helperDismissTransientUI)) { _ in
             showHealthDetails = false
             showBatteryDetails = false
@@ -346,26 +346,16 @@ private struct MenuBarPopupView: View {
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Spacer()
-                Button("Reduce CPU") {
-                    pendingReliefAction = .cpu
-                    showReliefConfirm = true
+                Text("Preview")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.regularMaterial, in: Capsule())
+                Button("Open Performance") {
+                    model.open(section: .performance, action: .runPerformanceScan)
                 }
-                .disabled(cpuReliefCandidates.isEmpty)
-                .controlSize(.small)
                 .buttonStyle(.bordered)
-                Button("Reduce Memory") {
-                    pendingReliefAction = .memory
-                    showReliefConfirm = true
-                }
-                .disabled(memoryReliefCandidates.isEmpty)
                 .controlSize(.small)
-                .buttonStyle(.bordered)
-                Button("Restore Priorities") {
-                    model.restorePriorities()
-                }
-                .disabled(!model.canRestorePriorities)
-                .controlSize(.small)
-                .buttonStyle(.bordered)
             }
             if consumerRows.isEmpty {
                 Text("Collecting process telemetry...")
@@ -373,7 +363,7 @@ private struct MenuBarPopupView: View {
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 6) {
-                    ForEach(consumerRows) { row in
+                    ForEach(Array(consumerRows.prefix(4))) { row in
                         HStack(spacing: 8) {
                             Text(row.name)
                                 .font(.subheadline.weight(.semibold))
@@ -392,19 +382,46 @@ private struct MenuBarPopupView: View {
                     }
                 }
             }
+            HStack(spacing: 8) {
+                Button("Reduce CPU") {
+                    pendingReliefAction = .cpu
+                    showReliefConfirm = true
+                }
+                .disabled(cpuReliefCandidates.isEmpty)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+
+                Button("Reduce Memory") {
+                    pendingReliefAction = .memory
+                    showReliefConfirm = true
+                }
+                .disabled(memoryReliefCandidates.isEmpty)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Restore Priorities") {
+                    model.restorePriorities()
+                }
+                .disabled(!model.canRestorePriorities)
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+            }
         }
         .padding(12)
         .background(cardBackground)
     }
 
     private var recommendationCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Today's Recommendation")
                 .font(.headline)
                 .foregroundStyle(.primary)
             Text(recommendationText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
             HStack {
                 Spacer()
                 Button(recommendationActionTitle) {
@@ -419,29 +436,44 @@ private struct MenuBarPopupView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Button("Smart Scan") {
-                model.open(section: .smartCare, action: .runUnifiedScan)
+        HStack(spacing: 8) {
+            Button("Open DRay") {
+                model.openMain()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
-            Button("Open DRay") {
-                model.openMain()
+            Button("Smart Scan") {
+                model.open(section: .smartCare, action: .runUnifiedScan)
             }
+            .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Button("Quit Completely", role: .destructive) {
-                model.quitCompletely()
+            Button("Open Performance") {
+                model.open(section: .performance, action: .runPerformanceScan)
             }
+            .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Button(model.launchAtLoginEnabled ? "Start at Login: On" : "Start at Login: Off") {
-                model.toggleLaunchAtLogin()
+            Spacer(minLength: 4)
+
+            Menu {
+                Button(model.launchAtLoginEnabled ? "Start at Login: On" : "Start at Login: Off") {
+                    model.toggleLaunchAtLogin()
+                }
+                Button("Restore Priorities") {
+                    model.restorePriorities()
+                }
+                .disabled(!model.canRestorePriorities)
+                Divider()
+                Button("Quit Completely", role: .destructive) {
+                    model.quitCompletely()
+                }
+            } label: {
+                Label("Actions", systemImage: "ellipsis.circle")
             }
             .controlSize(.small)
-
-            Spacer()
+            .buttonStyle(.bordered)
         }
     }
 

@@ -11,6 +11,7 @@ struct PerformanceView: View {
     @State private var reliefResultMessage: String?
     @State private var showStartupEntries = false
     @State private var showLiveSummary = false
+    @State private var workspaceTab: PerformanceWorkspaceTab = .overview
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: PerformanceViewModel(root: rootModel))
@@ -20,29 +21,10 @@ struct PerformanceView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 10) {
                 header
-                loadPanel
+                workspaceBar
+                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 10)
+                workspaceContent
                     .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
-
-                if model.performance.report == nil && !model.performance.isScanRunning {
-                    ContentUnavailableView(
-                        t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
-                        systemImage: "speedometer",
-                        description: Text(t(
-                            "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
-                            "Run diagnostics to inspect startup pressure and maintenance opportunities."
-                        ))
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 280)
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
-                } else if let cleanup = model.performance.startupCleanupReport {
-                    Text(t(
-                        "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
-                        "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
-                    ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                }
             }
             .padding(.top, 6)
             .padding(12)
@@ -99,6 +81,33 @@ struct PerformanceView: View {
         }
     }
 
+    private var workspaceBar: some View {
+        WorkspaceSegmentBar(
+            title: t("Рабочее пространство", "Workspace"),
+            selection: $workspaceTab,
+            segments: [
+                (.overview, t("Обзор", "Overview")),
+                (.systemLoad, t("Нагрузка", "System Load")),
+                (.batteryEnergy, t("Батарея", "Battery & Energy")),
+                (.startupNetwork, t("Автозапуск и сеть", "Startup & Network"))
+            ]
+        )
+    }
+
+    @ViewBuilder
+    private var workspaceContent: some View {
+        switch workspaceTab {
+        case .overview:
+            overviewWorkspace
+        case .systemLoad:
+            systemLoadWorkspace
+        case .batteryEnergy:
+            batteryEnergyWorkspace
+        case .startupNetwork:
+            startupNetworkWorkspace
+        }
+    }
+
     private var header: some View {
         ModuleHeaderCard(
             title: t("Производительность", "Performance"),
@@ -148,7 +157,7 @@ struct PerformanceView: View {
         }
     }
 
-    private var loadPanel: some View {
+    private var systemLoadWorkspace: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(t("Текущая нагрузка", "Live Load"))
@@ -200,27 +209,10 @@ struct PerformanceView: View {
                     subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) of \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
                 )
                 loadCard(
-                    title: t("Сеть (live)", "Network (live)"),
-                    value: "↓ \(networkSpeedText(monitor.snapshot.networkDownBytesPerSecond))",
-                    subtitle: "↑ \(networkSpeedText(monitor.snapshot.networkUpBytesPerSecond))"
-                )
-                loadCard(
                     title: t("Батарея", "Battery"),
                     value: batteryPrimaryText,
                     subtitle: batterySecondaryText
                 )
-            }
-
-            networkSpeedTestPanel
-
-            batteryEnergyPanel
-
-            if let report = model.performance.report {
-                diagnosticsSummary(report)
-            }
-
-            if let delta = model.performanceQuickActionDelta {
-                quickActionDeltaPanel(delta)
             }
 
             if !monitor.snapshot.topCPUConsumers.isEmpty || !monitor.snapshot.topMemoryConsumers.isEmpty {
@@ -246,6 +238,110 @@ struct PerformanceView: View {
                 }
                 .padding(10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    private var overviewWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                batteryMetricCard(
+                    t("Состояние системы", "System Condition"),
+                    value: systemConditionTitle,
+                    subtitle: systemConditionSubtitle
+                )
+                batteryMetricCard(
+                    t("Top CPU", "Top CPU"),
+                    value: topCPUConsumerName,
+                    subtitle: topCPUConsumerValue
+                )
+                batteryMetricCard(
+                    t("Top Memory", "Top Memory"),
+                    value: topMemoryConsumerName,
+                    subtitle: topMemoryConsumerValue
+                )
+                batteryMetricCard(
+                    t("Батарея", "Battery"),
+                    value: batteryPrimaryText,
+                    subtitle: batterySecondaryText
+                )
+            }
+
+            if let report = model.performance.report, let first = report.recommendations.first {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        GlassPillBadge(title: t("Ключевой инсайт", "Top Insight"), tint: .orange)
+                        if let action = first.actionTitle {
+                            Button(action) {
+                                handleRecommendationAction(first.action)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                        Spacer()
+                    }
+                    Text(first.title)
+                        .font(.headline)
+                    Text(first.details)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                Text(t(
+                    "Запусти диагностику, чтобы увидеть ключевые рекомендации и точки оптимизации.",
+                    "Run diagnostics to populate key recommendations and optimization points."
+                ))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 8)
+            }
+
+            if let delta = model.performanceQuickActionDelta {
+                quickActionDeltaPanel(delta)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private var batteryEnergyWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: t("System Fact", "System Fact"), tint: .blue)
+                GlassPillBadge(title: t("DiskRay Estimate", "DiskRay Estimate"), tint: .orange)
+                Spacer()
+            }
+            batteryEnergyPanel
+        }
+    }
+
+    private var startupNetworkWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            networkSpeedTestPanel
+            if let report = model.performance.report {
+                diagnosticsSummary(report)
+            } else if !model.performance.isScanRunning {
+                ContentUnavailableView(
+                    t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
+                    systemImage: "speedometer",
+                    description: Text(t(
+                        "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
+                        "Run diagnostics to inspect startup pressure and maintenance opportunities."
+                    ))
+                )
+                .frame(maxWidth: .infinity, minHeight: 200)
+                .glassSurface(cornerRadius: 12, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
+            }
+
+            if let cleanup = model.performance.startupCleanupReport {
+                Text(t(
+                    "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
+                    "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
             }
         }
     }
@@ -635,7 +731,7 @@ struct PerformanceView: View {
     }
 
     private func loadCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -650,7 +746,8 @@ struct PerformanceView: View {
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -823,11 +920,41 @@ struct PerformanceView: View {
         return report.startupEntries.filter { selectedPaths.contains($0.url.path) }
     }
 
-    private func networkSpeedText(_ bytesPerSecond: Double) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useBytes, .useKB, .useMB]
-        return "\(formatter.string(fromByteCount: Int64(bytesPerSecond)))/s"
+    private var systemConditionTitle: String {
+        if monitor.snapshot.memoryPressurePercent >= 82 || monitor.snapshot.cpuLoadPercent >= 86 {
+            return t("Needs Attention", "Needs Attention")
+        }
+        if monitor.snapshot.memoryPressurePercent >= 65 || monitor.snapshot.cpuLoadPercent >= 70 {
+            return t("Fair", "Fair")
+        }
+        return t("Good", "Good")
+    }
+
+    private var systemConditionSubtitle: String {
+        t(
+            "CPU \(Int(monitor.snapshot.cpuLoadPercent))% · RAM \(Int(monitor.snapshot.memoryPressurePercent))%",
+            "CPU \(Int(monitor.snapshot.cpuLoadPercent))% · RAM \(Int(monitor.snapshot.memoryPressurePercent))%"
+        )
+    }
+
+    private var topCPUConsumerName: String {
+        guard let top = monitor.snapshot.topCPUConsumers.first else { return "n/a" }
+        return shortConsumerName(top.name)
+    }
+
+    private var topCPUConsumerValue: String {
+        guard let top = monitor.snapshot.topCPUConsumers.first else { return t("Нет данных", "No data") }
+        return "CPU \(Int(top.cpuPercent))% · \(Int(top.memoryMB)) MB"
+    }
+
+    private var topMemoryConsumerName: String {
+        guard let top = monitor.snapshot.topMemoryConsumers.first else { return "n/a" }
+        return shortConsumerName(top.name)
+    }
+
+    private var topMemoryConsumerValue: String {
+        guard let top = monitor.snapshot.topMemoryConsumers.first else { return t("Нет данных", "No data") }
+        return "MEM \(Int(top.memoryMB)) MB · CPU \(Int(top.cpuPercent))%"
     }
 
     private func optionalMbps(_ value: Double?) -> String {
@@ -955,6 +1082,13 @@ private extension PerformanceView {
 private enum ReliefAction {
     case cpu
     case memory
+}
+
+private enum PerformanceWorkspaceTab: Hashable {
+    case overview
+    case systemLoad
+    case batteryEnergy
+    case startupNetwork
 }
 
 private struct LiveConsumerRow: Identifiable {

@@ -13,14 +13,19 @@ struct SpaceLensView: View {
     @State private var bubbleTapMode: BubbleTapMode = .openFolders
 
     var body: some View {
-        VStack(spacing: 10) {
-            header
-            HStack(alignment: .top, spacing: 12) {
-                sidebar
-                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
-                detail
-                    .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
-                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
+        GeometryReader { proxy in
+            let sidebarWidth = min(244, max(178, proxy.size.width * 0.22))
+
+            VStack(spacing: 10) {
+                header
+                HStack(alignment: .top, spacing: 12) {
+                    sidebar
+                        .frame(width: sidebarWidth)
+                    detail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .layoutPriority(1)
+                        .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
+                }
             }
         }
         .padding(12)
@@ -62,7 +67,7 @@ struct SpaceLensView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 240)
+                    .frame(width: 210)
 
                     if model.isLoading {
                         Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }

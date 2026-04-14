@@ -161,7 +161,8 @@ struct RepairView: View {
                                 }
                             }
                             .pickerStyle(.menu)
-                            .frame(width: 140)
+                            .frame(width: 246)
+                            .fixedSize(horizontal: true, vertical: false)
                             Button("Apply Strategy") {
                                 applySelectedStrategy()
                             }
