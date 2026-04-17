@@ -259,7 +259,7 @@ struct RootView: View {
         case .clutter:
             ClutterView(rootModel: model)
         case .uninstaller:
-            UninstallerView(model: model)
+            UninstallerView(rootModel: model)
         case .repair:
             RepairView(model: model)
         case .spaceLens:

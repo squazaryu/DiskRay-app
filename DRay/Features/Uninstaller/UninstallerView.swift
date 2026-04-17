@@ -2,14 +2,18 @@ import SwiftUI
 import AppKit
 
 struct UninstallerView: View {
-    @ObservedObject var model: RootViewModel
+    @StateObject private var model: UninstallerViewModel
     @StateObject private var iconCache = AppIconCache()
     @State private var selectedAppPath: String?
     @State private var appSearchQuery = ""
     @State private var showUninstallPreview = false
 
+    init(rootModel: RootViewModel) {
+        _model = StateObject(wrappedValue: UninstallerViewModel(root: rootModel))
+    }
+
     private var uninstallerState: UninstallerFeatureState {
-        model.uninstaller.state
+        model.state
     }
 
     private var installedApps: [InstalledApp] {
@@ -199,7 +203,7 @@ struct UninstallerView: View {
         .padding(12)
         .onAppear {
             if installedApps.isEmpty {
-                model.uninstaller.loadInstalledApps()
+                model.loadInstalledApps()
             }
             if selectedAppPath == nil {
                 selectedAppPath = installedApps.first?.appURL.path
@@ -207,7 +211,7 @@ struct UninstallerView: View {
         }
         .onChange(of: selectedAppPath) {
             guard let selectedApp else { return }
-            model.uninstaller.loadRemnants(for: selectedApp)
+            model.loadRemnants(for: selectedApp)
         }
         .onChange(of: installedApps) {
             guard selectedAppPath == nil else { return }
@@ -217,15 +221,15 @@ struct UninstallerView: View {
             if let selectedApp {
                 UninstallPreviewSheet(
                     app: selectedApp,
-                    previewItems: model.uninstaller.uninstallPreview(for: selectedApp),
+                    previewItems: model.uninstallPreview(for: selectedApp),
                     onConfirm: { selectedItems in
                         let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: selectedApp.bundleID).isEmpty
-                        model.uninstaller.uninstall(
+                        model.uninstall(
                             app: selectedApp,
                             selectedItems: selectedItems,
                             isAppRunning: isRunning
                         ) { _ in
-                            model.uninstaller.loadInstalledApps()
+                            model.loadInstalledApps()
                         }
                         showUninstallPreview = false
                     }
@@ -250,7 +254,7 @@ struct UninstallerView: View {
                 GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
 
                 Button("Rescan Apps") {
-                    model.uninstaller.loadInstalledApps()
+                    model.loadInstalledApps()
                 }
                 .buttonStyle(.bordered)
 
@@ -332,9 +336,9 @@ struct UninstallerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("Restore All") {
-                    let restored = model.uninstaller.restoreFromSession(session)
+                    let restored = model.restoreFromSession(session)
                     if restored.restoredCount > 0, let selectedApp {
-                        model.uninstaller.loadRemnants(for: selectedApp)
+                        model.loadRemnants(for: selectedApp)
                     }
                 }
                 .buttonStyle(.bordered)
@@ -347,9 +351,9 @@ struct UninstallerView: View {
                         .lineLimit(1)
                     Spacer()
                     Button("Restore") {
-                        let restored = model.uninstaller.restoreFromSession(session, item: item)
+                        let restored = model.restoreFromSession(session, item: item)
                         if restored.restoredCount > 0, let selectedApp {
-                            model.uninstaller.loadRemnants(for: selectedApp)
+                            model.loadRemnants(for: selectedApp)
                         }
                     }
                     .buttonStyle(.bordered)
@@ -382,7 +386,7 @@ struct UninstallerView: View {
                 Spacer()
                 Button("Re-run Verify") {
                     let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
-                    model.uninstaller.runVerifyPass(for: app, isAppRunning: isRunning)
+                    model.runVerifyPass(for: app, isAppRunning: isRunning)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
