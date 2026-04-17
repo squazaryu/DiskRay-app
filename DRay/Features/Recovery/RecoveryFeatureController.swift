@@ -58,6 +58,13 @@ final class RecoveryFeatureController: ObservableObject {
         saveQuickActionRollbackSessions()
     }
 
+    func clearRecoveryHistory() {
+        state.recentlyDeleted = []
+        state.quickActionRollbackSessions = []
+        recoveryHistoryUseCase.clearHistory()
+        saveQuickActionRollbackSessions()
+    }
+
     func markLatestRollbackSessionResolved(summary: String) {
         guard let index = state.quickActionRollbackSessions.firstIndex(where: { $0.canRollback }) else { return }
         state.quickActionRollbackSessions[index].restoredAt = Date()

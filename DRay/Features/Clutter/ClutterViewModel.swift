@@ -40,6 +40,10 @@ final class ClutterViewModel: ObservableObject {
         root.appLanguage
     }
 
+    var confirmBeforeDestructiveActions: Bool {
+        root.confirmBeforeDestructiveActions
+    }
+
     func scanDuplicatesInSelectedTarget() {
         duplicatesController.scanDuplicatesInSelectedTarget(root.selectedTarget.url)
     }

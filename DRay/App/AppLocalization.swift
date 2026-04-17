@@ -66,6 +66,44 @@ enum AppL10nKey: String {
     case settingsGrantFolder
     case settingsRestore
     case settingsRefresh
+    case settingsGeneralSection
+    case settingsGeneralSectionHint
+    case settingsFolderAccessTitle
+    case settingsFullDiskAccessTitle
+    case settingsFolderAccessImpact
+    case settingsFullDiskAccessImpact
+    case settingsPermissionStatusGranted
+    case settingsPermissionStatusMissing
+    case settingsScanningCleanupSection
+    case settingsScanningCleanupHint
+    case settingsDefaultScanTarget
+    case settingsScanTargetStartupDisk
+    case settingsScanTargetHome
+    case settingsScanTargetLastSelectedFolder
+    case settingsAutoRescanAfterCleanup
+    case settingsIncludeHiddenByDefault
+    case settingsIncludePackageContentsByDefault
+    case settingsExcludeTrashByDefault
+    case settingsDefaultSmartCareProfile
+    case settingsProfileConservative
+    case settingsProfileBalanced
+    case settingsProfileAggressive
+    case settingsRecoverySafetySection
+    case settingsRecoverySafetyHint
+    case settingsConfirmDestructiveActions
+    case settingsConfirmStartupCleanup
+    case settingsConfirmRepairFlows
+    case settingsAutoRescanAfterRestore
+    case settingsClearRecoveryHistory
+    case settingsDiagnosticsSection
+    case settingsDiagnosticsHint
+    case settingsExportOperationLog
+    case settingsExportDiagnosticReport
+    case settingsRevealCrashTelemetry
+    case settingsClearCachedSnapshots
+    case settingsResetSavedTargetBookmarks
+    case settingsLastOperationLogPath
+    case settingsLastDiagnosticReportPath
 
     case spaceLensTarget
     case spaceLensSelected
@@ -153,7 +191,7 @@ enum AppL10n {
         case .languageRussian: return "Russian"
 
         case .settingsTitle: return "Settings"
-        case .settingsSubtitle: return "Language, launch and permissions preferences."
+        case .settingsSubtitle: return "Global behavior, safety, scanning defaults and diagnostics controls."
         case .settingsLanguage: return "App Language"
         case .settingsLanguageHint: return "Applied instantly for localized modules."
         case .settingsAppearance: return "Interface Appearance"
@@ -175,6 +213,44 @@ enum AppL10n {
         case .settingsGrantFolder: return "Grant Folder Access"
         case .settingsRestore: return "Restore"
         case .settingsRefresh: return "Refresh Status"
+        case .settingsGeneralSection: return "General"
+        case .settingsGeneralSectionHint: return "Core app behavior and startup preferences."
+        case .settingsFolderAccessTitle: return "Folder Access"
+        case .settingsFullDiskAccessTitle: return "Full Disk Access"
+        case .settingsFolderAccessImpact: return "Smart Care coverage and cleanup actions may be limited for non-selected folders."
+        case .settingsFullDiskAccessImpact: return "Search visibility, Smart Care coverage and diagnostics depth may be reduced."
+        case .settingsPermissionStatusGranted: return "Granted"
+        case .settingsPermissionStatusMissing: return "Missing"
+        case .settingsScanningCleanupSection: return "Scanning & Cleanup"
+        case .settingsScanningCleanupHint: return "Global defaults for target scope, scan filters and Smart Care profile."
+        case .settingsDefaultScanTarget: return "Default Scan Target"
+        case .settingsScanTargetStartupDisk: return "Startup Disk"
+        case .settingsScanTargetHome: return "Home"
+        case .settingsScanTargetLastSelectedFolder: return "Last Selected Folder"
+        case .settingsAutoRescanAfterCleanup: return "Auto-rescan after cleanup actions"
+        case .settingsIncludeHiddenByDefault: return "Include hidden files by default"
+        case .settingsIncludePackageContentsByDefault: return "Include package contents by default"
+        case .settingsExcludeTrashByDefault: return "Exclude Trash by default"
+        case .settingsDefaultSmartCareProfile: return "Default Smart Care Profile"
+        case .settingsProfileConservative: return "Conservative"
+        case .settingsProfileBalanced: return "Balanced"
+        case .settingsProfileAggressive: return "Aggressive"
+        case .settingsRecoverySafetySection: return "Recovery & Safety"
+        case .settingsRecoverySafetyHint: return "Confirmation policy and restore behavior controls."
+        case .settingsConfirmDestructiveActions: return "Ask confirmation before destructive actions"
+        case .settingsConfirmStartupCleanup: return "Ask confirmation before startup cleanup"
+        case .settingsConfirmRepairFlows: return "Ask confirmation before repair/reset flows"
+        case .settingsAutoRescanAfterRestore: return "Auto-rescan after restore"
+        case .settingsClearRecoveryHistory: return "Clear recovery history"
+        case .settingsDiagnosticsSection: return "Diagnostics"
+        case .settingsDiagnosticsHint: return "Support and maintenance tools for diagnostics and state resets."
+        case .settingsExportOperationLog: return "Export operation log"
+        case .settingsExportDiagnosticReport: return "Export diagnostic report"
+        case .settingsRevealCrashTelemetry: return "Reveal crash telemetry"
+        case .settingsClearCachedSnapshots: return "Clear cached snapshots"
+        case .settingsResetSavedTargetBookmarks: return "Reset saved target bookmarks"
+        case .settingsLastOperationLogPath: return "Last operation log"
+        case .settingsLastDiagnosticReportPath: return "Last diagnostic report"
 
         case .spaceLensTarget: return "Target"
         case .spaceLensSelected: return "Selected"
@@ -239,7 +315,7 @@ enum AppL10n {
         case .languageRussian: return "Русский"
 
         case .settingsTitle: return "Настройки"
-        case .settingsSubtitle: return "Язык, автозапуск и системные разрешения."
+        case .settingsSubtitle: return "Глобальное поведение, безопасность, defaults сканирования и диагностика."
         case .settingsLanguage: return "Язык интерфейса"
         case .settingsLanguageHint: return "Применяется сразу для локализованных модулей."
         case .settingsAppearance: return "Тема интерфейса"
@@ -261,6 +337,44 @@ enum AppL10n {
         case .settingsGrantFolder: return "Выдать доступ к папке"
         case .settingsRestore: return "Восстановить"
         case .settingsRefresh: return "Обновить статус"
+        case .settingsGeneralSection: return "Общие"
+        case .settingsGeneralSectionHint: return "Базовое поведение приложения и параметры запуска."
+        case .settingsFolderAccessTitle: return "Доступ к папке"
+        case .settingsFullDiskAccessTitle: return "Полный доступ к диску"
+        case .settingsFolderAccessImpact: return "Покрытие Smart Care и действия очистки могут быть ограничены вне выбранной папки."
+        case .settingsFullDiskAccessImpact: return "Видимость поиска, покрытие Smart Care и глубина диагностики могут быть ограничены."
+        case .settingsPermissionStatusGranted: return "Выдано"
+        case .settingsPermissionStatusMissing: return "Отсутствует"
+        case .settingsScanningCleanupSection: return "Сканирование и очистка"
+        case .settingsScanningCleanupHint: return "Глобальные defaults для цели сканирования, фильтров и профиля Smart Care."
+        case .settingsDefaultScanTarget: return "Цель сканирования по умолчанию"
+        case .settingsScanTargetStartupDisk: return "Системный диск"
+        case .settingsScanTargetHome: return "Домашняя папка"
+        case .settingsScanTargetLastSelectedFolder: return "Последняя выбранная папка"
+        case .settingsAutoRescanAfterCleanup: return "Автоперескан после очистки"
+        case .settingsIncludeHiddenByDefault: return "Включать скрытые файлы по умолчанию"
+        case .settingsIncludePackageContentsByDefault: return "Включать содержимое пакетов по умолчанию"
+        case .settingsExcludeTrashByDefault: return "Исключать Корзину по умолчанию"
+        case .settingsDefaultSmartCareProfile: return "Профиль Smart Care по умолчанию"
+        case .settingsProfileConservative: return "Осторожный"
+        case .settingsProfileBalanced: return "Сбалансированный"
+        case .settingsProfileAggressive: return "Агрессивный"
+        case .settingsRecoverySafetySection: return "Восстановление и безопасность"
+        case .settingsRecoverySafetyHint: return "Политика подтверждений и поведение после восстановления."
+        case .settingsConfirmDestructiveActions: return "Запрашивать подтверждение перед разрушительными действиями"
+        case .settingsConfirmStartupCleanup: return "Запрашивать подтверждение перед очисткой автозапуска"
+        case .settingsConfirmRepairFlows: return "Запрашивать подтверждение перед repair/reset сценариями"
+        case .settingsAutoRescanAfterRestore: return "Автоперескан после восстановления"
+        case .settingsClearRecoveryHistory: return "Очистить историю восстановления"
+        case .settingsDiagnosticsSection: return "Диагностика"
+        case .settingsDiagnosticsHint: return "Инструменты поддержки и обслуживания для отчётов и сброса вспомогательных данных."
+        case .settingsExportOperationLog: return "Экспортировать operation log"
+        case .settingsExportDiagnosticReport: return "Экспортировать diagnostic report"
+        case .settingsRevealCrashTelemetry: return "Показать crash telemetry"
+        case .settingsClearCachedSnapshots: return "Очистить кеш snapshot-ов"
+        case .settingsResetSavedTargetBookmarks: return "Сбросить сохранённые bookmark-цели"
+        case .settingsLastOperationLogPath: return "Последний operation log"
+        case .settingsLastDiagnosticReportPath: return "Последний diagnostic report"
 
         case .spaceLensTarget: return "Цель"
         case .spaceLensSelected: return "Выбрано"

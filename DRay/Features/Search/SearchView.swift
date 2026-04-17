@@ -244,8 +244,7 @@ struct SearchView: View {
                 .controlSize(.small)
                 .disabled(selection.isEmpty)
                 Button(t("Удалить выбранное", "Trash Selected")) {
-                    pendingDeleteNodes = selectedNodes()
-                    showDeleteConfirm = !pendingDeleteNodes.isEmpty
+                    requestTrashConfirmation(for: selectedNodes())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -339,8 +338,7 @@ struct SearchView: View {
             Button(t("Показать в Finder", "Reveal in Finder")) { model.revealInFinder(node) }
             Button(t("Открыть", "Open")) { model.openItem(node) }
             Button(t("В корзину", "Move to Trash")) {
-                pendingDeleteNodes = [node]
-                showDeleteConfirm = true
+                requestTrashConfirmation(for: [node])
             }
         }
     }
@@ -359,6 +357,19 @@ struct SearchView: View {
 
     private func buildResultMessage(_ result: TrashOperationResult) -> String {
         model.trashResultMessage(result)
+    }
+
+    private func requestTrashConfirmation(for nodes: [FileNode]) {
+        guard !nodes.isEmpty else { return }
+        if model.confirmBeforeDestructiveActions {
+            pendingDeleteNodes = nodes
+            showDeleteConfirm = true
+            return
+        }
+        let result = model.moveToTrash(nodes: nodes)
+        selection.subtract(nodes.map(\.id))
+        pendingDeleteNodes = []
+        resultMessage = buildResultMessage(result)
     }
 
     private func isScopeSelected(_ choice: SearchScopeChoice) -> Bool {

@@ -38,6 +38,10 @@ final class SearchViewModel: ObservableObject {
         root.appLanguage
     }
 
+    var confirmBeforeDestructiveActions: Bool {
+        root.confirmBeforeDestructiveActions
+    }
+
     var searchScopeChoices: [SearchScopeChoice] {
         var seen = Set<String>()
         var items: [SearchScopeChoice] = []

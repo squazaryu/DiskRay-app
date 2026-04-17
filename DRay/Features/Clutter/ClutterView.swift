@@ -62,20 +62,7 @@ struct ClutterView: View {
             titleVisibility: .visible
         ) {
             Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
-                let result = model.moveDuplicatePathsToTrash(pendingTrashPaths)
-                let attempted = Set(pendingTrashPaths)
-                let skipped = Set(result.skippedProtected)
-                let failed = Set(result.failed)
-                let movedSet = attempted.subtracting(skipped).subtracting(failed)
-                cleanupDiagnostics = buildCleanupDiagnostics(
-                    attemptedPaths: pendingTrashPaths,
-                    moved: movedSet,
-                    skipped: skipped,
-                    failed: failed
-                )
-                selectedPaths.subtract(movedSet)
-                trashResultMessage = model.trashResultMessage(result)
-                pendingTrashPaths = []
+                performDuplicateTrash(paths: pendingTrashPaths)
             }
             Button(t("Отмена", "Cancel"), role: .cancel) { pendingTrashPaths = [] }
         }
@@ -295,8 +282,7 @@ struct ClutterView: View {
             }
             .disabled(isProtected)
             Button(t("Переместить в корзину", "Move to Trash"), role: .destructive) {
-                pendingTrashPaths = [path]
-                showTrashConfirm = true
+                requestDuplicateTrash(paths: [path])
             }
             .disabled(isProtected)
         }
@@ -312,8 +298,7 @@ struct ClutterView: View {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: first)])
             }
             Button(t("В корзину", "Move to Trash"), role: .destructive) {
-                pendingTrashPaths = selectedPaths.sorted()
-                showTrashConfirm = true
+                requestDuplicateTrash(paths: selectedPaths.sorted())
             }
             Button(t("Очистить", "Clear")) {
                 selectedPaths.removeAll()
@@ -434,6 +419,34 @@ struct ClutterView: View {
             Array(group.files.dropFirst().map { $0.url.path })
         }
         selectedPaths = Set(recommended.filter { !model.isPathProtectedForManualCleanup($0) })
+    }
+
+    private func requestDuplicateTrash(paths: [String]) {
+        guard !paths.isEmpty else { return }
+        if model.confirmBeforeDestructiveActions {
+            pendingTrashPaths = paths
+            showTrashConfirm = true
+            return
+        }
+        performDuplicateTrash(paths: paths)
+    }
+
+    private func performDuplicateTrash(paths: [String]) {
+        guard !paths.isEmpty else { return }
+        let result = model.moveDuplicatePathsToTrash(paths)
+        let attempted = Set(paths)
+        let skipped = Set(result.skippedProtected)
+        let failed = Set(result.failed)
+        let movedSet = attempted.subtracting(skipped).subtracting(failed)
+        cleanupDiagnostics = buildCleanupDiagnostics(
+            attemptedPaths: paths,
+            moved: movedSet,
+            skipped: skipped,
+            failed: failed
+        )
+        selectedPaths.subtract(movedSet)
+        trashResultMessage = model.trashResultMessage(result)
+        pendingTrashPaths = []
     }
 
     private func buildCleanupDiagnostics(

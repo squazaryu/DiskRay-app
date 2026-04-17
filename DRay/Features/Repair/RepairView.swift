@@ -10,6 +10,7 @@ struct RepairView: View {
     @State private var relaunchAfterRepair = true
     @State private var repairStrategy: AppRepairStrategy = .safeReset
     @State private var showDeepResetConfirm = false
+    @State private var showRepairConfirm = false
 
     private var installedApps: [InstalledApp] {
         model.uninstaller.state.installedApps
@@ -137,15 +138,7 @@ struct RepairView: View {
                             }
                             .buttonStyle(.bordered)
                             Button("Repair") {
-                                model.repair.runRepair(
-                                    app: selectedApp,
-                                    artifacts: selectedArtifacts.isEmpty ? repairArtifacts : selectedArtifacts
-                                ) { _ in
-                                    model.repair.loadArtifacts(for: selectedApp)
-                                    if relaunchAfterRepair {
-                                        relaunch(selectedApp)
-                                    }
-                                }
+                                requestRepairFlow()
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(repairArtifacts.isEmpty || isRepairLoading)
@@ -268,6 +261,18 @@ struct RepairView: View {
             if selectedArtifactPaths.isEmpty {
                 selectedArtifactPaths = Set(model.repair.recommendedArtifacts(for: repairStrategy).map { $0.url.path })
             }
+        }
+        .confirmationDialog(
+            "Run Repair?",
+            isPresented: $showRepairConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Run Repair", role: .destructive) {
+                performRepair()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Repair will remove selected artifacts and create rollback data.")
         }
         .confirmationDialog(
             "Apply Deep Reset Strategy?",
@@ -482,10 +487,35 @@ struct RepairView: View {
 
     private func applySelectedStrategy() {
         if repairStrategy == .deepReset {
-            showDeepResetConfirm = true
+            if model.confirmBeforeRepairFlows {
+                showDeepResetConfirm = true
+            } else {
+                selectedArtifactPaths = Set(strategyPreviewArtifacts.map { $0.url.path })
+            }
             return
         }
         selectedArtifactPaths = Set(strategyPreviewArtifacts.map { $0.url.path })
+    }
+
+    private func requestRepairFlow() {
+        if model.confirmBeforeRepairFlows {
+            showRepairConfirm = true
+            return
+        }
+        performRepair()
+    }
+
+    private func performRepair() {
+        guard let selectedApp else { return }
+        model.repair.runRepair(
+            app: selectedApp,
+            artifacts: selectedArtifacts.isEmpty ? repairArtifacts : selectedArtifacts
+        ) { _ in
+            model.repair.loadArtifacts(for: selectedApp)
+            if relaunchAfterRepair {
+                relaunch(selectedApp)
+            }
+        }
     }
 
     private func relaunch(_ app: InstalledApp) {

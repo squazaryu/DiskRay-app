@@ -221,8 +221,7 @@ struct SpaceLensView: View {
             }
             Divider()
             Button(model.localized(.spaceLensMoveToTrash), role: .destructive) {
-                pendingTrashNodes = [node]
-                showTrashConfirm = true
+                requestTrashConfirmation(for: [node], clearSelection: false)
             }
         }
     }
@@ -252,11 +251,7 @@ struct SpaceLensView: View {
             titleVisibility: .visible
         ) {
             Button(model.localized(.spaceLensTrashDialogAction), role: .destructive) {
-                guard !pendingTrashNodes.isEmpty else { return }
-                let result = model.moveToTrash(nodes: pendingTrashNodes)
-                trashResultMessage = model.trashResultMessage(result)
-                pendingTrashNodes = []
-                selectedPaths.removeAll()
+                performTrash(nodes: pendingTrashNodes, clearSelection: true)
             }
             Button(model.localized(.commonCancel), role: .cancel) { pendingTrashNodes = [] }
         }
@@ -332,8 +327,7 @@ struct SpaceLensView: View {
                             model.revealInFinder(first)
                         }
                         Button(model.localized(.spaceLensMoveToTrash), role: .destructive) {
-                            pendingTrashNodes = selectedNodes
-                            showTrashConfirm = true
+                            requestTrashConfirmation(for: selectedNodes, clearSelection: true)
                         }
                         Button(model.localized(.spaceLensClear)) { selectedPaths.removeAll() }
                     }
@@ -384,6 +378,29 @@ struct SpaceLensView: View {
             return model.localized(.bubbleTapModeSelect)
         case .openFolders:
             return model.localized(.bubbleTapModeOpenFolders)
+        }
+    }
+
+    private func requestTrashConfirmation(for nodes: [FileNode], clearSelection: Bool) {
+        guard !nodes.isEmpty else { return }
+        if model.confirmBeforeDestructiveActions {
+            pendingTrashNodes = nodes
+            showTrashConfirm = true
+            return
+        }
+        performTrash(nodes: nodes, clearSelection: clearSelection)
+    }
+
+    private func performTrash(nodes: [FileNode], clearSelection: Bool) {
+        guard !nodes.isEmpty else { return }
+        let result = model.moveToTrash(nodes: nodes)
+        trashResultMessage = model.trashResultMessage(result)
+        pendingTrashNodes = []
+        if clearSelection {
+            selectedPaths.removeAll()
+        } else {
+            let removedPaths = Set(nodes.map(\.url.path))
+            selectedPaths = selectedPaths.subtracting(removedPaths)
         }
     }
 

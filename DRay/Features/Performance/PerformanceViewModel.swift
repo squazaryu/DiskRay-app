@@ -27,6 +27,10 @@ final class PerformanceViewModel: ObservableObject {
         root.appLanguage
     }
 
+    var confirmBeforeStartupCleanup: Bool {
+        root.confirmBeforeStartupCleanup
+    }
+
     var performanceQuickActionDelta: QuickActionDeltaReport? {
         root.performanceQuickActionDelta
     }

@@ -4,14 +4,17 @@ import AppKit
 struct PerformanceView: View {
     @StateObject private var model: PerformanceViewModel
     @StateObject private var monitor = LiveSystemMetricsMonitor()
+
     @State private var selectedPaths = Set<String>()
     @State private var showCleanupConfirm = false
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     @State private var reliefResultMessage: String?
-    @State private var showStartupEntries = false
-    @State private var showLiveSummary = false
     @State private var workspaceTab: PerformanceWorkspaceTab = .overview
+
+    @State private var cpuTrend: [Double] = []
+    @State private var memoryTrend: [Double] = []
+    @State private var networkHistory: [NetworkHistoryPoint] = []
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: PerformanceViewModel(root: rootModel))
@@ -21,11 +24,10 @@ struct PerformanceView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 10) {
                 header
-                performanceActionsToolbar
-                workspaceBar
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 10)
+                globalCommandStrip
+                workspaceNavigation
                 workspaceContent
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.06, padding: 12)
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
             }
             .padding(.top, 6)
             .padding(12)
@@ -80,19 +82,85 @@ struct PerformanceView: View {
         .onDisappear {
             monitor.stop()
         }
+        .onReceive(monitor.$snapshot) { snapshot in
+            appendTrend(value: snapshot.cpuLoadPercent, to: &cpuTrend)
+            appendTrend(value: snapshot.memoryPressurePercent, to: &memoryTrend)
+        }
+        .onChange(of: model.performance.networkSpeedTestResult?.measuredAt) {
+            guard let result = model.performance.networkSpeedTestResult, result.isSuccess else { return }
+            appendNetworkHistory(result)
+        }
+        .onChange(of: model.performance.report?.generatedAt) {
+            let valid = Set(startupEntries.map { $0.url.path })
+            selectedPaths = selectedPaths.intersection(valid)
+        }
     }
 
-    private var workspaceBar: some View {
-        WorkspaceSegmentBar(
-            title: t("Рабочее пространство", "Workspace"),
-            selection: $workspaceTab,
-            segments: [
-                (.overview, t("Обзор", "Overview")),
-                (.systemLoad, t("Нагрузка", "System Load")),
-                (.batteryEnergy, t("Батарея", "Battery & Energy")),
-                (.startupNetwork, t("Автозапуск и сеть", "Startup & Network"))
-            ]
-        )
+    private var header: some View {
+        ModuleHeaderCard(
+            title: t("Производительность", "Performance"),
+            subtitle: t(
+                "Командный центр диагностики: нагрузка, батарея, автозапуск и сеть.",
+                "Diagnostics command center: load, battery, startup and network."
+            )
+        ) {
+            EmptyView()
+        }
+    }
+
+    private var globalCommandStrip: some View {
+        HStack(spacing: 8) {
+            Button(t("Запустить диагностику", "Run Diagnostics")) {
+                model.runPerformanceScan()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(model.performance.isScanRunning)
+
+            Button(t("Экспорт лога", "Export Ops Log")) {
+                if let url = model.exportOperationLogReport() {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button(t("Показать crash log", "Reveal Crash Log")) {
+                model.revealCrashTelemetry()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Spacer(minLength: 10)
+
+            if model.performance.isScanRunning {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(t("Диагностика выполняется", "Diagnostics running"))
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(.regularMaterial, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
+    }
+
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text(t("Обзор", "Overview")).tag(PerformanceWorkspaceTab.overview)
+                Text(t("Нагрузка", "System Load")).tag(PerformanceWorkspaceTab.systemLoad)
+                Text(t("Батарея", "Battery & Energy")).tag(PerformanceWorkspaceTab.batteryEnergy)
+                Text(t("Автозапуск", "Startup")).tag(PerformanceWorkspaceTab.startup)
+                Text(t("Сеть", "Network")).tag(PerformanceWorkspaceTab.network)
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal, 2)
     }
 
     @ViewBuilder
@@ -104,71 +172,121 @@ struct PerformanceView: View {
             systemLoadWorkspace
         case .batteryEnergy:
             batteryEnergyWorkspace
-        case .startupNetwork:
-            startupNetworkWorkspace
+        case .startup:
+            startupWorkspace
+        case .network:
+            networkWorkspace
         }
     }
 
-    private var header: some View {
-        ModuleHeaderCard(
-            title: t("Производительность", "Performance"),
-            subtitle: t(
-                "Диагностика автозапуска и рекомендации по обслуживанию.",
-                "Startup diagnostics and maintenance recommendations."
-            )
-        ) {
-            EmptyView()
-        }
-    }
+    private var overviewWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            healthStrip
 
-    private var performanceActionsToolbar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Button(t("Запустить диагностику", "Run Diagnostics")) { model.runPerformanceScan() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.performance.isScanRunning)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(t("Фокус сейчас", "Focus Now"))
+                        .font(.headline)
 
-                Button(t("Отключить выбранные", "Disable Selected")) {
-                    showCleanupConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .disabled(selectedEntries.isEmpty)
+                    if let top = model.performance.report?.recommendations.first {
+                        Text(top.title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(top.details)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
 
-                Button(t("Экспорт лога", "Export Ops Log")) {
-                    if let url = model.exportOperationLogReport() {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                }
-                .buttonStyle(.bordered)
+                        HStack(spacing: 8) {
+                            if let action = top.actionTitle {
+                                Button(action) {
+                                    handleRecommendationAction(top.action)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
 
-                Button(t("Показать crash log", "Reveal Crash Log")) {
-                    model.revealCrashTelemetry()
-                }
-                .buttonStyle(.bordered)
-
-                if model.performance.isScanRunning {
-                    HStack(spacing: 6) {
-                        ProgressView()
+                            Button(t("Открыть автозапуск", "Open Startup")) {
+                                workspaceTab = .startup
+                            }
+                            .buttonStyle(.bordered)
                             .controlSize(.small)
-                        Text(t("Идёт анализ...", "Analyzing..."))
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
+
+                            Button(t("Открыть нагрузку", "Open System Load")) {
+                                workspaceTab = .systemLoad
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    } else {
+                        Text(t(
+                            "Запусти диагностику, чтобы сформировать приоритетное действие.",
+                            "Run diagnostics to generate a prioritized action."
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(.regularMaterial, in: Capsule())
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(t("Быстрая сводка", "Quick Summary"))
+                        .font(.headline)
+
+                    DiagnosticBurdenBar(
+                        value: monitor.snapshot.cpuLoadPercent,
+                        label: "CPU",
+                        detail: t("Текущая вычислительная нагрузка", "Current compute load")
+                    )
+                    DiagnosticBurdenBar(
+                        value: monitor.snapshot.memoryPressurePercent,
+                        label: t("Память", "Memory"),
+                        detail: t("Давление памяти системы", "System memory pressure")
+                    )
+                    DiagnosticBurdenBar(
+                        value: startupBurdenValue,
+                        label: t("Автозапуск", "Startup"),
+                        detail: t("Бремя запуска по количеству и объёму", "Launch burden by count and footprint")
+                    )
+                    if let networkQualityValue {
+                        DiagnosticBurdenBar(
+                            value: networkQualityValue,
+                            label: t("Сеть", "Network"),
+                            detail: networkQualityLabel
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+
+            if let delta = model.performanceQuickActionDelta {
+                quickActionDeltaPanel(delta)
+            }
         }
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var healthStrip: some View {
+        HStack(spacing: 8) {
+            StatusChip(title: "CPU: \(severityLabel(for: monitor.snapshot.cpuLoadPercent))", tint: severityColor(for: monitor.snapshot.cpuLoadPercent))
+            StatusChip(title: "RAM: \(severityLabel(for: monitor.snapshot.memoryPressurePercent))", tint: severityColor(for: monitor.snapshot.memoryPressurePercent))
+            StatusChip(title: "\(t("Батарея", "Battery")): \(batteryHealthLabel)", tint: batteryHealthColor)
+            StatusChip(title: "\(t("Автозапуск", "Startup")): \(severityLabel(for: startupBurdenValue))", tint: severityColor(for: startupBurdenValue))
+            if let networkStatusChip {
+                StatusChip(title: networkStatusChip.title, tint: networkStatusChip.tint)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var systemLoadWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(t("Текущая нагрузка", "Live Load"))
+                Text(t("Live Load Diagnostics", "Live Load Diagnostics"))
                     .font(.headline)
                 Spacer()
                 Button(t("Снизить CPU", "Reduce CPU")) {
@@ -203,284 +321,79 @@ struct PerformanceView: View {
             }
 
             HStack(spacing: 10) {
-                loadCard(
+                metricCard(
                     title: "CPU",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
-                    subtitle: t(
-                        "Пользователь \(Int(monitor.snapshot.cpuUserPercent))% · Система \(Int(monitor.snapshot.cpuSystemPercent))%",
-                        "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%"
-                    )
+                    subtitle: t("Пользователь \(Int(monitor.snapshot.cpuUserPercent))% · Система \(Int(monitor.snapshot.cpuSystemPercent))%", "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%")
                 )
-                loadCard(
+                metricCard(
                     title: t("Память", "Memory"),
                     value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
-                    subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) of \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
+                    subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) / \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
                 )
-                loadCard(
-                    title: t("Батарея", "Battery"),
-                    value: batteryPrimaryText,
-                    subtitle: batterySecondaryText
-                )
-            }
-
-            if !monitor.snapshot.topCPUConsumers.isEmpty || !monitor.snapshot.topMemoryConsumers.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(t("Топ потребителей", "Top Consumers"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(Array(consumerRows.prefix(4))) { consumer in
-                        HStack {
-                            Text(consumer.displayName)
-                                .lineLimit(1)
-                            Spacer()
-                            Text("CPU \(Int(consumer.cpuPercent))%")
-                                .foregroundStyle(.secondary)
-                            Text(t("ПАМ \(Int(consumer.memoryMB)) MB", "MEM \(Int(consumer.memoryMB)) MB"))
-                                .foregroundStyle(.secondary)
-                            Text(t("БАТ \(String(format: "%.1f", consumer.batteryImpactScore))", "BAT \(String(format: "%.1f", consumer.batteryImpactScore))"))
-                                .foregroundStyle(.orange)
-                                .fontWeight(.semibold)
-                        }
-                        .font(.caption)
-                    }
-                }
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-        }
-    }
-
-    private var overviewWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                batteryMetricCard(
-                    t("Состояние системы", "System Condition"),
-                    value: systemConditionTitle,
-                    subtitle: systemConditionSubtitle
-                )
-                batteryMetricCard(
-                    t("Top CPU", "Top CPU"),
+                metricCard(
+                    title: t("Топ CPU", "Top CPU"),
                     value: topCPUConsumerName,
                     subtitle: topCPUConsumerValue
                 )
-                batteryMetricCard(
-                    t("Top Memory", "Top Memory"),
+                metricCard(
+                    title: t("Топ RAM", "Top RAM"),
                     value: topMemoryConsumerName,
                     subtitle: topMemoryConsumerValue
                 )
-                batteryMetricCard(
-                    t("Батарея", "Battery"),
-                    value: batteryPrimaryText,
-                    subtitle: batterySecondaryText
-                )
             }
 
-            if let report = model.performance.report, let first = report.recommendations.first {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        GlassPillBadge(title: t("Ключевой инсайт", "Top Insight"), tint: .orange)
-                        if let action = first.actionTitle {
-                            Button(action) {
-                                handleRecommendationAction(first.action)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                        }
-                        Spacer()
-                    }
-                    Text(first.title)
-                        .font(.headline)
-                    Text(first.details)
-                        .font(.subheadline)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CPU Trend")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    MiniSparkline(values: cpuTrend, tint: .orange)
+                        .frame(height: 34)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(t("Память trend", "Memory Trend"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    MiniSparkline(values: memoryTrend, tint: .blue)
+                        .frame(height: 34)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(t("Вклад потребителей", "Consumer Contribution"))
+                    .font(.subheadline.weight(.semibold))
+                let ranked = rankedLiveConsumers
+                ForEach(Array(ranked.prefix(6).enumerated()), id: \.offset) { index, consumer in
+                    let share = rankedContribution(for: consumer, in: ranked)
+                    RankedShareBar(
+                        title: consumer.displayName,
+                        subtitle: "CPU \(Int(consumer.cpuPercent))% · MEM \(Int(consumer.memoryMB)) MB · BAT \(String(format: "%.1f", consumer.batteryImpactScore))",
+                        percentage: share,
+                        accent: index < 2 ? .orange : .blue
+                    )
+                }
+                if ranked.isEmpty {
+                    Text(t("Активные потребители не обнаружены.", "No active consumers detected."))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                Text(t(
-                    "Запусти диагностику, чтобы увидеть ключевые рекомендации и точки оптимизации.",
-                    "Run diagnostics to populate key recommendations and optimization points."
-                ))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 8)
-            }
-
-            if let delta = model.performanceQuickActionDelta {
-                quickActionDeltaPanel(delta)
-                    .padding(.top, 2)
             }
         }
     }
 
     private var batteryEnergyWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                GlassPillBadge(title: t("System Fact", "System Fact"), tint: .blue)
-                GlassPillBadge(title: t("DiskRay Estimate", "DiskRay Estimate"), tint: .orange)
-                Spacer()
-            }
-            batteryEnergyPanel
-        }
-    }
-
-    private var startupNetworkWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            networkSpeedTestPanel
-            if let report = model.performance.report {
-                diagnosticsSummary(report)
-            } else if !model.performance.isScanRunning {
-                ContentUnavailableView(
-                    t("Диагностика ещё не запускалась", "No Diagnostics Yet"),
-                    systemImage: "speedometer",
-                    description: Text(t(
-                        "Запусти диагностику, чтобы проверить автозапуск и рекомендации по обслуживанию.",
-                        "Run diagnostics to inspect startup pressure and maintenance opportunities."
-                    ))
-                )
-                .frame(maxWidth: .infinity, minHeight: 200)
-                .glassSurface(cornerRadius: 12, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
-            }
-
-            if let cleanup = model.performance.startupCleanupReport {
-                Text(t(
-                    "Последняя очистка автозапуска: перемещено \(cleanup.moved), ошибок \(cleanup.failed), пропущено \(cleanup.skippedProtected)",
-                    "Last startup cleanup: moved \(cleanup.moved), failed \(cleanup.failed), skipped \(cleanup.skippedProtected)"
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var networkSpeedTestPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(t("Тест скорости интернета", "Internet Speed Test"))
-                        .font(.subheadline.weight(.semibold))
-                    Text(t(
-                        "По запросу запускает macOS networkQuality. Это не фоновый мониторинг канала.",
-                        "Runs macOS networkQuality on demand. This is not background link monitoring."
-                    ))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(t("Запустить тест", "Run Test")) {
-                    model.runNetworkSpeedTest()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.performance.isNetworkSpeedTestRunning)
-            }
-
-            if model.performance.isNetworkSpeedTestRunning {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(t(
-                        "Измеряем скорость (может занять до 10–15 секунд)...",
-                        "Measuring network speed (can take up to 10–15 seconds)..."
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                .padding(.top, 2)
-            } else if let speed = model.performance.networkSpeedTestResult {
-                if let error = speed.errorMessage {
-                    Text(t(
-                        "Тест не выполнен: \(error)",
-                        "Speed test failed: \(error)"
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                } else {
-                    HStack(spacing: 8) {
-                        batteryMetricCard(
-                            t("Скачивание", "Download"),
-                            value: optionalMbps(speed.downlinkMbps),
-                            subtitle: speed.interfaceName.map { t("Интерфейс \($0)", "Interface \($0)") } ?? "n/a"
-                        )
-                        batteryMetricCard(
-                            t("Отдача", "Upload"),
-                            value: optionalMbps(speed.uplinkMbps),
-                            subtitle: t(
-                                "Обновлено \(relativeTime(speed.measuredAt))",
-                                "Updated \(relativeTime(speed.measuredAt))"
-                            )
-                        )
-                        batteryMetricCard(
-                            t("Отклик", "Responsiveness"),
-                            value: optionalMilliseconds(speed.responsivenessMs),
-                            subtitle: t("networkQuality", "networkQuality")
-                        )
-                        batteryMetricCard(
-                            t("Base RTT", "Base RTT"),
-                            value: optionalMilliseconds(speed.baseRTTMs),
-                            subtitle: t("Задержка базовой сети", "Baseline network latency")
-                        )
-                    }
-                }
-            } else {
-                Text(t(
-                    "Нажми «Запустить тест», чтобы получить измерение download/upload и отклика.",
-                    "Tap \"Run Test\" to measure download/upload and responsiveness."
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
-        HStack(spacing: 8) {
-            GlassPillBadge(
-                title: t("Действие: \(delta.actionTitle)", "Action: \(delta.actionTitle)"),
-                tint: .blue
-            )
-            GlassPillBadge(
-                title: t(
-                    "Элементы \(delta.beforeItems) → \(delta.afterItems)",
-                    "Items \(delta.beforeItems) -> \(delta.afterItems)"
-                ),
-                tint: .green
-            )
-            GlassPillBadge(
-                title: t(
-                    "Размер \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) → \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
-                    "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) -> \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))"
-                ),
-                tint: .orange
-            )
-            Spacer()
-            Text(t(
-                "Обновлено \(relativeTime(delta.createdAt))",
-                "Updated \(relativeTime(delta.createdAt))"
-            ))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var batteryEnergyPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(t("Battery & Energy", "Battery & Energy"))
-                        .font(.headline)
-                    Text(t(
-                        "Оценка расхода строится по энергометрикам macOS и активности процессов.",
-                        "Estimated drain share is derived from macOS energy telemetry and recent process activity."
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
+                StatusChip(title: t("System Fact", "System Fact"), tint: .blue)
+                StatusChip(title: t("DiskRay Estimate", "DiskRay Estimate"), tint: .orange)
                 Spacer()
                 Button(t("Обновить", "Refresh")) {
                     model.loadBatteryEnergyReport(force: true)
@@ -492,18 +405,42 @@ struct PerformanceView: View {
 
             if model.performance.isBatteryEnergyLoading && model.performance.batteryEnergyReport == nil {
                 HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
+                    ProgressView().controlSize(.small)
                     Text(t("Считываем battery и energy телеметрию...", "Loading battery and energy telemetry..."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
             } else if let report = model.performance.batteryEnergyReport {
+                batterySummaryStrip(report.battery)
+
                 VStack(alignment: .leading, spacing: 8) {
-                    batterySummaryGrid(report.battery)
-                    consumersTable(report)
+                    HStack {
+                        Text(t("Power Consumers", "Power Consumers"))
+                            .font(.headline)
+                        Spacer()
+                        Text(report.estimatedMetricTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    Text(report.estimatedMetricExplanation)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if report.consumers.isEmpty {
+                        Text(t("Активные high-impact процессы не обнаружены.", "No high-impact processes detected right now."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 6)
+                    } else {
+                        let totalShare = max(report.consumers.prefix(8).reduce(0.0) { $0 + $1.estimatedDrainShare }, 0.1)
+                        ForEach(Array(report.consumers.prefix(8).enumerated()), id: \.offset) { _, consumer in
+                            batteryConsumerRow(consumer, totalShare: totalShare)
+                        }
+                    }
                 }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 Text(t(
                     "Battery/energy данные пока недоступны на этом Mac.",
@@ -513,39 +450,360 @@ struct PerformanceView: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func batterySummaryGrid(_ snapshot: BatteryEnergySnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                batteryMetricCard(
-                    t("Заряд", "Charge"),
-                    value: optionalPercent(snapshot.chargePercent),
-                    subtitle: batteryStateText(snapshot)
+    private var startupWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(t("Startup Diagnostics", "Startup Diagnostics"))
+                    .font(.headline)
+                Spacer()
+                Button(t("Отключить выбранные", "Disable Selected")) {
+                    requestStartupCleanup()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(selectedEntries.isEmpty)
+
+                Button(t("Выбрать heavy", "Select Heavy")) {
+                    selectedPaths = Set(startupEntries.filter { startupImpactLevel(for: $0) == .high }.map { $0.url.path })
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(startupEntries.isEmpty)
+
+                Button(t("Сбросить", "Clear")) {
+                    selectedPaths.removeAll()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedPaths.isEmpty)
+            }
+
+            HStack(spacing: 10) {
+                metricCard(
+                    title: t("Записи", "Entries"),
+                    value: "\(startupEntries.count)",
+                    subtitle: t("Всего элементов автозапуска", "Total startup entries")
                 )
-                batteryMetricCard(
-                    t("Health", "Health"),
-                    value: optionalPercent(snapshot.healthPercent),
-                    subtitle: t("Циклы \(snapshot.cycleCount.map(String.init) ?? "n/a")", "Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")")
+                metricCard(
+                    title: t("К review", "Review"),
+                    value: "\(startupReviewCount)",
+                    subtitle: t("Требуют внимания", "Need attention")
                 )
-                batteryMetricCard(
-                    t("Power Draw", "Power Draw"),
-                    value: optionalWatts(snapshot.powerDrawWatts),
-                    subtitle: timeEstimateText(snapshot)
+                metricCard(
+                    title: t("Footprint", "Footprint"),
+                    value: ByteCountFormatter.string(fromByteCount: startupTotalBytes, countStyle: .file),
+                    subtitle: t("Общий размер", "Total size")
                 )
-                batteryMetricCard(
-                    t("Температура", "Temperature"),
-                    value: optionalTemperature(snapshot.temperatureCelsius),
-                    subtitle: t("V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))", "V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))")
+                metricCard(
+                    title: t("Burden", "Burden"),
+                    value: severityLabel(for: startupBurdenValue),
+                    subtitle: t("Оценка влияния на запуск", "Launch impact estimate")
                 )
             }
-            .frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: 8) {
+                DiagnosticBurdenBar(
+                    value: startupBurdenValue,
+                    label: t("Burden Scale", "Burden Scale"),
+                    detail: t("Комбинирует количество и размер startup-компонентов", "Combines count and footprint of startup components")
+                )
+
+                HStack(spacing: 8) {
+                    RankedShareBar(
+                        title: t("Low", "Low"),
+                        subtitle: t("Низкий impact", "Low impact"),
+                        percentage: startupImpactDistribution.low,
+                        accent: .green
+                    )
+                    RankedShareBar(
+                        title: t("Review", "Review"),
+                        subtitle: t("Проверить вручную", "Manual review"),
+                        percentage: startupImpactDistribution.review,
+                        accent: .orange
+                    )
+                    RankedShareBar(
+                        title: t("High", "High"),
+                        subtitle: t("Высокий impact", "High impact"),
+                        percentage: startupImpactDistribution.high,
+                        accent: .red
+                    )
+                }
+            }
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(t("Ranked Startup Items", "Ranked Startup Items"))
+                    .font(.subheadline.weight(.semibold))
+
+                if startupEntries.isEmpty {
+                    Text(t("Автозапуск не обнаружен. Запусти диагностику.", "No startup entries detected. Run diagnostics."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(startupEntries.prefix(14)) { entry in
+                        startupEntryRow(entry)
+                    }
+                }
+            }
         }
     }
 
-    private func batteryMetricCard(_ title: String, value: String, subtitle: String) -> some View {
+    private var networkWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(t("Network Diagnostics", "Network Diagnostics"))
+                    .font(.headline)
+                Spacer()
+                Button(t("Запустить тест", "Run Test")) {
+                    model.runNetworkSpeedTest()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(model.performance.isNetworkSpeedTestRunning)
+            }
+
+            if model.performance.isNetworkSpeedTestRunning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(t(
+                        "Измеряем скорость (может занять до 10–15 секунд)...",
+                        "Measuring network speed (can take up to 10–15 seconds)..."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+
+            HStack(spacing: 10) {
+                metricCard(
+                    title: t("Скачивание", "Download"),
+                    value: optionalMbps(model.performance.networkSpeedTestResult?.downlinkMbps),
+                    subtitle: t("Пропускная способность вниз", "Downlink throughput")
+                )
+                metricCard(
+                    title: t("Отдача", "Upload"),
+                    value: optionalMbps(model.performance.networkSpeedTestResult?.uplinkMbps),
+                    subtitle: t("Пропускная способность вверх", "Uplink throughput")
+                )
+                metricCard(
+                    title: t("Отклик", "Responsiveness"),
+                    value: optionalMilliseconds(model.performance.networkSpeedTestResult?.responsivenessMs),
+                    subtitle: t("Влияет на интерактивность", "Impacts interactive tasks")
+                )
+                metricCard(
+                    title: "Base RTT",
+                    value: optionalMilliseconds(model.performance.networkSpeedTestResult?.baseRTTMs),
+                    subtitle: t("Базовая задержка сети", "Baseline network latency")
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(t("Качество", "Quality"))
+                    .font(.subheadline.weight(.semibold))
+                Text(networkInterpretation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let last = model.performance.networkSpeedTestResult {
+                    Text(t(
+                        "Последнее измерение: \(relativeTime(last.measuredAt))",
+                        "Last measurement: \(relativeTime(last.measuredAt))"
+                    ))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if !networkHistory.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(t("Recent Session History", "Recent Session History"))
+                        .font(.subheadline.weight(.semibold))
+
+                    HStack(spacing: 8) {
+                        historySparklineCard(
+                            title: t("Скачивание", "Download"),
+                            values: networkHistory.map { $0.downMbps },
+                            tint: .blue
+                        )
+                        historySparklineCard(
+                            title: t("Отдача", "Upload"),
+                            values: networkHistory.map { $0.upMbps },
+                            tint: .green
+                        )
+                        historySparklineCard(
+                            title: t("Отклик", "Responsiveness"),
+                            values: networkHistory.map { $0.responsivenessMs },
+                            tint: .orange
+                        )
+                    }
+                }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            if let error = model.performance.networkSpeedTestResult?.errorMessage {
+                Text(t("Тест не выполнен: \(error)", "Speed test failed: \(error)"))
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func batterySummaryStrip(_ snapshot: BatteryEnergySnapshot) -> some View {
+        HStack(spacing: 10) {
+            metricCard(
+                title: t("Заряд", "Charge"),
+                value: optionalPercent(snapshot.chargePercent),
+                subtitle: batteryStateText(snapshot)
+            )
+            metricCard(
+                title: "Health",
+                value: optionalPercent(snapshot.healthPercent),
+                subtitle: t("Циклы \(snapshot.cycleCount.map(String.init) ?? "n/a")", "Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")")
+            )
+            metricCard(
+                title: t("Power Draw", "Power Draw"),
+                value: optionalWatts(snapshot.powerDrawWatts),
+                subtitle: timeEstimateText(snapshot)
+            )
+            metricCard(
+                title: t("Температура", "Temperature"),
+                value: optionalTemperature(snapshot.temperatureCelsius),
+                subtitle: "V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))"
+            )
+        }
+    }
+
+    private func batteryConsumerRow(_ consumer: EnergyConsumerSnapshot, totalShare: Double) -> some View {
+        let normalized = (consumer.estimatedDrainShare / totalShare) * 100
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(consumer.displayName)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Spacer()
+                Text(t(
+                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%",
+                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%"
+                ))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule()
+                        .fill(Color.orange.opacity(0.76))
+                        .frame(width: max(7, geo.size.width * CGFloat(min(max(normalized, 0), 100) / 100)))
+                }
+            }
+            .frame(height: 7)
+
+            HStack(spacing: 8) {
+                StatusChip(title: "CPU \(Int(consumer.cpuPercent))%", tint: .blue)
+                StatusChip(title: "MEM \(Int(consumer.memoryMB)) MB", tint: .teal)
+                StatusChip(title: "EI \(String(format: "%.1f", consumer.currentEnergyImpact))", tint: .purple)
+                if let wh = consumer.estimatedPower12hWh {
+                    StatusChip(title: "12h \(String(format: "%.2f", wh)) Wh", tint: .orange)
+                }
+                if consumer.preventingSleep {
+                    StatusChip(title: "Sleep Block", tint: .red)
+                }
+                if let gpu = consumer.highPowerGPUUsage {
+                    StatusChip(title: gpu ? "GPU High" : "GPU Normal", tint: gpu ? .orange : .green)
+                }
+                if let appNap = consumer.appNapStatus {
+                    StatusChip(title: appNap ? "App Nap On" : "App Nap Off", tint: appNap ? .green : .blue)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func startupEntryRow(_ entry: StartupEntry) -> some View {
+        let selected = selectedPaths.contains(entry.url.path)
+        let impact = startupImpactLevel(for: entry)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Toggle("", isOn: Binding(
+                    get: { selected },
+                    set: { isOn in
+                        if isOn { selectedPaths.insert(entry.url.path) }
+                        else { selectedPaths.remove(entry.url.path) }
+                    }
+                ))
+                .labelsHidden()
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(entry.source) · \(entry.url.path)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+                StatusChip(title: impact.title, tint: impact.color)
+                Text(ByteCountFormatter.string(fromByteCount: entry.sizeInBytes, countStyle: .file))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { geo in
+                let width = maxStartupEntrySize > 0 ? geo.size.width * CGFloat(Double(entry.sizeInBytes) / Double(maxStartupEntrySize)) : 0
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(impact.color.opacity(0.72))
+                        .frame(width: max(6, width))
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Spacer()
+                Button(t("Показать", "Reveal")) {
+                    NSWorkspace.shared.activateFileViewerSelecting([entry.url])
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func historySparklineCard(title: String, values: [Double], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            MiniSparkline(values: values, tint: tint)
+                .frame(height: 32)
+            if let last = values.last {
+                Text(String(format: "%.1f", last))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tint)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func metricCard(title: String, value: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
@@ -553,6 +811,7 @@ struct PerformanceView: View {
             Text(value)
                 .font(.title3.bold())
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(subtitle)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -563,122 +822,63 @@ struct PerformanceView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func consumersTable(_ report: BatteryEnergyReport) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(t("Power Consumers", "Power Consumers"))
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(report.estimatedMetricTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
-            }
-            Text(report.estimatedMetricExplanation)
+    private func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
+        HStack(spacing: 8) {
+            StatusChip(title: t("Действие: \(delta.actionTitle)", "Action: \(delta.actionTitle)"), tint: .blue)
+            StatusChip(title: t("Элементы \(delta.beforeItems)→\(delta.afterItems)", "Items \(delta.beforeItems)->\(delta.afterItems)"), tint: .green)
+            StatusChip(
+                title: t(
+                    "Размер \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file))→\(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
+                    "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file))->\(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))"
+                ),
+                tint: .orange
+            )
+            Spacer()
+            Text(t("Обновлено \(relativeTime(delta.createdAt))", "Updated \(relativeTime(delta.createdAt))"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 
-            if report.consumers.isEmpty {
-                Text(t("Активные high-impact процессы не обнаружены.", "No high-impact processes detected right now."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-            } else {
-                VStack(spacing: 6) {
-                    ForEach(report.consumers.prefix(8)) { consumer in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(consumer.displayName)
-                                    .font(.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                Spacer()
-                                Text(t(
-                                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%",
-                                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%"
-                                ))
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.orange)
-                            }
-                            HStack(spacing: 10) {
-                                Text("EI \(String(format: "%.1f", consumer.currentEnergyImpact))")
-                                Text(t("Avg \(String(format: "%.1f", consumer.averageEnergyImpact))", "Avg \(String(format: "%.1f", consumer.averageEnergyImpact))"))
-                                Text("CPU \(Int(consumer.cpuPercent))%")
-                                Text(t("MEM \(Int(consumer.memoryMB)) MB", "MEM \(Int(consumer.memoryMB)) MB"))
-                                Text(consumer.preventingSleep ? t("Sleep: blocked", "Sleep: blocked") : t("Sleep: normal", "Sleep: normal"))
-                                if let estimated12hWh = consumer.estimatedPower12hWh {
-                                    Text(t("12h \(String(format: "%.2f", estimated12hWh)) Wh", "12h \(String(format: "%.2f", estimated12hWh)) Wh"))
-                                } else {
-                                    Text(t("12h n/a", "12h n/a"))
-                                }
-                                if let gpu = consumer.highPowerGPUUsage {
-                                    Text(gpu ? t("GPU: high", "GPU: high") : t("GPU: normal", "GPU: normal"))
-                                } else {
-                                    Text(t("GPU n/a", "GPU n/a"))
-                                }
-                                if let appNap = consumer.appNapStatus {
-                                    Text(appNap ? t("App Nap: on", "App Nap: on") : t("App Nap: off", "App Nap: off"))
-                                } else {
-                                    Text(t("App Nap n/a", "App Nap n/a"))
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                }
-            }
+    private func appendTrend(value: Double, to trend: inout [Double]) {
+        trend.append(value)
+        if trend.count > 24 {
+            trend.removeFirst(trend.count - 24)
         }
     }
 
-    private func optionalPercent(_ value: Int?) -> String {
-        guard let value else { return "n/a" }
-        return "\(value)%"
-    }
+    private func appendNetworkHistory(_ result: NetworkSpeedTestResult) {
+        let point = NetworkHistoryPoint(
+            measuredAt: result.measuredAt,
+            downMbps: result.downlinkMbps ?? 0,
+            upMbps: result.uplinkMbps ?? 0,
+            responsivenessMs: result.responsivenessMs ?? 0
+        )
 
-    private func optionalWatts(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.1f W", value)
-    }
-
-    private func optionalTemperature(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.1f °C", value)
-    }
-
-    private func optionalVolts(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.2f", value)
-    }
-
-    private func optionalAmps(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.2f", value)
-    }
-
-    private func batteryStateText(_ snapshot: BatteryEnergySnapshot) -> String {
-        guard let isCharging = snapshot.isCharging else {
-            return t("Статус n/a", "Status n/a")
+        if let last = networkHistory.last,
+           Calendar.current.isDate(last.measuredAt, equalTo: point.measuredAt, toGranularity: .second) {
+            return
         }
-        return isCharging ? t("Заряжается", "Charging") : t("Разряжается", "Discharging")
-    }
 
-    private func timeEstimateText(_ snapshot: BatteryEnergySnapshot) -> String {
-        if snapshot.isCharging == true {
-            guard let minutes = snapshot.minutesToFull else { return t("До 100% n/a", "To full n/a") }
-            let hours = minutes / 60
-            let mins = minutes % 60
-            return t("До 100% \(hours)ч \(mins)м", "To full \(hours)h \(mins)m")
+        networkHistory.append(point)
+        if networkHistory.count > 8 {
+            networkHistory.removeFirst(networkHistory.count - 8)
         }
-        guard let minutes = snapshot.minutesToEmpty else { return t("До разрядки n/a", "To empty n/a") }
-        let hours = minutes / 60
-        let mins = minutes % 60
-        return t("До разрядки \(hours)ч \(mins)м", "To empty \(hours)h \(mins)m")
     }
 
-    private var consumerRows: [LiveConsumerRow] {
+    private func requestStartupCleanup() {
+        guard !selectedEntries.isEmpty else { return }
+        if model.confirmBeforeStartupCleanup {
+            showCleanupConfirm = true
+            return
+        }
+        model.cleanupStartupEntries(selectedEntries)
+        selectedPaths.removeAll()
+    }
+
+    private var rankedLiveConsumers: [LiveConsumerRow] {
         var byName: [String: LiveConsumerRow] = [:]
 
         for consumer in monitor.snapshot.topCPUConsumers {
@@ -718,6 +918,14 @@ struct PerformanceView: View {
         }
     }
 
+    private func rankedContribution(for consumer: LiveConsumerRow, in ranked: [LiveConsumerRow]) -> Double {
+        let cpuTotal = max(ranked.reduce(0.0) { $0 + $1.cpuPercent }, 0.1)
+        let memTotal = max(ranked.reduce(0.0) { $0 + $1.memoryMB }, 0.1)
+        let cpuShare = (consumer.cpuPercent / cpuTotal) * 100
+        let memShare = (consumer.memoryMB / memTotal) * 100
+        return min(100, max(0, (cpuShare * 0.65) + (memShare * 0.35)))
+    }
+
     private func normalizedConsumerKey(_ name: String) -> String {
         shortConsumerName(name).lowercased()
     }
@@ -738,211 +946,174 @@ struct PerformanceView: View {
         return name
     }
 
-    private func loadCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func summaryBadge(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private func diagnosticsSummary(_ report: PerformanceReport) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    showLiveSummary.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: showLiveSummary ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(t("Сводка диагностики", "Diagnostics Summary"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 6)
-                }
-            }
-            .buttonStyle(.plain)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    summaryBadge(
-                        title: t("Автозапуск", "Startup"),
-                        value: "\(report.startupEntries.count)"
-                    )
-                    summaryBadge(
-                        title: t("Размер", "Size"),
-                        value: ByteCountFormatter.string(fromByteCount: report.startupTotalBytes, countStyle: .file)
-                    )
-                    summaryBadge(
-                        title: t("Свободно", "Free"),
-                        value: report.diskFreeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "n/a"
-                    )
-                    summaryBadge(
-                        title: t("Изменено", "Tweaks"),
-                        value: "\(model.performance.activeLoadReliefAdjustments)"
-                    )
-                }
-            }
-
-            if showLiveSummary {
-                if !report.recommendations.isEmpty {
-                    Divider()
-                    Text(t("Рекомендации автозапуска", "Startup Recommendations"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(report.recommendations) { rec in
-                        recommendationRow(rec)
-                    }
-                }
-
-                Divider()
-                HStack {
-                    Text(t("Элементы автозапуска", "Startup Entries"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button(showStartupEntries ? t("Скрыть", "Hide") : t("Показать", "Show")) {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            showStartupEntries.toggle()
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                if showStartupEntries {
-                    VStack(spacing: 6) {
-                        ForEach(report.startupEntries.prefix(12)) { entry in
-                            startupEntryRow(entry)
-                        }
-                        if report.startupEntries.count > 12 {
-                            Text(t(
-                                "Показаны первые \(min(12, report.startupEntries.count)) из \(report.startupEntries.count)",
-                                "Showing first \(min(12, report.startupEntries.count)) of \(report.startupEntries.count)"
-                            ))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 2)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func recommendationRow(_ rec: PerformanceRecommendation) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rec.title)
-                    .font(.subheadline.weight(.semibold))
-                Text(rec.details)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            if let actionTitle = rec.actionTitle {
-                Button(actionTitle) {
-                    handleRecommendationAction(rec.action)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func startupEntryRow(_ entry: StartupEntry) -> some View {
-        HStack(spacing: 8) {
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { selectedPaths.contains(entry.url.path) },
-                    set: { isOn in
-                        if isOn { selectedPaths.insert(entry.url.path) }
-                        else { selectedPaths.remove(entry.url.path) }
-                    }
-                )
-            )
-            .labelsHidden()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text("\(entry.source) · \(entry.url.path)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Text(ByteCountFormatter.string(fromByteCount: entry.sizeInBytes, countStyle: .file))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button(t("Показать", "Reveal")) {
-                NSWorkspace.shared.activateFileViewerSelecting([entry.url])
-            }
-            .buttonStyle(.borderless)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    private var startupEntries: [StartupEntry] {
+        model.performance.report?.startupEntries ?? []
     }
 
     private var selectedEntries: [StartupEntry] {
-        guard let report = model.performance.report else { return [] }
-        return report.startupEntries.filter { selectedPaths.contains($0.url.path) }
+        startupEntries.filter { selectedPaths.contains($0.url.path) }
     }
 
-    private var systemConditionTitle: String {
-        if monitor.snapshot.memoryPressurePercent >= 82 || monitor.snapshot.cpuLoadPercent >= 86 {
-            return t("Needs Attention", "Needs Attention")
-        }
-        if monitor.snapshot.memoryPressurePercent >= 65 || monitor.snapshot.cpuLoadPercent >= 70 {
-            return t("Fair", "Fair")
-        }
-        return t("Good", "Good")
+    private var startupTotalBytes: Int64 {
+        startupEntries.reduce(0) { $0 + $1.sizeInBytes }
     }
 
-    private var systemConditionSubtitle: String {
-        t(
-            "CPU \(Int(monitor.snapshot.cpuLoadPercent))% · RAM \(Int(monitor.snapshot.memoryPressurePercent))%",
-            "CPU \(Int(monitor.snapshot.cpuLoadPercent))% · RAM \(Int(monitor.snapshot.memoryPressurePercent))%"
+    private var maxStartupEntrySize: Int64 {
+        startupEntries.map(\.sizeInBytes).max() ?? 1
+    }
+
+    private var startupReviewCount: Int {
+        startupEntries.filter { startupImpactLevel(for: $0) != .low }.count
+    }
+
+    private var startupBurdenValue: Double {
+        let countScore = min(100.0, Double(startupEntries.count) * 2.4)
+        let sizeScore = min(100.0, Double(startupTotalBytes) / Double(80 * 1_048_576))
+        return min(100, (countScore * 0.55) + (sizeScore * 0.45))
+    }
+
+    private var startupImpactDistribution: (low: Double, review: Double, high: Double) {
+        guard !startupEntries.isEmpty else { return (0, 0, 0) }
+        let low = Double(startupEntries.filter { startupImpactLevel(for: $0) == .low }.count)
+        let review = Double(startupEntries.filter { startupImpactLevel(for: $0) == .review }.count)
+        let high = Double(startupEntries.filter { startupImpactLevel(for: $0) == .high }.count)
+        let total = max(low + review + high, 1)
+        return ((low / total) * 100, (review / total) * 100, (high / total) * 100)
+    }
+
+    private func startupImpactLevel(for entry: StartupEntry) -> StartupImpact {
+        if entry.sizeInBytes >= 100 * 1_048_576 {
+            return .high
+        }
+        if entry.sizeInBytes >= 25 * 1_048_576 {
+            return .review
+        }
+        return .low
+    }
+
+    private var networkStatusChip: (title: String, tint: Color)? {
+        guard let result = model.performance.networkSpeedTestResult, result.isSuccess else { return nil }
+        return (
+            title: "\(t("Сеть", "Network")): \(networkQualityTag(from: result))",
+            tint: networkQualityColor(from: result)
         )
+    }
+
+    private var networkQualityValue: Double? {
+        guard let result = model.performance.networkSpeedTestResult, result.isSuccess else { return nil }
+        let resp = max(1, result.responsivenessMs ?? 140)
+        let down = result.downlinkMbps ?? 0
+        let up = result.uplinkMbps ?? 0
+        let respPenalty = min(100.0, (resp / 220.0) * 100.0)
+        let throughputBonus = min(30.0, (down + up) / 12.0)
+        return max(0, min(100, respPenalty + 20 - throughputBonus))
+    }
+
+    private var networkQualityLabel: String {
+        guard let result = model.performance.networkSpeedTestResult, result.isSuccess else {
+            return t("Сетевых данных пока нет", "No network data yet")
+        }
+        return networkQualityText(from: result)
+    }
+
+    private var networkInterpretation: String {
+        guard let result = model.performance.networkSpeedTestResult else {
+            return t(
+                "Запусти тест, чтобы получить интерпретацию пропускной способности и отклика.",
+                "Run a test to get throughput and responsiveness interpretation."
+            )
+        }
+        if let error = result.errorMessage {
+            return t("Тест завершился ошибкой: \(error)", "Test failed: \(error)")
+        }
+        return networkQualityText(from: result)
+    }
+
+    private func networkQualityTag(from result: NetworkSpeedTestResult) -> String {
+        let resp = result.responsivenessMs ?? 999
+        let down = result.downlinkMbps ?? 0
+        if resp <= 45 && down >= 120 { return t("Отлично", "Excellent") }
+        if resp <= 90 && down >= 40 { return t("Хорошо", "Good") }
+        if resp <= 150 { return t("Умеренно", "Fair") }
+        return t("Слабый отклик", "Poor latency")
+    }
+
+    private func networkQualityColor(from result: NetworkSpeedTestResult) -> Color {
+        let tag = networkQualityTag(from: result)
+        switch tag {
+        case t("Отлично", "Excellent"): return .green
+        case t("Хорошо", "Good"): return .blue
+        case t("Умеренно", "Fair"): return .orange
+        default: return .red
+        }
+    }
+
+    private func networkQualityText(from result: NetworkSpeedTestResult) -> String {
+        let down = result.downlinkMbps ?? 0
+        let up = result.uplinkMbps ?? 0
+        let resp = result.responsivenessMs ?? 999
+        if resp <= 45 && down >= 120 {
+            return t(
+                "Сильная пропускная способность и высокий отклик. Подходит для latency-sensitive задач.",
+                "Strong throughput and responsiveness. Suitable for latency-sensitive work."
+            )
+        }
+        if resp <= 90 && down >= 40 {
+            return t(
+                "Стабильное качество сети: хороший баланс скорости и отклика.",
+                "Stable network quality: good balance of throughput and responsiveness."
+            )
+        }
+        if resp <= 150 {
+            return t(
+                "Пропускная способность приемлемая, но отклик средний. Для интерактивных задач может ощущаться задержка.",
+                "Throughput is acceptable, but responsiveness is moderate. Interactive tasks may feel delayed."
+            )
+        }
+        if down + up < 20 {
+            return t(
+                "Низкая пропускная способность и слабый отклик. Стоит проверить сеть перед тяжелыми задачами.",
+                "Low throughput and poor responsiveness. Check your connection before heavy tasks."
+            )
+        }
+        return t(
+            "Отклик сети неидеален для чувствительных сценариев. Для загрузок подходит лучше, чем для интерактивной работы.",
+            "Network responsiveness is not ideal for latency-sensitive scenarios. Better for bulk transfer than interactive work."
+        )
+    }
+
+    private var batteryHealthLabel: String {
+        guard let health = model.performance.batteryEnergyReport?.battery.healthPercent else {
+            return t("Нет данных", "No data")
+        }
+        if health >= 88 { return t("Хорошо", "Good") }
+        if health >= 75 { return t("Умеренно", "Fair") }
+        return t("Внимание", "Attention")
+    }
+
+    private var batteryHealthColor: Color {
+        guard let health = model.performance.batteryEnergyReport?.battery.healthPercent else {
+            return .secondary
+        }
+        if health >= 88 { return .green }
+        if health >= 75 { return .orange }
+        return .red
+    }
+
+    private func severityLabel(for value: Double) -> String {
+        switch value {
+        case 0..<45: return t("Низко", "Low")
+        case 45..<75: return t("Умеренно", "Moderate")
+        default: return t("Высоко", "High")
+        }
+    }
+
+    private func severityColor(for value: Double) -> Color {
+        switch value {
+        case 0..<45: return .green
+        case 45..<75: return .orange
+        default: return .red
+        }
     }
 
     private var topCPUConsumerName: String {
@@ -963,48 +1134,6 @@ struct PerformanceView: View {
     private var topMemoryConsumerValue: String {
         guard let top = monitor.snapshot.topMemoryConsumers.first else { return t("Нет данных", "No data") }
         return "MEM \(Int(top.memoryMB)) MB · CPU \(Int(top.cpuPercent))%"
-    }
-
-    private func optionalMbps(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.1f Mbps", value)
-    }
-
-    private func optionalMilliseconds(_ value: Double?) -> String {
-        guard let value else { return "n/a" }
-        return String(format: "%.1f ms", value)
-    }
-
-    private var batteryPrimaryText: String {
-        guard let percent = monitor.snapshot.batteryLevelPercent else { return "n/a" }
-        return "\(percent)%"
-    }
-
-    private var batterySecondaryText: String {
-        guard let percent = monitor.snapshot.batteryLevelPercent else { return t("Нет данных батареи", "No battery data") }
-        let charging = monitor.snapshot.batteryIsCharging ?? false
-        let minutes = monitor.snapshot.batteryMinutesRemaining
-        if let minutes {
-            let hours = minutes / 60
-            let mins = minutes % 60
-            if charging {
-                return t(
-                    "\(percent)% · зарядка (\(hours)ч \(mins)м)",
-                    "\(percent)% · charging (\(hours)h \(mins)m)"
-                )
-            }
-            return t(
-                "\(percent)% · осталось \(hours)ч \(mins)м",
-                "\(percent)% · \(hours)h \(mins)m left"
-            )
-        }
-        return charging ? t("\(percent)% · зарядка", "\(percent)% · charging") : "\(percent)%"
-    }
-
-    private func relativeTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private var cpuReliefCandidates: [ProcessConsumer] {
@@ -1060,14 +1189,11 @@ struct PerformanceView: View {
     private func handleRecommendationAction(_ action: PerformanceRecommendationAction) {
         switch action {
         case .selectAllStartup:
-            guard let report = model.performance.report else { return }
-            selectedPaths = Set(report.startupEntries.map { $0.url.path })
+            selectedPaths = Set(startupEntries.map { $0.url.path })
+            workspaceTab = .startup
         case .selectHeavyStartup:
-            guard let report = model.performance.report else { return }
-            let heavy = report.startupEntries
-                .filter { $0.sizeInBytes >= 100 * 1_048_576 }
-                .map { $0.url.path }
-            selectedPaths = Set(heavy)
+            selectedPaths = Set(startupEntries.filter { $0.sizeInBytes >= 100 * 1_048_576 }.map { $0.url.path })
+            workspaceTab = .startup
         case .openSmartCare:
             model.openSection(.smartCare)
             model.runSmartScan()
@@ -1076,6 +1202,67 @@ struct PerformanceView: View {
         case .none:
             break
         }
+    }
+
+    private func optionalPercent(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value)%"
+    }
+
+    private func optionalWatts(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f W", value)
+    }
+
+    private func optionalTemperature(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f °C", value)
+    }
+
+    private func optionalVolts(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f", value)
+    }
+
+    private func optionalAmps(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.2f", value)
+    }
+
+    private func optionalMbps(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f Mbps", value)
+    }
+
+    private func optionalMilliseconds(_ value: Double?) -> String {
+        guard let value else { return "n/a" }
+        return String(format: "%.1f ms", value)
+    }
+
+    private func batteryStateText(_ snapshot: BatteryEnergySnapshot) -> String {
+        guard let isCharging = snapshot.isCharging else {
+            return t("Статус n/a", "Status n/a")
+        }
+        return isCharging ? t("Заряжается", "Charging") : t("Разряжается", "Discharging")
+    }
+
+    private func timeEstimateText(_ snapshot: BatteryEnergySnapshot) -> String {
+        if snapshot.isCharging == true {
+            guard let minutes = snapshot.minutesToFull else { return t("До 100% n/a", "To full n/a") }
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return t("До 100% \(hours)ч \(mins)м", "To full \(hours)h \(mins)m")
+        }
+        guard let minutes = snapshot.minutesToEmpty else { return t("До разрядки n/a", "To empty n/a") }
+        let hours = minutes / 60
+        let mins = minutes % 60
+        return t("До разрядки \(hours)ч \(mins)м", "To empty \(hours)h \(mins)m")
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
@@ -1096,7 +1283,8 @@ private enum PerformanceWorkspaceTab: Hashable {
     case overview
     case systemLoad
     case batteryEnergy
-    case startupNetwork
+    case startup
+    case network
 }
 
 private struct LiveConsumerRow: Identifiable {
@@ -1105,4 +1293,34 @@ private struct LiveConsumerRow: Identifiable {
     var cpuPercent: Double
     var memoryMB: Double
     var batteryImpactScore: Double
+}
+
+private struct NetworkHistoryPoint: Identifiable {
+    let id = UUID()
+    let measuredAt: Date
+    let downMbps: Double
+    let upMbps: Double
+    let responsivenessMs: Double
+}
+
+private enum StartupImpact {
+    case low
+    case review
+    case high
+
+    var title: String {
+        switch self {
+        case .low: return "Low"
+        case .review: return "Review"
+        case .high: return "High"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .low: return .green
+        case .review: return .orange
+        case .high: return .red
+        }
+    }
 }

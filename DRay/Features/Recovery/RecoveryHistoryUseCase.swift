@@ -92,6 +92,10 @@ struct RecoveryHistoryUseCase {
         )
     }
 
+    func clearHistory() {
+        save([])
+    }
+
     private func save(_ history: [RecentlyDeletedItem]) {
         historyStore.save(history, fileName: fileName)
     }

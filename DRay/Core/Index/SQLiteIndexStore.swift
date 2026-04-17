@@ -86,6 +86,11 @@ final class SQLiteIndexStore {
         return buildTree(records: records, rootPath: rootPath)
     }
 
+    func clearSnapshotCache() -> Bool {
+        guard let db else { return false }
+        return sqlite3_exec(db, "DELETE FROM file_index", nil, nil, nil) == SQLITE_OK
+    }
+
     private func createSchema() {
         guard let db else { return }
         let sql = """

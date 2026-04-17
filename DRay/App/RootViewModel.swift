@@ -187,6 +187,14 @@ enum SearchScopeMode: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+enum ScanDefaultTarget: String, CaseIterable, Identifiable {
+    case startupDisk
+    case home
+    case lastSelectedFolder
+
+    var id: String { rawValue }
+}
+
 enum SmartCleanProfile: String, CaseIterable, Identifiable {
     case conservative
     case balanced
@@ -269,6 +277,60 @@ final class RootViewModel: ObservableObject {
     @Published var appAppearance: AppAppearance = .system {
         didSet {
             uiSettingsStore.saveAppAppearance(appAppearance)
+        }
+    }
+    @Published var defaultScanTarget: ScanDefaultTarget = .lastSelectedFolder {
+        didSet {
+            uiSettingsStore.saveDefaultScanTarget(defaultScanTarget)
+        }
+    }
+    @Published var autoRescanAfterCleanup = true {
+        didSet {
+            uiSettingsStore.saveAutoRescanAfterCleanup(autoRescanAfterCleanup)
+        }
+    }
+    @Published var includeHiddenByDefault = true {
+        didSet {
+            uiSettingsStore.saveIncludeHiddenByDefault(includeHiddenByDefault)
+            search.update(\.includeHidden, value: includeHiddenByDefault)
+        }
+    }
+    @Published var includePackageContentsByDefault = true {
+        didSet {
+            uiSettingsStore.saveIncludePackageContentsByDefault(includePackageContentsByDefault)
+            search.update(\.includePackageContents, value: includePackageContentsByDefault)
+        }
+    }
+    @Published var excludeTrashByDefault = true {
+        didSet {
+            uiSettingsStore.saveExcludeTrashByDefault(excludeTrashByDefault)
+            search.update(\.excludeTrash, value: excludeTrashByDefault)
+        }
+    }
+    @Published var defaultSmartCareProfile: SmartCleanProfile = .balanced {
+        didSet {
+            uiSettingsStore.saveDefaultSmartCareProfile(defaultSmartCareProfile)
+            smartCareController.applySmartProfile(defaultSmartCareProfile)
+        }
+    }
+    @Published var confirmBeforeDestructiveActions = true {
+        didSet {
+            uiSettingsStore.saveConfirmBeforeDestructiveActions(confirmBeforeDestructiveActions)
+        }
+    }
+    @Published var confirmBeforeStartupCleanup = true {
+        didSet {
+            uiSettingsStore.saveConfirmBeforeStartupCleanup(confirmBeforeStartupCleanup)
+        }
+    }
+    @Published var confirmBeforeRepairFlows = true {
+        didSet {
+            uiSettingsStore.saveConfirmBeforeRepairFlows(confirmBeforeRepairFlows)
+        }
+    }
+    @Published var autoRescanAfterRestore = true {
+        didSet {
+            uiSettingsStore.saveAutoRescanAfterRestore(autoRescanAfterRestore)
         }
     }
 
@@ -357,7 +419,40 @@ final class RootViewModel: ObservableObject {
         if let appearance = uiSettingsStore.loadAppAppearance() {
             appAppearance = appearance
         }
-        restoreLastTargetIfPossible()
+        if let target = uiSettingsStore.loadDefaultScanTarget() {
+            defaultScanTarget = target
+        }
+        if let autoRescan = uiSettingsStore.loadAutoRescanAfterCleanup() {
+            autoRescanAfterCleanup = autoRescan
+        }
+        if let includeHidden = uiSettingsStore.loadIncludeHiddenByDefault() {
+            includeHiddenByDefault = includeHidden
+        }
+        if let includePackage = uiSettingsStore.loadIncludePackageContentsByDefault() {
+            includePackageContentsByDefault = includePackage
+        }
+        if let excludeTrash = uiSettingsStore.loadExcludeTrashByDefault() {
+            excludeTrashByDefault = excludeTrash
+        }
+        if let profile = uiSettingsStore.loadDefaultSmartCareProfile() {
+            defaultSmartCareProfile = profile
+        }
+        if let confirmDestructive = uiSettingsStore.loadConfirmBeforeDestructiveActions() {
+            confirmBeforeDestructiveActions = confirmDestructive
+        }
+        if let confirmStartupCleanup = uiSettingsStore.loadConfirmBeforeStartupCleanup() {
+            confirmBeforeStartupCleanup = confirmStartupCleanup
+        }
+        if let confirmRepairFlows = uiSettingsStore.loadConfirmBeforeRepairFlows() {
+            confirmBeforeRepairFlows = confirmRepairFlows
+        }
+        if let autoRescanRestore = uiSettingsStore.loadAutoRescanAfterRestore() {
+            autoRescanAfterRestore = autoRescanRestore
+        }
+
+        applyInitialScanTarget()
+        applySearchDefaults()
+        smartCareController.applySmartProfile(defaultSmartCareProfile)
         search.setSelectedTargetURL(selectedTarget.url)
         search.loadPresets()
         recovery.loadHistory()
@@ -787,6 +882,7 @@ final class RootViewModel: ObservableObject {
     }
 
     func scheduleRescanAfterMutation() {
+        guard autoRescanAfterCleanup else { return }
         guard let lastScannedTarget else { return }
         scheduleCoalescedRescan(for: lastScannedTarget)
     }
@@ -868,7 +964,7 @@ final class RootViewModel: ObservableObject {
             presentPermissionBlock(blockedPermissionHint)
         }
 
-        if moved > 0, let lastScannedTarget {
+        if moved > 0, autoRescanAfterCleanup, let lastScannedTarget {
             scheduleCoalescedRescan(for: lastScannedTarget)
         }
 
@@ -930,7 +1026,7 @@ final class RootViewModel: ObservableObject {
             return false
         }
         guard result.restoredCount > 0 else { return false }
-        if let lastScannedTarget {
+        if autoRescanAfterRestore, let lastScannedTarget {
             scheduleCoalescedRescan(for: lastScannedTarget)
         }
         return true
@@ -984,8 +1080,8 @@ final class RootViewModel: ObservableObject {
         }
     }
 
-    private func restoreLastTargetIfPossible() {
-        guard let data = uiSettingsStore.loadSelectedTargetBookmark() else { return }
+    private func restoreLastTargetIfPossible() -> Bool {
+        guard let data = uiSettingsStore.loadSelectedTargetBookmark() else { return false }
         do {
             var isStale = false
             let url = try URL(
@@ -995,13 +1091,55 @@ final class RootViewModel: ObservableObject {
                 bookmarkDataIsStale: &isStale
             )
             selectedTarget = ScanTarget(name: url.lastPathComponent, url: url)
+            return true
         } catch {
             uiSettingsStore.clearSelectedTargetBookmark()
+            return false
         }
+    }
+
+    private func applyInitialScanTarget() {
+        switch defaultScanTarget {
+        case .startupDisk:
+            selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
+        case .home:
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            selectedTarget = ScanTarget(name: "Home", url: home)
+        case .lastSelectedFolder:
+            if !restoreLastTargetIfPossible() {
+                selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
+            }
+        }
+    }
+
+    private func applySearchDefaults() {
+        search.update(\.includeHidden, value: includeHiddenByDefault)
+        search.update(\.includePackageContents, value: includePackageContentsByDefault)
+        search.update(\.excludeTrash, value: excludeTrashByDefault)
     }
 
     private func clearSavedTargetBookmark() {
         uiSettingsStore.clearSelectedTargetBookmark()
+    }
+
+    func resetSavedTargetBookmark() {
+        clearSavedTargetBookmark()
+        operationLogs.add(category: "settings", message: "Saved target bookmark reset")
+    }
+
+    func clearCachedSnapshots() {
+        let cleared = indexStore?.clearSnapshotCache() ?? false
+        operationLogs.add(
+            category: "settings",
+            message: cleared
+                ? "Cleared cached snapshots"
+                : "Failed to clear cached snapshots"
+        )
+    }
+
+    func clearRecoveryHistory() {
+        recovery.clearRecoveryHistory()
+        operationLogs.add(category: "settings", message: "Recovery history cleared")
     }
 
     private func appendQuickActionRollbackSession(_ session: QuickActionRollbackSession) {
