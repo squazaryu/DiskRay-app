@@ -17,6 +17,7 @@ struct ClutterView: View {
     var body: some View {
         VStack(spacing: 10) {
             controls
+            controlsToolbar
 
             if model.isDuplicateScanRunning {
                 progressPanel
@@ -96,73 +97,78 @@ struct ClutterView: View {
                 "Groups with identical content (SHA-256) and equal file size."
             )
         ) {
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: t("Групп \(model.duplicateGroups.count)", "Groups \(model.duplicateGroups.count)"), tint: .blue)
-                    GlassPillBadge(
-                        title: t(
-                            "К освобождению \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
-                            "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))"
-                        ),
-                        tint: .green
-                    )
-                    GlassPillBadge(
-                        title: t(
-                            "Выбрано \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
-                            "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))"
-                        ),
-                        tint: .orange
-                    )
-                }
-
-                HStack(spacing: 8) {
-                    Stepper(value: duplicateMinSizeBinding, in: 1...2_048, step: 1) {
-                        Text(t("Мин \(Int(model.duplicateMinSizeMB)) МБ", "Min \(Int(model.duplicateMinSizeMB)) MB"))
-                            .frame(minWidth: 120, alignment: .trailing)
-                    }
-                    .frame(width: 170)
-
-                    Button(t("Скан цели", "Scan Target")) {
-                        selectedPaths.removeAll()
-                        model.scanDuplicatesInSelectedTarget()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.isDuplicateScanRunning)
-
-                    Button(t("Скан Home", "Scan Home")) {
-                        selectedPaths.removeAll()
-                        model.scanDuplicatesInHome()
-                    }
-                    .controlSize(.small)
-                    .disabled(model.isDuplicateScanRunning)
-
-                    if model.isDuplicateScanRunning {
-                        Button(t("Отмена", "Cancel")) {
-                            model.cancelDuplicateScan()
-                        }
-                        .controlSize(.small)
-                    }
-
-                    Button(t("Очистить", "Clear")) {
-                        selectedPaths.removeAll()
-                        model.clearDuplicateResults()
-                    }
-                    .controlSize(.small)
-                    .disabled(model.duplicateGroups.isEmpty && selectedPaths.isEmpty)
-
-                    Button(t("Экспорт лога", "Export Ops Log")) {
-                        if let url = model.exportOperationLogReport() {
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                            trashResultMessage = t("Лог сохранён:\n\(url.path)", "Ops log exported:\n\(url.path)")
-                        } else {
-                            trashResultMessage = t("Не удалось сохранить лог.", "Failed to export ops log.")
-                        }
-                    }
-                    .controlSize(.small)
-                }
-            }
+            EmptyView()
         }
+    }
+
+    private var controlsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: t("Групп \(model.duplicateGroups.count)", "Groups \(model.duplicateGroups.count)"), tint: .blue)
+                GlassPillBadge(
+                    title: t(
+                        "К освобождению \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
+                        "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))"
+                    ),
+                    tint: .green
+                )
+                GlassPillBadge(
+                    title: t(
+                        "Выбрано \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
+                        "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))"
+                    ),
+                    tint: .orange
+                )
+
+                Stepper(value: duplicateMinSizeBinding, in: 1...2_048, step: 1) {
+                    Text(t("Мин \(Int(model.duplicateMinSizeMB)) МБ", "Min \(Int(model.duplicateMinSizeMB)) MB"))
+                        .frame(minWidth: 120, alignment: .trailing)
+                }
+                .frame(width: 170)
+
+                Button(t("Скан цели", "Scan Target")) {
+                    selectedPaths.removeAll()
+                    model.scanDuplicatesInSelectedTarget()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(model.isDuplicateScanRunning)
+
+                Button(t("Скан Home", "Scan Home")) {
+                    selectedPaths.removeAll()
+                    model.scanDuplicatesInHome()
+                }
+                .controlSize(.small)
+                .disabled(model.isDuplicateScanRunning)
+
+                if model.isDuplicateScanRunning {
+                    Button(t("Отмена", "Cancel")) {
+                        model.cancelDuplicateScan()
+                    }
+                    .controlSize(.small)
+                }
+
+                Button(t("Очистить", "Clear")) {
+                    selectedPaths.removeAll()
+                    model.clearDuplicateResults()
+                }
+                .controlSize(.small)
+                .disabled(model.duplicateGroups.isEmpty && selectedPaths.isEmpty)
+
+                Button(t("Экспорт лога", "Export Ops Log")) {
+                    if let url = model.exportOperationLogReport() {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                        trashResultMessage = t("Лог сохранён:\n\(url.path)", "Ops log exported:\n\(url.path)")
+                    } else {
+                        trashResultMessage = t("Не удалось сохранить лог.", "Failed to export ops log.")
+                    }
+                }
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var progressPanel: some View {

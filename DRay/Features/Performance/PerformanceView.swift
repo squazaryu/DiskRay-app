@@ -21,6 +21,7 @@ struct PerformanceView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 10) {
                 header
+                performanceActionsToolbar
                 workspaceBar
                     .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 10)
                 workspaceContent
@@ -116,45 +117,52 @@ struct PerformanceView: View {
                 "Startup diagnostics and maintenance recommendations."
             )
         ) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button(t("Запустить диагностику", "Run Diagnostics")) { model.runPerformanceScan() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.performance.isScanRunning)
+            EmptyView()
+        }
+    }
 
-                    Button(t("Отключить выбранные", "Disable Selected")) {
-                        showCleanupConfirm = true
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(selectedEntries.isEmpty)
+    private var performanceActionsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button(t("Запустить диагностику", "Run Diagnostics")) { model.runPerformanceScan() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.performance.isScanRunning)
 
-                    Button(t("Экспорт лога", "Export Ops Log")) {
-                        if let url = model.exportOperationLogReport() {
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }
-                    }
-                    .buttonStyle(.bordered)
+                Button(t("Отключить выбранные", "Disable Selected")) {
+                    showCleanupConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(selectedEntries.isEmpty)
 
-                    Button(t("Показать crash log", "Reveal Crash Log")) {
-                        model.revealCrashTelemetry()
-                    }
-                    .buttonStyle(.bordered)
-
-                    if model.performance.isScanRunning {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(t("Идёт анализ...", "Analyzing..."))
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(.regularMaterial, in: Capsule())
+                Button(t("Экспорт лога", "Export Ops Log")) {
+                    if let url = model.exportOperationLogReport() {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
                     }
                 }
+                .buttonStyle(.bordered)
+
+                Button(t("Показать crash log", "Reveal Crash Log")) {
+                    model.revealCrashTelemetry()
+                }
+                .buttonStyle(.bordered)
+
+                if model.performance.isScanRunning {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(t("Идёт анализ...", "Analyzing..."))
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial, in: Capsule())
+                }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var systemLoadWorkspace: some View {

@@ -14,6 +14,16 @@ struct SearchView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            ModuleHeaderCard(
+                title: t("Search", "Search"),
+                subtitle: t(
+                    "Live file intelligence workspace with scope, filters, presets and bulk actions.",
+                    "Live file intelligence workspace with scope, filters, presets and bulk actions."
+                )
+            ) {
+                EmptyView()
+            }
+
             searchToolbar
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
 

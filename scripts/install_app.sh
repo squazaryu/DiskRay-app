@@ -4,7 +4,7 @@ set -euo pipefail
 APP_NAME="DRay.app"
 APP_PATH="/Applications/${APP_NAME}"
 BUNDLE_ID="com.squazaryu.DRay"
-VERSION="${1:-1.2.2}"
+VERSION="${1:-2.0.2}"
 BUILD_NUMBER="${2:-1}"
 
 ICON_BASENAME="DRay"

@@ -17,6 +17,7 @@ struct RootViewModelDependencies {
     let indexStore: SQLiteIndexStore?
     let safeFileOperations: SafeFileOperationService
     let processPriorityService: ProcessPriorityService
+    let workspaceActions: any WorkspaceActioning
     let historyStore: OperationalHistoryStore
     let searchPresetStore: any SearchPresetStoring
     let recoveryStore: any RecoveryStoring
@@ -40,6 +41,7 @@ struct RootViewModelDependencies {
             indexStore: SQLiteIndexStore(),
             safeFileOperations: SafeFileOperationService(),
             processPriorityService: ProcessPriorityService(),
+            workspaceActions: WorkspaceActionService(),
             historyStore: historyStore,
             searchPresetStore: SearchPresetStore(historyStore: historyStore),
             recoveryStore: RecoveryStore(historyStore: historyStore),

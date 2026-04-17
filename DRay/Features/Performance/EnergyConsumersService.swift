@@ -22,13 +22,36 @@ actor EnergyConsumersService: EnergyConsumersProviding {
     private let commandRunner: CommandRunner
     private let historyWindow: TimeInterval = 12 * 60 * 60
     private let averageWindow: TimeInterval = 20 * 60
+    private let fetchCacheTTL: TimeInterval = 2.0
     private var historyByProcess: [String: [HistoryPoint]] = [:]
+    private var cachedFetch: (timestamp: Date, snapshots: [EnergyConsumerSnapshot])?
+    private var inFlightFetch: Task<[EnergyConsumerSnapshot], Never>?
 
     init(commandRunner: @escaping CommandRunner = EnergyConsumersService.defaultCommandRunner) {
         self.commandRunner = commandRunner
     }
 
     func fetchEnergyConsumers(now: Date = Date()) async -> [EnergyConsumerSnapshot] {
+        if let cachedFetch, now.timeIntervalSince(cachedFetch.timestamp) <= fetchCacheTTL {
+            return cachedFetch.snapshots
+        }
+
+        if let inFlightFetch {
+            return await inFlightFetch.value
+        }
+
+        let task = Task { [weak self] in
+            guard let self else { return [EnergyConsumerSnapshot]() }
+            return await self.computeFreshSnapshots(now: now)
+        }
+        inFlightFetch = task
+        let snapshots = await task.value
+        inFlightFetch = nil
+        cachedFetch = (timestamp: Date(), snapshots: snapshots)
+        return snapshots
+    }
+
+    private func computeFreshSnapshots(now: Date) async -> [EnergyConsumerSnapshot] {
         let processSamples = readProcessSamples()
         guard !processSamples.isEmpty else {
             trimHistory(now: now)
@@ -214,4 +237,3 @@ actor EnergyConsumersService: EnergyConsumersProviding {
         return String(data: data, encoding: .utf8) ?? ""
     }
 }
-

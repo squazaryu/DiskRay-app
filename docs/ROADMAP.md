@@ -243,6 +243,44 @@ Build feature parity with CleanMyMac-class utility while keeping DRay's own bran
   - [x] replaced masters with external 2.0 concept art and regenerated full `iconset` + `icns` pipeline.
 - [x] Final 2.0 visual QA pass (all sections, both themes, narrow-window edge cases).
 
+## Milestone M16: Version 2.0.1 Header/Toolbar Polish (completed 2026-04-16)
+- [x] Remove per-section action buttons from global header layer and move them into local section toolbars.
+- [x] Keep section headers informational only (`ModuleHeaderCard` title + subtitle) across:
+  - [x] Smart Care
+  - [x] My Clutter
+  - [x] Uninstaller
+  - [x] App Repair
+  - [x] Space Lens
+  - [x] Privacy
+  - [x] Performance
+  - [x] Settings
+- [x] Add local glass toolbars for section-specific controls/badges to improve consistency and reduce top-level header noise.
+- [x] Tighten main shell spacing:
+  - [x] remove duplicate section title layer in root shell
+  - [x] show permissions onboarding card only when setup is incomplete
+
+## Milestone M17: Focused Cleanup Pass (in progress)
+- [x] Energy hygiene:
+  - [x] add short-lived TTL cache in `EnergyConsumersService` to avoid repeated external command calls on burst refreshes.
+  - [x] add in-flight fetch coalescing in `EnergyConsumersService` so concurrent requests share one system sampling run.
+  - [x] add deterministic tests for cache + coalescing behavior (`EnergyConsumersServiceTests`).
+- [x] Rescan hygiene after destructive actions:
+  - [x] add coalesced post-mutation rescan scheduler in `RootViewModel` (debounced refresh instead of immediate repeated scans).
+  - [x] wire duplicate-cleanup success flow to scheduled rescan path.
+- [x] State propagation cleanup:
+  - [x] remove global root fan-out forwarding from feature controllers (`feature.objectWillChange -> root.objectWillChange`), keeping updates local to feature view models.
+- [x] Root noise reduction:
+  - [x] move Finder/open side effects behind `WorkspaceActionService` and inject it via `RootViewModelDependencies`.
+- [x] Helper idle work sanity:
+  - [x] disable expensive top-consumers sampling in helper while popup is hidden.
+  - [x] re-enable and force immediate sample when popup opens.
+- [ ] Follow-up: add focused tests around coalesced post-mutation rescan scheduling (root-level behavior).
+  - [x] reduce sidebar width bounds for better content area usage on medium windows
+- [x] Build/validation:
+  - [x] `swift build`
+  - [x] `swift test` (79 tests passed)
+  - [x] local install to `/Applications/DRay.app` as version `2.0.1`
+
 ## Acceptance Criteria for Parity
 - One-click Smart Scan with meaningful multi-module findings.
 - Review/clean UX with safe defaults and confirmations.

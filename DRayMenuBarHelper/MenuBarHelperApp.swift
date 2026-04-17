@@ -126,6 +126,7 @@ struct DRayMenuBarHelperApp: App {
     init() {
         let config = HelperConfig(arguments: CommandLine.arguments)
         let liveMonitor = LiveSystemMetricsMonitor(updateInterval: 1.0, heavySamplePeriod: 4.0)
+        liveMonitor.setConsumerSamplingEnabled(false)
         _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
         _monitor = StateObject(wrappedValue: liveMonitor)
         AppBundleIconThemeSynchronizer.shared.start(appPath: config.appPath)
@@ -213,11 +214,15 @@ private struct MenuBarPopupView: View {
             showReliefConfirm = false
             pendingReliefAction = nil
         }
+        .onAppear {
+            monitor.setConsumerSamplingEnabled(true, sampleImmediately: true)
+        }
         .onDisappear {
             showHealthDetails = false
             showBatteryDetails = false
             showReliefConfirm = false
             pendingReliefAction = nil
+            monitor.setConsumerSamplingEnabled(false)
         }
         .onChange(of: showBatteryDetails) {
             if !showBatteryDetails {

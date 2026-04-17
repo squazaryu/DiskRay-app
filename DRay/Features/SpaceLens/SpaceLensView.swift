@@ -14,10 +14,11 @@ struct SpaceLensView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let sidebarWidth = min(244, max(178, proxy.size.width * 0.22))
+            let sidebarWidth = min(212, max(156, proxy.size.width * 0.185))
 
             VStack(spacing: 10) {
                 header
+                controlsToolbar
                 HStack(alignment: .top, spacing: 12) {
                     sidebar
                         .frame(width: sidebarWidth)
@@ -48,40 +49,47 @@ struct SpaceLensView: View {
             title: model.localized(.navSpaceLens),
             subtitle: "\(model.localized(.spaceLensTarget)): \(model.selectedTarget.url.path)"
         ) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "\(model.localized(.spaceLensSelected)) \(selectedPaths.count)", tint: .blue)
-                    if let root = model.root {
-                        GlassPillBadge(title: "\(model.localized(.spaceLensNodes)) \(root.children.count)", tint: .green)
-                    }
-                    targetPicker
-
-                    Button(model.localized(.spaceLensScan)) { model.scanSelected() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(model.isLoading)
-
-                    Picker(model.localized(.spaceLensTapMode), selection: $bubbleTapMode) {
-                        ForEach(BubbleTapMode.allCases) { mode in
-                            Text(bubbleTapModeTitle(mode)).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 210)
-
-                    if model.isLoading {
-                        Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
-                            .controlSize(.small)
-                        Button(model.localized(.spaceLensCancel)) { model.cancelScan() }
-                            .controlSize(.small)
-                    }
-
-                    Button(model.localized(.spaceLensRescan)) { model.rescan() }
-                        .controlSize(.small)
-                        .disabled(model.lastScannedTarget == nil || model.isLoading)
-                }
-            }
+            EmptyView()
         }
+    }
+
+    private var controlsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "\(model.localized(.spaceLensSelected)) \(selectedPaths.count)", tint: .blue)
+                if let root = model.root {
+                    GlassPillBadge(title: "\(model.localized(.spaceLensNodes)) \(root.children.count)", tint: .green)
+                }
+                targetPicker
+
+                Button(model.localized(.spaceLensScan)) { model.scanSelected() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isLoading)
+
+                Picker(model.localized(.spaceLensTapMode), selection: $bubbleTapMode) {
+                    ForEach(BubbleTapMode.allCases) { mode in
+                        Text(bubbleTapModeTitle(mode)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 210)
+
+                if model.isLoading {
+                    Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
+                        .controlSize(.small)
+                    Button(model.localized(.spaceLensCancel)) { model.cancelScan() }
+                        .controlSize(.small)
+                }
+
+                Button(model.localized(.spaceLensRescan)) { model.rescan() }
+                    .controlSize(.small)
+                    .disabled(model.lastScannedTarget == nil || model.isLoading)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var sidebar: some View {

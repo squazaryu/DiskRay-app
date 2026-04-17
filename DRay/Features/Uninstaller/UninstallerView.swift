@@ -64,6 +64,7 @@ struct UninstallerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            actionsToolbar
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 10) {
@@ -238,23 +239,30 @@ struct UninstallerView: View {
             title: "Uninstaller",
             subtitle: "Inspect app remnants and remove applications with rollback support. Apps: \(filteredApps.count)."
         ) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                    GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
-
-                    Button("Rescan Apps") {
-                        model.uninstaller.loadInstalledApps()
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Open App Repair") {
-                        model.openSection(.repair)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
+            EmptyView()
         }
+    }
+
+    private var actionsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
+                GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
+
+                Button("Rescan Apps") {
+                    model.uninstaller.loadInstalledApps()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Open App Repair") {
+                    model.openSection(.repair)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private func appSidebarRow(_ app: InstalledApp) -> some View {

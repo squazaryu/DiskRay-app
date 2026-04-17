@@ -19,6 +19,7 @@ struct PrivacyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            privacyToolbar
 
             if model.state.isScanRunning {
                 ProgressView("Scanning privacy artifacts...")
@@ -91,73 +92,76 @@ struct PrivacyView: View {
             title: "Privacy",
             subtitle: "Review local traces and clean selected categories with explicit control."
         ) {
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Categories \(model.state.categories.count)", tint: .blue)
-                    GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
-                    GlassPillBadge(
-                        title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
-                        tint: .orange
-                    )
-                }
-
-                HStack(spacing: 8) {
-                    Button("Scan Privacy Traces") {
-                        model.runScan()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.state.isScanRunning)
-
-                    Button("Select Low Risk") {
-                        model.selectRecommended(includeMediumRisk: false)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.state.categories.isEmpty)
-
-                    Button("Select Recommended") {
-                        model.selectRecommended(includeMediumRisk: true)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.state.categories.isEmpty)
-
-                    Button("Clear") {
-                        model.clearSelection()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(selectedCount == 0)
-                }
-
-                HStack(spacing: 8) {
-                    Button("Clean Selected") {
-                        pendingCleanMode = .selected
-                        showConfirm = true
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(selectedCount == 0)
-
-                    Button("Quick Clean Safe") {
-                        pendingCleanMode = .safeLowRisk
-                        showConfirm = true
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.state.categories.isEmpty)
-
-                    Button("Quick Clean Recommended") {
-                        pendingCleanMode = .recommended
-                        showConfirm = true
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(model.state.categories.isEmpty)
-                }
-            }
+            EmptyView()
         }
+    }
+
+    private var privacyToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "Categories \(model.state.categories.count)", tint: .blue)
+                GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
+                GlassPillBadge(
+                    title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
+                    tint: .orange
+                )
+
+                Button("Scan Privacy Traces") {
+                    model.runScan()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(model.state.isScanRunning)
+
+                Button("Select Low Risk") {
+                    model.selectRecommended(includeMediumRisk: false)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.state.categories.isEmpty)
+
+                Button("Select Recommended") {
+                    model.selectRecommended(includeMediumRisk: true)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.state.categories.isEmpty)
+
+                Button("Clear") {
+                    model.clearSelection()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedCount == 0)
+
+                Button("Clean Selected") {
+                    pendingCleanMode = .selected
+                    showConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedCount == 0)
+
+                Button("Quick Clean Safe") {
+                    pendingCleanMode = .safeLowRisk
+                    showConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.state.categories.isEmpty)
+
+                Button("Quick Clean Recommended") {
+                    pendingCleanMode = .recommended
+                    showConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.state.categories.isEmpty)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var categoriesList: some View {

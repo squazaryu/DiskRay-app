@@ -69,6 +69,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private var batterySmoother = BatterySmoother()
     private var tickCounter = 0
     private var isSamplingConsumers = false
+    private var isConsumerSamplingEnabled = true
 
     init(updateInterval: TimeInterval = 1.0, heavySamplePeriod: TimeInterval = 4.0) {
         let safeInterval = max(0.4, updateInterval)
@@ -103,6 +104,13 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         powerNotifier.onPowerSourceChanged = nil
     }
 
+    func setConsumerSamplingEnabled(_ enabled: Bool, sampleImmediately: Bool = false) {
+        isConsumerSamplingEnabled = enabled
+        if enabled, sampleImmediately {
+            tickCounter = heavySampleTickInterval
+        }
+    }
+
     private func update() {
         let now = Date()
         let cpu = cpuSample()
@@ -115,7 +123,9 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         )
         let network = networkSample(at: now)
         tickCounter += 1
-        if (tickCounter.isMultiple(of: heavySampleTickInterval) || cachedCPUConsumers.isEmpty), !isSamplingConsumers {
+        if isConsumerSamplingEnabled,
+           (tickCounter.isMultiple(of: heavySampleTickInterval) || cachedCPUConsumers.isEmpty),
+           !isSamplingConsumers {
             isSamplingConsumers = true
             DispatchQueue.global(qos: .utility).async {
                 let consumers = ProcessConsumerSampler.sample()

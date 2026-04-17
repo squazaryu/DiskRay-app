@@ -22,9 +22,9 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let adaptiveSidebarWidth = min(172, max(68, proxy.size.width * 0.118))
-            let compactSidebar = adaptiveSidebarWidth < 132
-            let sidebarWidth: CGFloat = compactSidebar ? 74 : adaptiveSidebarWidth
+            let adaptiveSidebarWidth = min(156, max(64, proxy.size.width * 0.102))
+            let compactSidebar = adaptiveSidebarWidth < 118
+            let sidebarWidth: CGFloat = compactSidebar ? 62 : adaptiveSidebarWidth
 
             ZStack {
                 GlassShellBackground()
@@ -36,9 +36,8 @@ struct RootView: View {
                         .glassSurface(cornerRadius: 20, strokeOpacity: 0.18, shadowOpacity: 0.10, padding: 10)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionHeader
-
-                        if model.permissions.firstLaunchNeedsSetup {
+                        if model.permissions.firstLaunchNeedsSetup
+                            && (!model.permissions.hasFolderPermission || !model.permissions.hasFullDiskAccess) {
                             permissionsOnboardingCard
                                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.14, shadowOpacity: 0.08, padding: 12)
                         }
@@ -154,32 +153,6 @@ struct RootView: View {
             .padding(.horizontal, isCompact ? 0 : 6)
             .padding(.bottom, 4)
             .help(model.permissions.hasFullDiskAccess ? "Full Disk Access: On" : "Full Disk Access: Required")
-        }
-    }
-
-    private var sectionHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(model.localizedSectionTitle(for: model.selectedSection))
-                .font(.title2.bold())
-            Text(sectionSubtitle(for: model.selectedSection))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 14)
-    }
-
-    private func sectionSubtitle(for section: AppSection) -> String {
-        switch section {
-        case .smartCare: return "Guided cleanup recommendations with risk-aware controls."
-        case .clutter: return "Duplicate detection and reclaimable storage management."
-        case .uninstaller: return "Remove apps and verify leftover artifacts."
-        case .repair: return "Reset app state by cleaning low-risk supporting artifacts."
-        case .spaceLens: return "Visual disk map and direct folder-level cleanup actions."
-        case .search: return "Live file discovery with targeted cleanup workflows."
-        case .performance: return "System diagnostics, load relief, battery and energy analytics."
-        case .privacy: return "Review and clean privacy-sensitive cached artifacts."
-        case .recovery: return "Rollback and restore items moved through DiskRay actions."
-        case .settings: return "Language, appearance and permission control center."
         }
     }
 
