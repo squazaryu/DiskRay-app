@@ -86,6 +86,7 @@ struct RepairView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            actionsToolbar
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 10) {
@@ -155,14 +156,10 @@ struct RepairView: View {
                             Toggle("Relaunch app after repair", isOn: $relaunchAfterRepair)
                                 .toggleStyle(.switch)
                             Spacer()
-                            Picker("Strategy", selection: $repairStrategy) {
-                                ForEach(AppRepairStrategy.allCases) { strategy in
-                                    Text(strategy.title).tag(strategy)
-                                }
+                            HStack(spacing: 6) {
+                                Text("Strategy")
+                                repairStrategyMenu
                             }
-                            .pickerStyle(.menu)
-                            .frame(width: 246)
-                            .fixedSize(horizontal: true, vertical: false)
                             Button("Apply Strategy") {
                                 applySelectedStrategy()
                             }
@@ -291,19 +288,52 @@ struct RepairView: View {
             title: "App Repair",
             subtitle: "Reset problematic app data safely without reinstalling."
         ) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                    GlassPillBadge(title: "\(repairArtifacts.count) artifacts", tint: .orange)
-                    GlassPillBadge(title: "Selected \(selectedArtifacts.count)", tint: .green)
+            EmptyView()
+        }
+    }
 
-                    Button("Rescan Apps") {
-                        model.uninstaller.loadInstalledApps()
+    private var actionsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
+                GlassPillBadge(title: "\(repairArtifacts.count) artifacts", tint: .orange)
+                GlassPillBadge(title: "Selected \(selectedArtifacts.count)", tint: .green)
+
+                Button("Rescan Apps") {
+                    model.uninstaller.loadInstalledApps()
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var repairStrategyMenu: some View {
+        Menu {
+            ForEach(AppRepairStrategy.allCases) { strategy in
+                Button {
+                    repairStrategy = strategy
+                } label: {
+                    if strategy == repairStrategy {
+                        Label(strategy.title, systemImage: "checkmark")
+                    } else {
+                        Text(strategy.title)
                     }
-                    .buttonStyle(.bordered)
                 }
             }
+        } label: {
+            HStack(spacing: 6) {
+                Text(repairStrategy.title)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .frame(minWidth: 132, alignment: .leading)
         }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private func repairSidebarRow(_ app: InstalledApp) -> some View {

@@ -64,7 +64,7 @@ final class ClutterViewModel: ObservableObject {
             },
             onSuccessfulCleanup: { [weak self] in
                 guard let self, self.root.lastScannedTarget != nil else { return }
-                self.root.rescan()
+                self.root.scheduleRescanAfterMutation()
             }
         )
     }

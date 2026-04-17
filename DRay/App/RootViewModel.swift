@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import Combine
 
 struct ScanTarget {
     let name: String
@@ -283,9 +282,12 @@ final class RootViewModel: ObservableObject {
     private let menuBarLoginAgentService: MenuBarLoginAgentService
     private let indexStore: SQLiteIndexStore?
     private let safeFileOperations: SafeFileOperationService
+    private let workspaceActions: any WorkspaceActioning
     private let uiSettingsStore: any UISettingsStoring
+    private let postMutationRescanDelay: TimeInterval = 0.35
     private var scanTask: Task<Void, Never>?
-    private var featureStateCancellables = Set<AnyCancellable>()
+    private var scheduledRescanTask: Task<Void, Never>?
+    private var pendingRescanTarget: ScanTarget?
 
     init(initialSection: AppSection? = nil, dependencies: RootViewModelDependencies = .live) {
         self.permissions = dependencies.permissions
@@ -315,6 +317,7 @@ final class RootViewModel: ObservableObject {
         self.menuBarLoginAgentService = dependencies.menuBarLoginAgentService
         self.indexStore = dependencies.indexStore
         self.safeFileOperations = dependencies.safeFileOperations
+        self.workspaceActions = dependencies.workspaceActions
         self.uiSettingsStore = dependencies.uiSettingsStore
         self.duplicatesController = DuplicatesFeatureController(
             duplicateFinderService: dependencies.duplicateFinderService,
@@ -366,31 +369,6 @@ final class RootViewModel: ObservableObject {
         if let initialSection {
             selectedSection = initialSection
         }
-
-        search.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        smartCareController.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        duplicatesController.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        privacy.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        recovery.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        uninstaller.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        repair.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
-        performanceController.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &featureStateCancellables)
 
         let context = FeatureContext(
             canRunProtectedModule: { [weak self] actionName in
@@ -744,7 +722,7 @@ final class RootViewModel: ObservableObject {
             operationLogs.add(category: "telemetry", message: "Crash telemetry log is empty")
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        workspaceActions.reveal([url])
         operationLogs.add(category: "telemetry", message: "Revealed crash telemetry log: \(url.path)")
     }
 
@@ -800,9 +778,17 @@ final class RootViewModel: ObservableObject {
     }
 
     func rescan() {
+        scheduledRescanTask?.cancel()
+        scheduledRescanTask = nil
+        pendingRescanTarget = nil
         guard let lastScannedTarget else { return }
         selectedTarget = lastScannedTarget
         scanSelected()
+    }
+
+    func scheduleRescanAfterMutation() {
+        guard let lastScannedTarget else { return }
+        scheduleCoalescedRescan(for: lastScannedTarget)
     }
 
     func restorePermissions() {
@@ -825,11 +811,11 @@ final class RootViewModel: ObservableObject {
     }
 
     func revealInFinder(_ node: FileNode) {
-        NSWorkspace.shared.activateFileViewerSelecting([node.url])
+        workspaceActions.reveal([node.url])
     }
 
     func openItem(_ node: FileNode) {
-        NSWorkspace.shared.open(node.url)
+        workspaceActions.open(node.url)
     }
 
     func moveToTrash(_ node: FileNode) {
@@ -883,8 +869,7 @@ final class RootViewModel: ObservableObject {
         }
 
         if moved > 0, let lastScannedTarget {
-            selectedTarget = lastScannedTarget
-            scanSelected()
+            scheduleCoalescedRescan(for: lastScannedTarget)
         }
 
         return TrashOperationResult(
@@ -946,8 +931,7 @@ final class RootViewModel: ObservableObject {
         }
         guard result.restoredCount > 0 else { return false }
         if let lastScannedTarget {
-            selectedTarget = lastScannedTarget
-            scanSelected()
+            scheduleCoalescedRescan(for: lastScannedTarget)
         }
         return true
     }
@@ -1045,6 +1029,27 @@ final class RootViewModel: ObservableObject {
 
     private func markLatestQuickRollbackSessionResolved(summary: String) {
         recovery.markLatestRollbackSessionResolved(summary: summary)
+    }
+
+    private func scheduleCoalescedRescan(for target: ScanTarget) {
+        pendingRescanTarget = target
+        scheduledRescanTask?.cancel()
+
+        let delayNanos = UInt64(postMutationRescanDelay * 1_000_000_000)
+        scheduledRescanTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: delayNanos)
+            guard !Task.isCancelled else { return }
+            await self.performScheduledRescanIfNeeded()
+        }
+    }
+
+    private func performScheduledRescanIfNeeded() {
+        guard let target = pendingRescanTarget else { return }
+        pendingRescanTarget = nil
+        scheduledRescanTask = nil
+        selectedTarget = target
+        scanSelected()
     }
 
 }

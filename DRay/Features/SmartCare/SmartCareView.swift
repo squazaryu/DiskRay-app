@@ -14,6 +14,7 @@ struct SmartCareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            smartActionsToolbar
             WorkspaceSegmentBar(
                 title: "Workspace",
                 selection: $workspaceTab,
@@ -32,11 +33,15 @@ struct SmartCareView: View {
             Group {
                 switch workspaceTab {
                 case .overview:
-                    smartOverview
+                    ScrollView(.vertical, showsIndicators: true) {
+                        smartOverview
+                    }
                 case .categories:
                     categoriesWorkspace
                 case .exclusions:
-                    exclusionsPanel
+                    ScrollView(.vertical, showsIndicators: true) {
+                        exclusionsPanel
+                    }
                 }
             }
             .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : 12)
@@ -151,76 +156,99 @@ struct SmartCareView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Smart Care")
-                    .font(.title3.weight(.bold))
-                Text(headerSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-
-            GlassPillBadge(
-                title: "Cat \(model.smartCare.categories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
-                tint: .blue
-            )
-
-            Picker("Profile", selection: Binding(
-                get: { model.smartCare.profile },
-                set: { model.applySmartProfile($0) }
-            )) {
-                ForEach(SmartCleanProfile.allCases) { profile in
-                    Text(profile.title).tag(profile)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 230)
-            .fixedSize(horizontal: true, vertical: false)
-
-            Button("Run") {
-                selectedItemPaths.removeAll()
-                model.runSmartScan()
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
-
-            Button("Clean") {
-                cleanSelection()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
-
-            Menu {
-                Button("Run Full Smart Scan") {
-                    selectedItemPaths.removeAll()
-                    model.runUnifiedScan()
-                }
-                .disabled(model.isUnifiedScanRunning)
-
-                Button("Quick Clean Recommended") {
-                    selectedItemPaths.removeAll()
-                    model.cleanRecommendedSmartCategories()
-                }
-                .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
-
-                Divider()
-
-                Button("Select Recommended") {
-                    selectedItemPaths.removeAll()
-                    model.selectRecommendedSmartCategories()
-                }
-                .disabled(model.smartCare.categories.isEmpty)
-            } label: {
-                Label("More", systemImage: "ellipsis.circle")
-            }
-            .controlSize(.small)
-            .buttonStyle(.bordered)
+        ModuleHeaderCard(
+            title: "Smart Care",
+            subtitle: headerSubtitle
+        ) {
+            EmptyView()
         }
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.08, padding: 10)
+    }
+
+    private var smartActionsToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                GlassPillBadge(
+                    title: "Cat \(model.smartCare.categories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
+                    tint: .blue
+                )
+
+                HStack(spacing: 6) {
+                    Text("Profile")
+                        .foregroundStyle(.secondary)
+                    profileMenu
+                }
+
+                Button("Run") {
+                    selectedItemPaths.removeAll()
+                    model.runSmartScan()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
+
+                Button("Clean") {
+                    cleanSelection()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+
+                Menu {
+                    Button("Run Full Smart Scan") {
+                        selectedItemPaths.removeAll()
+                        model.runUnifiedScan()
+                    }
+                    .disabled(model.isUnifiedScanRunning)
+
+                    Button("Quick Clean Recommended") {
+                        selectedItemPaths.removeAll()
+                        model.cleanRecommendedSmartCategories()
+                    }
+                    .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
+
+                    Divider()
+
+                    Button("Select Recommended") {
+                        selectedItemPaths.removeAll()
+                        model.selectRecommendedSmartCategories()
+                    }
+                    .disabled(model.smartCare.categories.isEmpty)
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var profileMenu: some View {
+        Menu {
+            ForEach(SmartCleanProfile.allCases) { profile in
+                Button {
+                    model.applySmartProfile(profile)
+                } label: {
+                    if profile == model.smartCare.profile {
+                        Label(profile.title, systemImage: "checkmark")
+                    } else {
+                        Text(profile.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(model.smartCare.profile.title)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .frame(minWidth: 126, alignment: .leading)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private var exclusionsPanel: some View {

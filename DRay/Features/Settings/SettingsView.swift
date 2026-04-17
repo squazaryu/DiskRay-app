@@ -10,13 +10,10 @@ struct SettingsView: View {
                 title: model.localized(.settingsTitle),
                 subtitle: model.localized(.settingsSubtitle)
             ) {
-                Button(model.localized(.settingsRefresh)) {
-                    model.refreshPermissions()
-                    model.refreshLaunchAtLoginStatus()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                EmptyView()
             }
+
+            settingsToolbar
 
             ScrollView {
                 VStack(spacing: 12) {
@@ -34,6 +31,21 @@ struct SettingsView: View {
             model.refreshPermissions()
             model.refreshLaunchAtLoginStatus()
         }
+    }
+
+    private var settingsToolbar: some View {
+        HStack {
+            Spacer()
+            Button(model.localized(.settingsRefresh)) {
+                model.refreshPermissions()
+                model.refreshLaunchAtLoginStatus()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var languageCard: some View {
