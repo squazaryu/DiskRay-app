@@ -183,6 +183,8 @@ final class AppBundleIconThemeSynchronizer {
     static let shared = AppBundleIconThemeSynchronizer()
 
     private let themeNotification = Notification.Name("AppleInterfaceThemeChangedNotification")
+    private let appearanceDefaults = UserDefaults(suiteName: "com.squazaryu.DRay")
+    private let appearanceKey = "dray.ui.appearance"
     private var appPath: String?
     private var observer: NSObjectProtocol?
     private var lastIconName: String?
@@ -216,7 +218,7 @@ final class AppBundleIconThemeSynchronizer {
     func applyCurrentThemeIcon(force: Bool) {
         guard let appPath else { return }
 
-        let preferredName = currentThemeIsDark ? "DRayDark" : "DRayLight"
+        let preferredName = preferredIconName
         if !force, lastIconName == preferredName { return }
 
         let resourceRoot = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/Resources", isDirectory: true)
@@ -236,7 +238,15 @@ final class AppBundleIconThemeSynchronizer {
         lastIconName = preferredName
     }
 
-    private var currentThemeIsDark: Bool {
+    private var preferredIconName: String {
+        if let appearanceRaw = appearanceDefaults?.string(forKey: appearanceKey)?.lowercased() {
+            if appearanceRaw == "light" { return "DRayLight" }
+            if appearanceRaw == "dark" { return "DRayDark" }
+        }
+        return currentSystemThemeIsDark ? "DRayDark" : "DRayLight"
+    }
+
+    private var currentSystemThemeIsDark: Bool {
         let appearance = NSApplication.shared.effectiveAppearance
         if let match = appearance.bestMatch(from: [.darkAqua, .aqua]) {
             return match == .darkAqua

@@ -713,20 +713,20 @@ final class RootViewModel: ObservableObject {
                     clearStartupCleanup: true
                 )
 
-                self.unifiedScanSummary = UnifiedScanSummary(
-                    smartCareCategories: smart.categories.count,
-                    smartCareBytes: smart.totalBytes,
-                    privacyCategories: privacy.categories.count,
-                    privacyBytes: privacy.totalBytes,
-                    startupEntries: performance.startupEntries.count,
-                    startupBytes: performance.startupTotalBytes,
-                    finishedAt: Date()
+                self.unifiedScanSummary = RootUnifiedScanCoordinator.buildSummary(
+                    smartResult: smart,
+                    privacyReport: privacy,
+                    performanceReport: performance
                 )
 
                 self.isUnifiedScanRunning = false
                 self.operationLogs.add(
                     category: "scan",
-                    message: "Unified scan done: smart \(smart.categories.count), privacy \(privacy.categories.count), startup \(performance.startupEntries.count)"
+                    message: RootUnifiedScanCoordinator.completionMessage(
+                        smartResult: smart,
+                        privacyReport: privacy,
+                        performanceReport: performance
+                    )
                 )
             }
         }
@@ -758,58 +758,26 @@ final class RootViewModel: ObservableObject {
 
     @discardableResult
     func exportOperationLogReport() -> URL? {
-        let url = operationLogs.exportJSON()
+        let exportResult = RootDiagnosticsExporter.exportOperationLog(using: operationLogs)
+        let url = exportResult.exportedURL
         lastExportedOperationLogURL = url
-        if let url {
-            operationLogs.add(category: "telemetry", message: "Exported operation log report to \(url.path)")
-        } else {
-            operationLogs.add(category: "telemetry", message: "Failed to export operation log report")
-        }
+        operationLogs.add(category: "telemetry", message: exportResult.telemetryMessage)
         return url
     }
 
     @discardableResult
     func exportDiagnosticReport() -> URL? {
-        let report = DiagnosticReport(
-            generatedAt: Date(),
+        let exportResult = RootDiagnosticsExporter.exportDiagnosticReport(
             selectedTargetPath: selectedTarget.url.path,
-            unifiedScanSummary: unifiedScanSummary.map {
-                UnifiedScanSnapshot(
-                    smartCareCategories: $0.smartCareCategories,
-                    smartCareBytes: $0.smartCareBytes,
-                    privacyCategories: $0.privacyCategories,
-                    privacyBytes: $0.privacyBytes,
-                    startupEntries: $0.startupEntries,
-                    startupBytes: $0.startupBytes,
-                    finishedAt: $0.finishedAt
-                )
-            },
+            unifiedScanSummary: unifiedScanSummary,
             smartCareCategoryCount: smartCareController.state.categories.count,
             privacyCategoryCount: privacyCategories.count,
             startupEntryCount: performanceReport?.startupEntries.count ?? 0,
-            operationLogs: Array(operationLogs.entries.prefix(300))
+            operationLogEntries: Array(operationLogs.entries.prefix(300))
         )
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(report),
-              let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
-            operationLogs.add(category: "telemetry", message: "Failed to export diagnostic report")
-            return nil
-        }
-
-        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let url = downloads.appendingPathComponent("dray-diagnostic-\(stamp).json")
-        do {
-            try data.write(to: url, options: [.atomic])
-            lastExportedDiagnosticURL = url
-            operationLogs.add(category: "telemetry", message: "Exported diagnostic report to \(url.path)")
-            return url
-        } catch {
-            operationLogs.add(category: "telemetry", message: "Failed to save diagnostic report")
-            return nil
-        }
+        lastExportedDiagnosticURL = exportResult.exportedURL
+        operationLogs.add(category: "telemetry", message: exportResult.telemetryMessage)
+        return exportResult.exportedURL
     }
 
     func revealCrashTelemetry() {
@@ -1059,43 +1027,18 @@ final class RootViewModel: ObservableObject {
     }
 
     private func persistAndResolveBookmark(for url: URL) -> URL? {
-        do {
-            let bookmark = try url.bookmarkData(
-                options: [.withSecurityScope],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
-            uiSettingsStore.saveSelectedTargetBookmark(bookmark)
-
-            var isStale = false
-            let resolvedURL = try URL(
-                resolvingBookmarkData: bookmark,
-                options: [.withSecurityScope],
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            return resolvedURL
-        } catch {
-            return nil
-        }
+        RootTargetBookmarkCoordinator.persistAndResolveBookmark(
+            for: url,
+            store: uiSettingsStore
+        )
     }
 
     private func restoreLastTargetIfPossible() -> Bool {
-        guard let data = uiSettingsStore.loadSelectedTargetBookmark() else { return false }
-        do {
-            var isStale = false
-            let url = try URL(
-                resolvingBookmarkData: data,
-                options: [.withSecurityScope],
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            selectedTarget = ScanTarget(name: url.lastPathComponent, url: url)
-            return true
-        } catch {
-            uiSettingsStore.clearSelectedTargetBookmark()
+        guard let url = RootTargetBookmarkCoordinator.restoreLastTarget(store: uiSettingsStore) else {
             return false
         }
+        selectedTarget = ScanTarget(name: url.lastPathComponent, url: url)
+        return true
     }
 
     private func applyInitialScanTarget() {
@@ -1119,7 +1062,7 @@ final class RootViewModel: ObservableObject {
     }
 
     private func clearSavedTargetBookmark() {
-        uiSettingsStore.clearSelectedTargetBookmark()
+        RootTargetBookmarkCoordinator.clearSavedTargetBookmark(store: uiSettingsStore)
     }
 
     func resetSavedTargetBookmark() {

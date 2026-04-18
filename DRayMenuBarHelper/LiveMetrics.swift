@@ -70,6 +70,8 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private var tickCounter = 0
     private var isSamplingConsumers = false
     private var isConsumerSamplingEnabled = true
+    private var fullSampleTickInterval = 1
+    private var shouldForceFullSample = true
 
     init(updateInterval: TimeInterval = 1.0, heavySamplePeriod: TimeInterval = 4.0) {
         let safeInterval = max(0.4, updateInterval)
@@ -106,23 +108,48 @@ final class LiveSystemMetricsMonitor: ObservableObject {
 
     func setConsumerSamplingEnabled(_ enabled: Bool, sampleImmediately: Bool = false) {
         isConsumerSamplingEnabled = enabled
-        if enabled, sampleImmediately {
-            tickCounter = heavySampleTickInterval
+        // Keep full diagnostics sampling dense while popup is visible,
+        // and relaxed while hidden to reduce background system work.
+        fullSampleTickInterval = enabled ? 1 : max(2, heavySampleTickInterval)
+        if sampleImmediately {
+            shouldForceFullSample = true
+            if enabled {
+                tickCounter = heavySampleTickInterval
+            }
         }
     }
 
     private func update() {
         let now = Date()
-        let cpu = cpuSample()
-        let memory = memorySample()
-        let disk = diskSample()
         let battery = batterySmoother.ingest(
             batterySample(),
             source: .timer,
             now: now
         )
-        let network = networkSample(at: now)
         tickCounter += 1
+        let runFullSample = shouldForceFullSample
+            || tickCounter.isMultiple(of: fullSampleTickInterval)
+            || snapshot.memoryTotalBytes == 0
+            || snapshot.diskTotalBytes == 0
+
+        let cpu: (totalLoad: Double, user: Double, system: Double)
+        let memory: (used: Int64, total: Int64, pressure: Double)
+        let disk: (free: Int64, total: Int64)
+        let network: (downPerSecond: Double, upPerSecond: Double)
+
+        if runFullSample {
+            cpu = cpuSample()
+            memory = memorySample()
+            disk = diskSample()
+            network = networkSample(at: now)
+            shouldForceFullSample = false
+        } else {
+            cpu = (snapshot.cpuLoadPercent, snapshot.cpuUserPercent, snapshot.cpuSystemPercent)
+            memory = (snapshot.memoryUsedBytes, snapshot.memoryTotalBytes, snapshot.memoryPressurePercent)
+            disk = (snapshot.diskFreeBytes, snapshot.diskTotalBytes)
+            network = (snapshot.networkDownBytesPerSecond, snapshot.networkUpBytesPerSecond)
+        }
+
         if isConsumerSamplingEnabled,
            (tickCounter.isMultiple(of: heavySampleTickInterval) || cachedCPUConsumers.isEmpty),
            !isSamplingConsumers {

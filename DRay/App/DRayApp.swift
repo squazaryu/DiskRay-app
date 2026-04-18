@@ -423,18 +423,18 @@ private struct ThemedRootContainer: View {
         RootView(model: model)
             .preferredColorScheme(preferredColorScheme)
             .onAppear {
-                AppIconThemeController.shared.apply(for: colorScheme)
+                AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
                 guard !didAppear else { return }
                 didAppear = true
                 onInitialAppear()
             }
             .onChange(of: colorScheme) {
-                AppIconThemeController.shared.apply(for: colorScheme)
+                AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
             }
             .onChange(of: model.appAppearance) {
                 // App appearance update can race with ColorScheme propagation.
                 DispatchQueue.main.async {
-                    AppIconThemeController.shared.apply(for: colorScheme)
+                    AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
                 }
             }
     }
@@ -445,20 +445,24 @@ private final class AppIconThemeController {
     static let shared = AppIconThemeController()
 
     private var lastAppliedIconName: String?
+    private var lastAppliedBundleIconName: String?
 
     private init() {}
 
-    func apply(for colorScheme: ColorScheme) {
-        let preferredNames = colorScheme == .dark
+    func apply(for colorScheme: ColorScheme, appearance: AppAppearance) {
+        let useDarkIcon = resolveDarkIconPreference(colorScheme: colorScheme, appearance: appearance)
+        let preferredNames = useDarkIcon
             ? ["DRayDark", "DRay", "DRayLight"]
             : ["DRayLight", "DRay", "DRayDark"]
 
         for name in preferredNames {
             guard let image = icon(named: name) else { continue }
-            guard lastAppliedIconName != name else { return }
-            NSApp.applicationIconImage = image
-            NSApp.dockTile.display()
-            lastAppliedIconName = name
+            if lastAppliedIconName != name {
+                NSApp.applicationIconImage = image
+                NSApp.dockTile.display()
+                lastAppliedIconName = name
+            }
+            applyBundleIcon(image: image, name: name)
             return
         }
     }
@@ -468,5 +472,33 @@ private final class AppIconThemeController {
             return nil
         }
         return NSImage(contentsOf: url)
+    }
+
+    private func applyBundleIcon(image: NSImage, name: String) {
+        guard lastAppliedBundleIconName != name else { return }
+        let appPath = Bundle.main.bundlePath
+        guard !appPath.isEmpty else { return }
+        guard NSWorkspace.shared.setIcon(image, forFile: appPath, options: []) else { return }
+        lastAppliedBundleIconName = name
+    }
+
+    private func resolveDarkIconPreference(colorScheme: ColorScheme, appearance: AppAppearance) -> Bool {
+        switch appearance {
+        case .light:
+            return false
+        case .dark:
+            return true
+        case .system:
+            return currentSystemThemeIsDark ?? (colorScheme == .dark)
+        }
+    }
+
+    private var currentSystemThemeIsDark: Bool? {
+        guard let style = UserDefaults.standard
+            .persistentDomain(forName: UserDefaults.globalDomain)?["AppleInterfaceStyle"] as? String
+        else {
+            return nil
+        }
+        return style.caseInsensitiveCompare("dark") == .orderedSame
     }
 }

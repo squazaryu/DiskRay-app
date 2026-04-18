@@ -53,12 +53,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 2.0.3 2
+./scripts/install_app.sh 2.0.3 4
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 2.0.3 2
+./scripts/package_release.sh 2.0.3 4
 ```
 Artifacts are created in `dist`.
 
@@ -74,7 +74,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.0.3 2`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.0.3 4`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -86,6 +86,10 @@ Optional:
 - Release process: `docs/RELEASE.md`
 - Roadmap: `docs/ROADMAP.md`
 - Past notes: `docs/releases`
+- Agent guide: `AGENTS.md`
+- Architecture 2X: `docs/ARCHITECTURE_2X.md`
+- Performance workspace model: `docs/PERFORMANCE_WORKSPACE.md`
+- Settings model: `docs/SETTINGS_MODEL.md`
 
 ## Current Channel
-`v2.0.3` is the active release channel with the premium redesign shell, adaptive sidebar, refreshed helper popup, structured Performance workspace, and the Uninstaller first-load refresh fix.
+`v2.0.3 (build 4)` is the active release channel with the premium redesign shell, adaptive sidebar, refreshed helper popup, structured Performance workspace, and the Uninstaller first-load refresh fix.
