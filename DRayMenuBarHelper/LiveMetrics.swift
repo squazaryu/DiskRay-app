@@ -110,7 +110,10 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         isConsumerSamplingEnabled = enabled
         // Keep full diagnostics sampling dense while popup is visible,
         // and relaxed while hidden to reduce background system work.
-        fullSampleTickInterval = enabled ? 1 : max(2, heavySampleTickInterval)
+        fullSampleTickInterval = enabled ? 1 : max(8, heavySampleTickInterval * 2)
+        if !enabled {
+            tickCounter = 0
+        }
         if sampleImmediately {
             shouldForceFullSample = true
             if enabled {

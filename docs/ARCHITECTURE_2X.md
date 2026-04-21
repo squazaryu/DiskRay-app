@@ -9,8 +9,11 @@ This document describes the current maintainable boundaries after staged cleanup
 ## App Shell
 - `RootViewModel` remains the app coordinator.
 - Focused collaborators under `DRay/App/Root/` hold extracted helper responsibilities:
+  - `RootDomainModels`
+  - `RootScanTargetCoordinator`
   - `RootDiagnosticsExporter`
   - `RootTargetBookmarkCoordinator`
+  - `RootTrashResultMessageFormatter`
   - `RootUnifiedScanCoordinator`
 
 The coordinator owns state; collaborators are stateless/operation-focused.
@@ -19,16 +22,27 @@ The coordinator owns state; collaborators are stateless/operation-focused.
 - Feature controllers own feature state and call use-cases/services.
 - `Performance` UI is decomposed by role:
   - view shell: `PerformanceView.swift`
-  - workspace composition: `PerformanceView+WorkspaceContent.swift`
+  - workspace composition:
+    - `PerformanceView+WorkspaceOverview.swift`
+    - `PerformanceView+WorkspaceSystemLoad.swift`
+    - `PerformanceView+WorkspaceBatteryEnergy.swift`
+    - `PerformanceView+WorkspaceStartup.swift`
+    - `PerformanceView+WorkspaceNetwork.swift`
   - shared UI pieces: `PerformanceView+WorkspaceComponents.swift`
-  - presentation helpers: `PerformanceView+PresentationHelpers.swift`
+  - presentation helpers:
+    - `PerformanceView+LiveLoadHelpers.swift`
+    - `PerformanceView+StartupNetworkHelpers.swift`
+    - `PerformanceView+FormattingHelpers.swift`
   - shared types: `PerformanceViewTypes.swift`
 
 ## Settings
 - `Settings` is a global control center (not per-screen preference dump).
 - Sections are decomposed from main view shell:
   - `SettingsView.swift`
-  - `SettingsView+Sections.swift`
+  - `SettingsView+SectionScaffold.swift`
+  - `SettingsView+GeneralScanningSections.swift`
+  - `SettingsView+PermissionsSection.swift`
+  - `SettingsView+RecoveryDiagnosticsSections.swift`
   - `SettingsPermissionAvailability.swift`
 
 ## Permissions
@@ -38,8 +52,8 @@ The coordinator owns state; collaborators are stateless/operation-focused.
 ## Helper Hygiene
 - Helper monitor uses adaptive sampling cadence:
   - dense full sampling while popup is active,
-  - reduced full sampling while hidden,
-  - battery signal still refreshed continuously.
+  - reduced full sampling while hidden.
+- Battery details refresh is scoped to visible battery sheet lifecycle (no always-on hidden timer).
 
 ## Non-goals
 - No new architecture framework.

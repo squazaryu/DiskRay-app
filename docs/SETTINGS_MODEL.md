@@ -2,6 +2,14 @@
 
 `Settings` is a global control center for DRay behavior, safety, and diagnostics actions.
 
+## UI Composition
+- Shell: `DRay/Features/Settings/SettingsView.swift`
+- Section scaffold/shared rows: `.../SettingsView+SectionScaffold.swift`
+- General + Scanning/Cleanup: `.../SettingsView+GeneralScanningSections.swift`
+- Permissions: `.../SettingsView+PermissionsSection.swift`
+- Recovery/Safety + Diagnostics: `.../SettingsView+RecoveryDiagnosticsSections.swift`
+- Permission impact mapping: `.../SettingsPermissionAvailability.swift`
+
 ## Sections
 1. **General**
 - Language
@@ -42,7 +50,7 @@ Settings are persisted via existing store patterns (`UISettingsStore` and existi
 No new persistence framework is introduced.
 
 ## Permission Clarity Rule
-Permission impact text should describe real blocked/limited flows only.
+Permission impact text should describe real blocked/limited flows only, mapped to active gate usage (for example: `Performance Diagnostics`, `Privacy Scan`, `Unified Scan`, `App Repair / Uninstall / Verify`, and cleanup flows that require write/full-disk access).
 Do not introduce conceptual warnings that are not backed by actual gate usage.
 
 ## Maintenance Rule

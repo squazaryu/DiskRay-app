@@ -11,6 +11,8 @@ final class MenuBarPopupModel: ObservableObject {
     private let loginAgentService: MenuBarLoginAgentService
     private let reliefService = LoadReliefService()
     private let batteryService = BatteryDiagnosticsService()
+    private var cachedBatterySnapshot: (timestamp: Date, snapshot: BatteryDiagnosticsSnapshot)?
+    private let batteryDetailsCacheTTL: TimeInterval = 2.0
 
     init(config: HelperConfig) {
         appPath = config.appPath
@@ -61,8 +63,16 @@ final class MenuBarPopupModel: ObservableObject {
         reliefService.hasAdjustments
     }
 
-    func fetchBatteryDetails() -> BatteryDiagnosticsSnapshot {
-        batteryService.fetchSnapshot()
+    func fetchBatteryDetails(force: Bool = false) -> BatteryDiagnosticsSnapshot {
+        let now = Date()
+        if !force,
+           let cachedBatterySnapshot,
+           now.timeIntervalSince(cachedBatterySnapshot.timestamp) <= batteryDetailsCacheTTL {
+            return cachedBatterySnapshot.snapshot
+        }
+        let snapshot = batteryService.fetchSnapshot()
+        cachedBatterySnapshot = (timestamp: now, snapshot: snapshot)
+        return snapshot
     }
 
     private func formatReliefResult(_ result: LoadReliefResult) -> String {
@@ -190,7 +200,7 @@ private struct MenuBarPopupView: View {
     @State private var suppressBatteryDetailsOpenUntil = Date.distantPast
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
-    private let batteryRefreshTimer = Timer.publish(every: 5.0, on: .main, in: .common).autoconnect()
+    @State private var batteryAutoRefreshTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -223,15 +233,17 @@ private struct MenuBarPopupView: View {
             showReliefConfirm = false
             pendingReliefAction = nil
             monitor.setConsumerSamplingEnabled(false)
+            stopBatteryAutoRefresh()
         }
         .onChange(of: showBatteryDetails) {
+            if showBatteryDetails {
+                startBatteryAutoRefresh()
+            } else {
+                stopBatteryAutoRefresh()
+            }
             if !showBatteryDetails {
                 suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
             }
-        }
-        .onReceive(batteryRefreshTimer) { _ in
-            guard showBatteryDetails else { return }
-            loadBatteryDetails()
         }
         .overlay(alignment: .bottom) {
             if let message = model.reliefResultMessage {
@@ -258,7 +270,7 @@ private struct MenuBarPopupView: View {
                         snapshot: batterySnapshot,
                         isLoading: isBatteryDetailsLoading,
                         errorText: batteryDetailsError,
-                        onRefresh: loadBatteryDetails,
+                        onRefresh: { loadBatteryDetails(force: true) },
                         onClose: { closeBatteryDetails() }
                     )
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.14), radius: 16, y: 8)
@@ -950,7 +962,7 @@ private struct MenuBarPopupView: View {
         }
 
         showBatteryDetails = true
-        loadBatteryDetails()
+        loadBatteryDetails(force: false)
     }
 
     private func closeBatteryDetails() {
@@ -959,12 +971,12 @@ private struct MenuBarPopupView: View {
         showBatteryDetails = false
     }
 
-    private func loadBatteryDetails() {
+    private func loadBatteryDetails(force: Bool) {
         guard !isBatteryDetailsLoading else { return }
         isBatteryDetailsLoading = true
         batteryDetailsError = nil
         Task(priority: .userInitiated) {
-            let snapshot = model.fetchBatteryDetails()
+            let snapshot = model.fetchBatteryDetails(force: force)
             await MainActor.run {
                 self.batterySnapshot = snapshot
                 self.isBatteryDetailsLoading = false
@@ -973,6 +985,25 @@ private struct MenuBarPopupView: View {
                 }
             }
         }
+    }
+
+    private func startBatteryAutoRefresh() {
+        stopBatteryAutoRefresh()
+        guard showBatteryDetails else { return }
+
+        batteryAutoRefreshTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { return }
+                guard showBatteryDetails else { return }
+                loadBatteryDetails(force: false)
+            }
+        }
+    }
+
+    private func stopBatteryAutoRefresh() {
+        batteryAutoRefreshTask?.cancel()
+        batteryAutoRefreshTask = nil
     }
 }
 

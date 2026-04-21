@@ -30,6 +30,7 @@ DRay — macOS utility suite for storage cleanup and maintenance with Space Lens
 - Battery indicator in menu bar (`BAT xx%`) with realtime refresh.
 - Health cards and quick actions open relevant DRay modules.
 - Battery details panel (charge/health/cycles/temp/power/ETA).
+- Refresh discipline: heavy sampling is reduced while popup is hidden; battery details auto-refresh runs only while its sheet is open.
 - Explicit `Quit Completely` path for full exit.
 
 ## Architecture (high-level)
@@ -53,12 +54,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 2.0.3 4
+./scripts/install_app.sh 2.0.3 5
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 2.0.3 4
+./scripts/package_release.sh 2.0.3 5
 ```
 Artifacts are created in `dist`.
 
@@ -74,7 +75,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.0.3 4`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.0.3 5`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -92,4 +93,4 @@ Optional:
 - Settings model: `docs/SETTINGS_MODEL.md`
 
 ## Current Channel
-`v2.0.3 (build 4)` is the active release channel with the premium redesign shell, adaptive sidebar, refreshed helper popup, structured Performance workspace, and the Uninstaller first-load refresh fix.
+`v2.0.3 (build 5)` is the active release channel with staged maintainability cleanup (root/performance/settings decomposition), permission-impact clarity updates, and helper refresh-discipline hardening.

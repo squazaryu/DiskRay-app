@@ -46,19 +46,19 @@ enum SettingsPermissionAvailabilityMap {
                     en: "Scanning outside the granted folder can be blocked until access is granted again.",
                     useRussian: useRussian
                 ),
-                severity: .limited
+                severity: .blocked
             ))
 
             items.append(SettingsPermissionImpactItem(
-                id: "cleanup-write",
+                id: "cleanup-write-scope",
                 feature: localized(
-                    ru: "Очистка и удаление",
-                    en: "Cleanup & Removal",
+                    ru: "Smart Clean / Duplicate Cleanup",
+                    en: "Smart Clean / Duplicate Cleanup",
                     useRussian: useRussian
                 ),
                 effect: localized(
-                    ru: "Очистка может частично пропускать элементы без доступа на запись в выбранных путях.",
-                    en: "Cleanup can partially skip items without write access in selected paths.",
+                    ru: "Очистка может частично пропускать файлы без доступа на запись в выбранных путях.",
+                    en: "Cleanup can partially skip files without write access in selected paths.",
                     useRussian: useRussian
                 ),
                 severity: .limited
@@ -68,59 +68,78 @@ enum SettingsPermissionAvailabilityMap {
         // Grounded in FeatureContext.allowProtectedModule(...) usage in feature controllers.
         if !hasFullDiskAccess {
             items.append(SettingsPermissionImpactItem(
-                id: "smart-care",
-                feature: "Smart Care",
+                id: "performance-diagnostics",
+                feature: localized(
+                    ru: "Performance Diagnostics",
+                    en: "Performance Diagnostics",
+                    useRussian: useRussian
+                ),
                 effect: localized(
-                    ru: "Smart Scan может блокироваться и терять покрытие системных зон.",
-                    en: "Smart Scan can be blocked and lose coverage for protected system areas.",
+                    ru: "Запуск диагностики производительности блокируется до выдачи Full Disk Access.",
+                    en: "Performance diagnostics are blocked until Full Disk Access is granted.",
                     useRussian: useRussian
                 ),
                 severity: .blocked
             ))
 
             items.append(SettingsPermissionImpactItem(
-                id: "performance",
+                id: "privacy-scan",
                 feature: localized(
-                    ru: "Производительность",
-                    en: "Performance",
+                    ru: "Privacy Scan",
+                    en: "Privacy Scan",
                     useRussian: useRussian
                 ),
                 effect: localized(
-                    ru: "Performance Diagnostics может не запускаться полностью.",
-                    en: "Performance Diagnostics may not run fully.",
+                    ru: "Скан приватности блокируется до выдачи Full Disk Access.",
+                    en: "Privacy scan is blocked until Full Disk Access is granted.",
                     useRussian: useRussian
                 ),
                 severity: .blocked
             ))
 
             items.append(SettingsPermissionImpactItem(
-                id: "privacy",
+                id: "unified-scan",
                 feature: localized(
-                    ru: "Приватность",
-                    en: "Privacy",
+                    ru: "Unified Scan",
+                    en: "Unified Scan",
                     useRussian: useRussian
                 ),
                 effect: localized(
-                    ru: "Privacy Scan может быть ограничен или заблокирован.",
-                    en: "Privacy Scan can be limited or blocked.",
+                    ru: "Объединённый скан блокируется до выдачи Full Disk Access.",
+                    en: "Unified Scan is blocked until Full Disk Access is granted.",
                     useRussian: useRussian
                 ),
                 severity: .blocked
             ))
 
             items.append(SettingsPermissionImpactItem(
-                id: "repair-uninstall",
+                id: "repair-and-uninstall",
                 feature: localized(
-                    ru: "Repair и Uninstaller",
-                    en: "Repair & Uninstaller",
+                    ru: "App Repair / Uninstall / Verify",
+                    en: "App Repair / Uninstall / Verify",
                     useRussian: useRussian
                 ),
                 effect: localized(
-                    ru: "Доступ к системным remnant-путям и проверкам может быть неполным.",
-                    en: "Access to protected remnant paths and verification checks can be incomplete.",
+                    ru: "Потоки ремонта и удаления (включая verify pass) блокируются до выдачи Full Disk Access.",
+                    en: "Repair and uninstall flows (including verify pass) are blocked until Full Disk Access is granted.",
                     useRussian: useRussian
                 ),
-                severity: .limited
+                severity: .blocked
+            ))
+
+            items.append(SettingsPermissionImpactItem(
+                id: "full-disk-cleanups",
+                feature: localized(
+                    ru: "Startup / Privacy Cleanup",
+                    en: "Startup / Privacy Cleanup",
+                    useRussian: useRussian
+                ),
+                effect: localized(
+                    ru: "Очистка startup и privacy артефактов требует Full Disk Access и блокируется без него.",
+                    en: "Startup and privacy cleanup actions require Full Disk Access and are blocked without it.",
+                    useRussian: useRussian
+                ),
+                severity: .blocked
             ))
         }
 

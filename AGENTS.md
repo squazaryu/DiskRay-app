@@ -26,8 +26,8 @@ Touch these only with explicit need and narrow blast radius.
 ## Build & Test
 - Build: `swift build`
 - Tests: `swift test`
-- App install (example): `./scripts/install_app.sh 2.0.3 3`
-- Release artifacts: `./scripts/package_release.sh 2.0.3 3`
+- App install (example): `./scripts/install_app.sh 2.0.3 5`
+- Release artifacts: `./scripts/package_release.sh 2.0.3 5`
 
 ## Validation Baseline (after non-trivial change)
 - App launches.
@@ -41,6 +41,20 @@ Touch these only with explicit need and narrow blast radius.
 3. Settings/permissions clarity third.
 4. Helper/diagnostics hygiene fourth.
 5. Docs last.
+
+## Current Structure Notes
+- `RootViewModel` extractions currently live under `DRay/App/Root/`:
+  - `RootDomainModels.swift`
+  - `RootScanTargetCoordinator.swift`
+  - `RootDiagnosticsExporter.swift`
+  - `RootTargetBookmarkCoordinator.swift`
+  - `RootTrashResultMessageFormatter.swift`
+  - `RootUnifiedScanCoordinator.swift`
+- `Performance` view is decomposed by workspace/domain helper files; avoid re-concentrating workspace logic into a single extension file.
+- `Settings` is decomposed into section files and uses `SettingsPermissionAvailability.swift` for impact mapping.
+- Menu bar helper refresh discipline:
+  - keep heavy sampling reduced while popup is hidden,
+  - avoid always-on timers for hidden overlays/sheets.
 
 ## Git Hygiene
 - Make atomic commits (prefer Conventional Commits).

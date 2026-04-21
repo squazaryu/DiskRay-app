@@ -10,9 +10,17 @@
 
 ## Code Structure
 - Shell/lifecycle: `DRay/Features/Performance/PerformanceView.swift`
-- Workspace content: `.../PerformanceView+WorkspaceContent.swift`
+- Workspace content:
+  - `.../PerformanceView+WorkspaceOverview.swift`
+  - `.../PerformanceView+WorkspaceSystemLoad.swift`
+  - `.../PerformanceView+WorkspaceBatteryEnergy.swift`
+  - `.../PerformanceView+WorkspaceStartup.swift`
+  - `.../PerformanceView+WorkspaceNetwork.swift`
 - Reusable workspace components: `.../PerformanceView+WorkspaceComponents.swift`
-- Presentation/ranking/format helpers: `.../PerformanceView+PresentationHelpers.swift`
+- Presentation/ranking/format helpers:
+  - `.../PerformanceView+LiveLoadHelpers.swift`
+  - `.../PerformanceView+StartupNetworkHelpers.swift`
+  - `.../PerformanceView+FormattingHelpers.swift`
 - Shared local types: `.../PerformanceViewTypes.swift`
 
 ## Design Rules
@@ -25,6 +33,7 @@
 - Live load data comes from `LiveSystemMetricsMonitor`.
 - Trend/history visuals are in-session only.
 - Network history in this pass is session-level (not persisted store).
+- No additional persistence/store layer for performance presentation state.
 
 ## Local Action Ownership
 - Global strip: run diagnostics + export/reveal actions.
