@@ -14,17 +14,9 @@ struct SmartCareView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            smartActionsToolbar
-            WorkspaceSegmentBar(
-                title: "Workspace",
-                selection: $workspaceTab,
-                segments: [
-                    (.overview, "Overview"),
-                    (.categories, "Categories"),
-                    (.exclusions, "Exclusions")
-                ]
-            )
-            .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 10)
+            smartCommandStrip
+            workspaceNavigation
+            smartStatusStrip
 
             if model.smartCare.isScanRunning {
                 scanProgressBanner
@@ -60,7 +52,10 @@ struct SmartCareView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            categoriesList
+            VStack(spacing: 8) {
+                categoriesActionStrip
+                categoriesList
+            }
         }
     }
 
@@ -164,14 +159,9 @@ struct SmartCareView: View {
         }
     }
 
-    private var smartActionsToolbar: some View {
+    private var smartCommandStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                GlassPillBadge(
-                    title: "Cat \(model.smartCare.categories.count) · Sel \(selectedCategoryCount) · Items \(selectedItemPaths.count)",
-                    tint: .blue
-                )
-
                 HStack(spacing: 6) {
                     Text("Profile")
                         .foregroundStyle(.secondary)
@@ -185,13 +175,6 @@ struct SmartCareView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
-
-                Button("Clean") {
-                    cleanSelection()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
 
                 Menu {
                     Button("Run Full Smart Scan") {
@@ -223,6 +206,77 @@ struct SmartCareView: View {
             .padding(.vertical, 8)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text("Overview").tag(SmartCareWorkspaceTab.overview)
+                Text("Categories").tag(SmartCareWorkspaceTab.categories)
+                Text("Exclusions").tag(SmartCareWorkspaceTab.exclusions)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 420)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var smartStatusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(
+                title: "Categories",
+                value: "\(model.smartCare.categories.count)",
+                tint: .blue
+            )
+            statusTile(
+                title: "Selected",
+                value: "\(selectedCategoryCount)",
+                tint: selectedCategoryCount > 0 ? .green : .secondary
+            )
+            statusTile(
+                title: "Items",
+                value: "\(selectedItemPaths.count)",
+                tint: selectedItemPaths.isEmpty ? .secondary : .orange
+            )
+            statusTile(
+                title: "Profile",
+                value: model.smartCare.profile.title,
+                tint: .purple
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var categoriesActionStrip: some View {
+        HStack(spacing: 8) {
+            GlassPillBadge(title: "Selected categories \(selectedCategoryCount)", tint: .blue)
+            GlassPillBadge(title: "Selected items \(selectedItemPaths.count)", tint: .orange)
+
+            Spacer(minLength: 8)
+
+            Button("Select Recommended") {
+                selectedItemPaths.removeAll()
+                model.selectRecommendedSmartCategories()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.smartCare.categories.isEmpty)
+
+            Button("Clean Selection") {
+                cleanSelection()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
     }
 
     private var profileMenu: some View {
@@ -586,6 +640,22 @@ struct SmartCareView: View {
     private func durationText(_ ms: Int) -> String {
         if ms < 1000 { return "\(ms) ms" }
         return String(format: "%.1f s", Double(ms) / 1000.0)
+    }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

@@ -11,6 +11,7 @@ struct SpaceLensView: View {
     @State private var nodeIndex: [String: FileNode] = [:]
     @State private var nodeIndexBuildToken = UUID()
     @State private var bubbleTapMode: BubbleTapMode = .openFolders
+    @State private var workspaceTab: SpaceLensWorkspaceTab = .map
 
     var body: some View {
         GeometryReader { proxy in
@@ -19,12 +20,19 @@ struct SpaceLensView: View {
             VStack(spacing: 10) {
                 header
                 controlsToolbar
-                HStack(alignment: .top, spacing: 12) {
-                    sidebar
-                        .frame(width: sidebarWidth)
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .layoutPriority(1)
+                workspaceNavigation
+                statusStrip
+                if workspaceTab == .map {
+                    HStack(alignment: .top, spacing: 12) {
+                        sidebar
+                            .frame(width: sidebarWidth)
+                        detail
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .layoutPriority(1)
+                            .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
+                    }
+                } else {
+                    insightsWorkspace
                         .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
                 }
             }
@@ -42,6 +50,47 @@ struct SpaceLensView: View {
         .onDisappear {
             nodeIndexBuildToken = UUID()
         }
+    }
+
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text(t("Карта", "Map")).tag(SpaceLensWorkspaceTab.map)
+                Text(t("Инсайты", "Insights")).tag(SpaceLensWorkspaceTab.insights)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 300)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(
+                title: t("Цель", "Target"),
+                value: model.selectedTarget.name,
+                tint: .blue
+            )
+            statusTile(
+                title: t("Узлы", "Nodes"),
+                value: "\(max(nodeIndex.count - 1, 0))",
+                tint: .green
+            )
+            statusTile(
+                title: t("Выбрано", "Selected"),
+                value: "\(selectedPaths.count)",
+                tint: selectedPaths.isEmpty ? .secondary : .orange
+            )
+            statusTile(
+                title: t("Tap Mode", "Tap Mode"),
+                value: bubbleTapModeTitle(bubbleTapMode),
+                tint: .purple
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var header: some View {
@@ -114,6 +163,57 @@ struct SpaceLensView: View {
             if model.isLoading {
                 ProgressView(t("Сканирование диска...", "Scanning disk..."))
             }
+        }
+    }
+
+    private var insightsWorkspace: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    summaryCard(
+                        title: t("Узлы", "Nodes"),
+                        value: "\(max(nodeIndex.count - 1, 0))",
+                        subtitle: t("Проиндексировано в дереве", "Indexed in tree")
+                    )
+                    summaryCard(
+                        title: t("Выбрано", "Selected"),
+                        value: "\(selectedPaths.count)",
+                        subtitle: t("Элементов в выборке", "Items in selection")
+                    )
+                    summaryCard(
+                        title: t("Размер выбора", "Selected Size"),
+                        value: ByteCountFormatter.string(
+                            fromByteCount: selectedNodes.reduce(Int64(0)) { $0 + $1.sizeInBytes },
+                            countStyle: .file
+                        ),
+                        subtitle: t("Потенциально к очистке", "Potential cleanup volume")
+                    )
+                }
+
+                if !selectedNodes.isEmpty {
+                    sectionCard(title: t("Выбранные элементы", "Selected Items")) {
+                        VStack(spacing: 6) {
+                            ForEach(selectedNodes.prefix(60)) { node in
+                                largestRow(node)
+                            }
+                        }
+                    }
+                }
+
+                if let root = model.root {
+                    sectionCard(title: t("Крупнейшие элементы", "Largest Items")) {
+                        largestSection(root: root)
+                    }
+                } else {
+                    ContentUnavailableView(
+                        model.localized(.navSpaceLens),
+                        systemImage: "externaldrive",
+                        description: Text(model.localized(.spaceLensEmptyNeedScan))
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .padding(10)
         }
     }
 
@@ -449,6 +549,41 @@ struct SpaceLensView: View {
         let formatted = count.formatted(.number.grouping(.automatic))
         return isRussian ? "\(formatted) файлов" : "\(formatted) files"
     }
+
+    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 }
 
 private func buildNodeIndex(root: FileNode) -> [String: FileNode] {
@@ -459,4 +594,9 @@ private func buildNodeIndex(root: FileNode) -> [String: FileNode] {
         stack.append(contentsOf: node.children)
     }
     return map
+}
+
+private enum SpaceLensWorkspaceTab: Hashable {
+    case map
+    case insights
 }

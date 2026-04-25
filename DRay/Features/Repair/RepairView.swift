@@ -11,6 +11,7 @@ struct RepairView: View {
     @State private var repairStrategy: AppRepairStrategy = .safeReset
     @State private var showDeepResetConfirm = false
     @State private var showRepairConfirm = false
+    @State private var workspaceTab: RepairWorkspaceTab = .repair
 
     private var installedApps: [InstalledApp] {
         model.uninstaller.state.installedApps
@@ -88,153 +89,142 @@ struct RepairView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             actionsToolbar
+            workspaceNavigation
+            statusStrip
 
-            HStack(alignment: .top, spacing: 12) {
-                VStack(spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Filter applications", text: $appSearchQuery)
-                            .textFieldStyle(.plain)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(filteredApps) { app in
-                                repairSidebarRow(app)
-                            }
-                        }
-                        .padding(6)
-                    }
-                }
-                .frame(minWidth: 240, idealWidth: 280, maxWidth: 330)
-                .padding(10)
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    if let selectedApp {
-                        HStack {
-                            Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
-                                .resizable()
-                                .frame(width: 34, height: 34)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("App Repair")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(selectedApp.name)
-                                    .font(.title3.bold())
-                                Text(selectedApp.appURL.path)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Button("Rescan Artifacts") {
-                                model.repair.loadArtifacts(for: selectedApp)
-                            }
-                            .buttonStyle(.bordered)
-                            Button("Repair") {
-                                requestRepairFlow()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(repairArtifacts.isEmpty || isRepairLoading)
-                        }
-                        .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
-
-                        HStack {
-                            Toggle("Relaunch app after repair", isOn: $relaunchAfterRepair)
-                                .toggleStyle(.switch)
-                            Spacer()
-                            HStack(spacing: 6) {
-                                Text("Strategy")
-                                repairStrategyMenu
-                            }
-                            Button("Apply Strategy") {
-                                applySelectedStrategy()
-                            }
-                            .buttonStyle(.bordered)
-                            Text("Selected: \(selectedArtifacts.count)")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Reclaimable: \(reclaimedSizeText)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
-
+            if workspaceTab == .repair {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(spacing: 10) {
                         HStack(spacing: 8) {
-                            Text(repairStrategy.subtitle)
-                                .font(.caption)
+                            Image(systemName: "magnifyingglass")
                                 .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            Spacer()
-                            Text("Preview \(strategyPreviewArtifacts.count) · \(strategyPreviewSizeText)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            riskBadge("Low \(strategyRiskCounts.low)", color: .green)
-                            riskBadge("Med \(strategyRiskCounts.medium)", color: .orange)
-                            riskBadge("High \(strategyRiskCounts.high)", color: .red)
+                            TextField("Filter applications", text: $appSearchQuery)
+                                .textFieldStyle(.plain)
                         }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(repairArtifacts) { artifact in
-                                repairArtifactRow(artifact)
+                        ScrollView {
+                            LazyVStack(spacing: 6) {
+                                ForEach(filteredApps) { app in
+                                    repairSidebarRow(app)
+                                }
                             }
-                        }
-                        .padding(8)
-                    }
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 0)
-                    .overlay {
-                        if isRepairLoading {
-                            ProgressView("Repair scan in progress...")
+                            .padding(6)
                         }
                     }
+                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 330)
+                    .padding(10)
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
 
-                    if let report = repairReport {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Repair report")
-                                .font(.headline)
-                            Text("Removed \(report.removedCount) · Skipped \(report.skippedCount) · Failed \(report.failedCount)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text(repairStrategy.subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
-                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let selectedApp {
+                            HStack {
+                                Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
+                                    .resizable()
+                                    .frame(width: 34, height: 34)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("App Repair")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(selectedApp.name)
+                                        .font(.title3.bold())
+                                    Text(selectedApp.appURL.path)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Button("Rescan Artifacts") {
+                                    model.repair.loadArtifacts(for: selectedApp)
+                                }
+                                .buttonStyle(.bordered)
+                                Button("Repair") {
+                                    requestRepairFlow()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(repairArtifacts.isEmpty || isRepairLoading)
+                            }
+                            .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
 
-                    if !repairSessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Repair rollback sessions")
-                                .font(.headline)
+                            HStack {
+                                Toggle("Relaunch app after repair", isOn: $relaunchAfterRepair)
+                                    .toggleStyle(.switch)
+                                Spacer()
+                                HStack(spacing: 6) {
+                                    Text("Strategy")
+                                    repairStrategyMenu
+                                }
+                                Button("Apply Strategy") {
+                                    applySelectedStrategy()
+                                }
+                                .buttonStyle(.bordered)
+                                Text("Selected: \(selectedArtifacts.count)")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Reclaimable: \(reclaimedSizeText)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+
+                            HStack(spacing: 8) {
+                                Text(repairStrategy.subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                Spacer()
+                                Text("Preview \(strategyPreviewArtifacts.count) · \(strategyPreviewSizeText)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                riskBadge("Low \(strategyRiskCounts.low)", color: .green)
+                                riskBadge("Med \(strategyRiskCounts.medium)", color: .orange)
+                                riskBadge("High \(strategyRiskCounts.high)", color: .red)
+                            }
+                            .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+
                             ScrollView {
-                                LazyVStack(spacing: 8) {
-                                    ForEach(Array(repairSessions.prefix(10))) { session in
-                                        repairRollbackSessionCard(session)
+                                LazyVStack(spacing: 6) {
+                                    ForEach(repairArtifacts) { artifact in
+                                        repairArtifactRow(artifact)
                                     }
                                 }
                                 .padding(8)
                             }
-                            .frame(minHeight: 170)
+                            .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 0)
+                            .overlay {
+                                if isRepairLoading {
+                                    ProgressView("Repair scan in progress...")
+                                }
+                            }
+
+                            if let report = repairReport {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Repair report")
+                                        .font(.headline)
+                                    Text("Removed \(report.removedCount) · Skipped \(report.skippedCount) · Failed \(report.failedCount)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Text(repairStrategy.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
+                            }
+                        } else {
+                            ContentUnavailableView(
+                                "App Repair",
+                                systemImage: "wrench.and.screwdriver",
+                                description: Text("Select application to scan and clean corrupted leftovers without reinstalling.")
+                            )
                         }
-                        .glassSurface(cornerRadius: 12, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 10)
                     }
-                } else {
-                    ContentUnavailableView(
-                        "App Repair",
-                        systemImage: "wrench.and.screwdriver",
-                        description: Text("Select application to scan and clean corrupted leftovers without reinstalling.")
-                    )
+                    .padding(12)
+                    .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
                 }
-                }
-                .padding(12)
-                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                rollbackWorkspace
             }
         }
         .padding(12)
@@ -308,11 +298,74 @@ struct RepairView: View {
                     model.uninstaller.loadInstalledApps()
                 }
                 .buttonStyle(.bordered)
+
+                if let selectedApp {
+                    Button("Rescan Artifacts") {
+                        model.repair.loadArtifacts(for: selectedApp)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text("Repair").tag(RepairWorkspaceTab.repair)
+                Text("Rollback").tag(RepairWorkspaceTab.rollback)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 320)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(title: "Apps", value: "\(filteredApps.count)", tint: .blue)
+            statusTile(title: "Artifacts", value: "\(repairArtifacts.count)", tint: .orange)
+            statusTile(title: "Selected", value: "\(selectedArtifacts.count)", tint: .green)
+            statusTile(title: "Rollback Sessions", value: "\(repairSessions.count)", tint: .purple)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var rollbackWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "Sessions \(repairSessions.count)", tint: .blue)
+                GlassPillBadge(title: "Recoverable items \(repairSessions.reduce(0) { $0 + $1.rollbackItems.count })", tint: .green)
+                Spacer(minLength: 8)
+            }
+
+            if repairSessions.isEmpty {
+                ContentUnavailableView(
+                    "No repair rollback sessions",
+                    systemImage: "arrow.uturn.backward.circle",
+                    description: Text("Run a repair action to create rollback sessions.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(Array(repairSessions.prefix(20))) { session in
+                            repairRollbackSessionCard(session)
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.05, shadowOpacity: 0.04, padding: 0)
     }
 
     private var repairStrategyMenu: some View {
@@ -532,6 +585,27 @@ struct RepairView: View {
             .background(color.opacity(0.14), in: Capsule())
             .foregroundStyle(color)
     }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private enum RepairWorkspaceTab: Hashable {
+    case repair
+    case rollback
 }
 
 @MainActor

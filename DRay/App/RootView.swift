@@ -97,7 +97,7 @@ struct RootView: View {
                     Image(systemName: "bolt.circle.fill")
                         .font(.title2)
                         .foregroundStyle(PremiumTheme.accent(colorScheme))
-                    Text("2.0")
+                    Text(compactSidebarVersionText)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
@@ -249,6 +249,13 @@ struct RootView: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var compactSidebarVersionText: String {
+        let baseVersion = model.appVersionDisplay.split(separator: " ").first.map(String.init) ?? model.appVersionDisplay
+        let parts = baseVersion.split(separator: ".")
+        guard parts.count >= 2 else { return baseVersion }
+        return "\(parts[0]).\(parts[1])"
     }
 
     @ViewBuilder

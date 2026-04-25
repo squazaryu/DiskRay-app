@@ -11,6 +11,7 @@ struct PrivacyView: View {
     @State private var expanded = Set<String>()
     @State private var showConfirm = false
     @State private var pendingCleanMode: PrivacyCleanMode = .selected
+    @State private var workspaceTab: PrivacyWorkspaceTab = .overview
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: PrivacyViewModel(root: rootModel))
@@ -20,6 +21,8 @@ struct PrivacyView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             privacyToolbar
+            workspaceNavigation
+            statusStrip
 
             if model.state.isScanRunning {
                 ProgressView("Scanning privacy artifacts...")
@@ -27,50 +30,15 @@ struct PrivacyView: View {
                     .padding(.horizontal, 4)
             }
 
-            if let cleanReport = model.state.cleanReport {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Moved \(cleanReport.moved)", tint: .green)
-                    GlassPillBadge(title: "Failed \(cleanReport.failed)", tint: .red)
-                    GlassPillBadge(title: "Skipped \(cleanReport.skippedProtected)", tint: .orange)
-                    GlassPillBadge(
-                        title: "Reclaimed \(ByteCountFormatter.string(fromByteCount: cleanReport.cleanedBytes, countStyle: .file))",
-                        tint: .blue
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-            }
-
-            if let delta = model.state.quickActionDelta {
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Action \(delta.actionTitle)", tint: .blue)
-                    GlassPillBadge(title: "Items \(delta.beforeItems) -> \(delta.afterItems)", tint: .green)
-                    GlassPillBadge(
-                        title: "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) -> \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
-                        tint: .orange
-                    )
-                    Spacer()
-                    Text("Updated \(delta.createdAt, style: .relative)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-            }
-
             Group {
-                if model.state.categories.isEmpty, !model.state.isScanRunning {
-                    ContentUnavailableView(
-                        "No Privacy Scan Results",
-                        systemImage: "lock.shield",
-                        description: Text("Run scan to review browser and local privacy traces.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    categoriesList
+                switch workspaceTab {
+                case .overview:
+                    overviewWorkspace
+                case .categories:
+                    categoriesWorkspace
                 }
             }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : 12)
         }
         .padding(12)
         .confirmationDialog(
@@ -87,6 +55,119 @@ struct PrivacyView: View {
         }
     }
 
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text("Overview").tag(PrivacyWorkspaceTab.overview)
+                Text("Categories").tag(PrivacyWorkspaceTab.categories)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 320)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(title: "Categories", value: "\(model.state.categories.count)", tint: .blue)
+            statusTile(title: "Selected", value: "\(selectedCount)", tint: .green)
+            statusTile(
+                title: "Items",
+                value: "\(selectedArtifactsCount)",
+                tint: selectedArtifactsCount > 0 ? .orange : .secondary
+            )
+            statusTile(
+                title: "Estimated",
+                value: ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file),
+                tint: .purple
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var overviewWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                summaryCard(title: "Categories", value: "\(model.state.categories.count)", subtitle: "Privacy cleanup groups")
+                summaryCard(title: "Selected", value: "\(selectedCount)", subtitle: "Chosen categories")
+                summaryCard(title: "Items", value: "\(selectedArtifactsCount)", subtitle: "Artifacts in scope")
+                summaryCard(
+                    title: "Estimated",
+                    value: ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file),
+                    subtitle: "Potential cleanup footprint"
+                )
+            }
+
+            if let cleanReport = model.state.cleanReport {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Moved \(cleanReport.moved)", tint: .green)
+                    GlassPillBadge(title: "Failed \(cleanReport.failed)", tint: .red)
+                    GlassPillBadge(title: "Skipped \(cleanReport.skippedProtected)", tint: .orange)
+                    GlassPillBadge(
+                        title: "Reclaimed \(ByteCountFormatter.string(fromByteCount: cleanReport.cleanedBytes, countStyle: .file))",
+                        tint: .blue
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let delta = model.state.quickActionDelta {
+                HStack(spacing: 8) {
+                    GlassPillBadge(title: "Action \(delta.actionTitle)", tint: .blue)
+                    GlassPillBadge(title: "Items \(delta.beforeItems) -> \(delta.afterItems)", tint: .green)
+                    GlassPillBadge(
+                        title: "Size \(ByteCountFormatter.string(fromByteCount: delta.beforeBytes, countStyle: .file)) -> \(ByteCountFormatter.string(fromByteCount: delta.afterBytes, countStyle: .file))",
+                        tint: .orange
+                    )
+                    Spacer()
+                    Text("Updated \(delta.createdAt, style: .relative)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if model.state.categories.isEmpty, !model.state.isScanRunning {
+                ContentUnavailableView(
+                    "No Privacy Scan Results",
+                    systemImage: "lock.shield",
+                    description: Text("Run scan to review browser and local privacy traces.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Privacy guidance")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Use Categories workspace for detailed review and selective cleanup. Keep high-risk groups for manual review.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var categoriesWorkspace: some View {
+        if model.state.categories.isEmpty, !model.state.isScanRunning {
+            ContentUnavailableView(
+                "No Privacy Scan Results",
+                systemImage: "lock.shield",
+                description: Text("Run scan to review browser and local privacy traces.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(spacing: 8) {
+                categoriesActionStrip
+                categoriesList
+            }
+        }
+    }
+
     private var header: some View {
         ModuleHeaderCard(
             title: "Privacy",
@@ -99,13 +180,6 @@ struct PrivacyView: View {
     private var privacyToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                GlassPillBadge(title: "Categories \(model.state.categories.count)", tint: .blue)
-                GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
-                GlassPillBadge(
-                    title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
-                    tint: .orange
-                )
-
                 Button("Scan Privacy Traces") {
                     model.runScan()
                 }
@@ -133,35 +207,69 @@ struct PrivacyView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(selectedCount == 0)
-
-                Button("Clean Selected") {
-                    pendingCleanMode = .selected
-                    showConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selectedCount == 0)
-
-                Button("Quick Clean Safe") {
-                    pendingCleanMode = .safeLowRisk
-                    showConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.state.categories.isEmpty)
-
-                Button("Quick Clean Recommended") {
-                    pendingCleanMode = .recommended
-                    showConfirm = true
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.state.categories.isEmpty)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var categoriesActionStrip: some View {
+        HStack(spacing: 8) {
+            GlassPillBadge(title: "Selected \(selectedCount)", tint: .green)
+            GlassPillBadge(
+                title: "Estimated \(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file))",
+                tint: .orange
+            )
+            Spacer(minLength: 8)
+
+            Button("Clean Selected") {
+                pendingCleanMode = .selected
+                showConfirm = true
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(selectedCount == 0)
+
+            Button("Quick Clean Safe") {
+                pendingCleanMode = .safeLowRisk
+                showConfirm = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.state.categories.isEmpty)
+
+            Button("Quick Clean Recommended") {
+                pendingCleanMode = .recommended
+                showConfirm = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.state.categories.isEmpty)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+    }
+
+    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var categoriesList: some View {
@@ -290,4 +398,25 @@ struct PrivacyView: View {
         case .high: return .red
         }
     }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private enum PrivacyWorkspaceTab: Hashable {
+    case overview
+    case categories
 }

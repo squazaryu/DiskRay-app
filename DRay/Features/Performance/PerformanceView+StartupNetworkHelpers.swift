@@ -83,6 +83,10 @@ extension PerformanceView {
         )
     }
 
+    var latestNetworkResult: NetworkSpeedTestResult? {
+        model.performance.networkSpeedTestResult
+    }
+
     var networkQualityValue: Double? {
         guard let result = model.performance.networkSpeedTestResult, result.isSuccess else { return nil }
         let resp = max(1, result.responsivenessMs ?? 140)
@@ -98,6 +102,54 @@ extension PerformanceView {
             return t("Сетевых данных пока нет", "No network data yet")
         }
         return networkQualityText(from: result)
+    }
+
+    var networkLatencyBurdenValue: Double {
+        guard let result = latestNetworkResult, result.isSuccess else { return 0 }
+        let responsiveness = max(result.responsivenessMs ?? 0, 0)
+        return min(100, (responsiveness / 180) * 100)
+    }
+
+    var networkThroughputBurdenValue: Double {
+        guard let result = latestNetworkResult, result.isSuccess else { return 0 }
+        let down = max(result.downlinkMbps ?? 0, 0)
+        let up = max(result.uplinkMbps ?? 0, 0)
+        let combined = down + up
+        let qualityScore = min(100, (combined / 240) * 100)
+        return max(0, 100 - qualityScore)
+    }
+
+    var networkBurdenSummaryText: String {
+        if latestNetworkResult == nil {
+            return t("Запусти тест для оценки латентности и канала.", "Run a test to evaluate latency and throughput.")
+        }
+        if latestNetworkResult?.isSuccess == false {
+            return t("Последний тест завершился ошибкой, повтори измерение.", "Last test failed, run another measurement.")
+        }
+        return t(
+            "Ниже показано, что сейчас ограничивает качество сильнее: отклик или пропускная способность.",
+            "The bars below show what currently limits quality more: responsiveness or throughput."
+        )
+    }
+
+    var recentNetworkRows: [NetworkHistoryPoint] {
+        Array(networkHistory.suffix(8).reversed())
+    }
+
+    var bestDownlinkInSession: Double {
+        max(networkHistory.map(\.downMbps).max() ?? 0, 0.01)
+    }
+
+    var bestResponsivenessInSession: Double {
+        max(networkHistory.map(\.responsivenessMs).filter { $0 > 0 }.min() ?? 0, 0.01)
+    }
+
+    func downlinkShare(from point: NetworkHistoryPoint) -> Double {
+        min(100, max(0, (point.downMbps / bestDownlinkInSession) * 100))
+    }
+
+    func responsivenessQualityShare(from point: NetworkHistoryPoint) -> Double {
+        min(100, max(0, (bestResponsivenessInSession / max(point.responsivenessMs, 0.01)) * 100))
     }
 
     var networkInterpretation: String {

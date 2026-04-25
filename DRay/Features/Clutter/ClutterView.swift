@@ -9,6 +9,7 @@ struct ClutterView: View {
     @State private var showTrashConfirm = false
     @State private var trashResultMessage: String?
     @State private var cleanupDiagnostics: [CleanupDiagnosticRow] = []
+    @State private var workspaceTab: ClutterWorkspaceTab = .overview
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: ClutterViewModel(root: rootModel))
@@ -18,34 +19,23 @@ struct ClutterView: View {
         VStack(spacing: 10) {
             controls
             controlsToolbar
+            workspaceNavigation
+            statusStrip
 
             if model.isDuplicateScanRunning {
                 progressPanel
             }
 
-            Group {
-                if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
-                    ContentUnavailableView(
-                        t("Дубликаты не найдены", "No Duplicates"),
-                        systemImage: "square.on.square",
-                        description: Text(t(
-                            "Запусти скан выбранной цели или домашней папки.",
-                            "Run duplicate scan for selected target or Home folder."
-                        ))
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    duplicateList
-                }
-            }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
-
-            if !selectedPaths.isEmpty {
-                selectionPanel
-            }
-
-            if !cleanupDiagnostics.isEmpty {
-                cleanupDiagnosticsPanel
+            switch workspaceTab {
+            case .overview:
+                overviewWorkspace
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
+            case .groups:
+                groupsWorkspace
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+            case .diagnostics:
+                diagnosticsWorkspace
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
             }
         }
         .padding(12)
@@ -88,25 +78,51 @@ struct ClutterView: View {
         }
     }
 
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text(t("Обзор", "Overview")).tag(ClutterWorkspaceTab.overview)
+                Text(t("Группы", "Groups")).tag(ClutterWorkspaceTab.groups)
+                Text(t("Диагностика", "Diagnostics")).tag(ClutterWorkspaceTab.diagnostics)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 420)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(
+                title: t("Группы", "Groups"),
+                value: "\(model.duplicateGroups.count)",
+                tint: .blue
+            )
+            statusTile(
+                title: t("К освобождению", "Reclaimable"),
+                value: ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file),
+                tint: .green
+            )
+            statusTile(
+                title: t("Выбрано", "Selected"),
+                value: "\(selectedPaths.count)",
+                tint: selectedPaths.isEmpty ? .secondary : .orange
+            )
+            statusTile(
+                title: t("Диагностика", "Diagnostics"),
+                value: "\(cleanupDiagnostics.count)",
+                tint: cleanupDiagnostics.isEmpty ? .secondary : .purple
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
     private var controlsToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                GlassPillBadge(title: t("Групп \(model.duplicateGroups.count)", "Groups \(model.duplicateGroups.count)"), tint: .blue)
-                GlassPillBadge(
-                    title: t(
-                        "К освобождению \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))",
-                        "Reclaimable \(ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file))"
-                    ),
-                    tint: .green
-                )
-                GlassPillBadge(
-                    title: t(
-                        "Выбрано \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))",
-                        "Selected \(selectedPaths.count) · \(ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file))"
-                    ),
-                    tint: .orange
-                )
-
                 Stepper(value: duplicateMinSizeBinding, in: 1...2_048, step: 1) {
                     Text(t("Мин \(Int(model.duplicateMinSizeMB)) МБ", "Min \(Int(model.duplicateMinSizeMB)) MB"))
                         .frame(minWidth: 120, alignment: .trailing)
@@ -156,6 +172,99 @@ struct ClutterView: View {
             .padding(.vertical, 8)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var overviewWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                summaryCard(
+                    title: t("Группы", "Groups"),
+                    value: "\(model.duplicateGroups.count)",
+                    subtitle: t("Группы с идентичным содержимым", "Groups with identical content")
+                )
+                summaryCard(
+                    title: t("Выбрано", "Selected"),
+                    value: "\(selectedPaths.count)",
+                    subtitle: t("Файлы к удалению", "Files selected for cleanup")
+                )
+                summaryCard(
+                    title: t("К освобождению", "Reclaimable"),
+                    value: ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file),
+                    subtitle: t("Потенциал очистки", "Potential cleanup")
+                )
+                summaryCard(
+                    title: t("Выбрано (объём)", "Selected Size"),
+                    value: ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file),
+                    subtitle: t("Текущий выбор", "Current selection")
+                )
+            }
+
+            if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
+                ContentUnavailableView(
+                    t("Дубликаты не найдены", "No Duplicates"),
+                    systemImage: "square.on.square",
+                    description: Text(t(
+                        "Запусти скан выбранной цели или домашней папки.",
+                        "Run duplicate scan for selected target or Home folder."
+                    ))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(t("Рекомендация", "Focus"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(t(
+                        "Перейди во вкладку «Группы», проверь рекомендованный выбор и выполни очистку пакетно.",
+                        "Open Groups workspace, verify recommended selection, then run batch cleanup."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    private var groupsWorkspace: some View {
+        VStack(spacing: 8) {
+            if model.duplicateGroups.isEmpty, !model.isDuplicateScanRunning {
+                ContentUnavailableView(
+                    t("Дубликаты не найдены", "No Duplicates"),
+                    systemImage: "square.on.square",
+                    description: Text(t(
+                        "Запусти скан выбранной цели или домашней папки.",
+                        "Run duplicate scan for selected target or Home folder."
+                    ))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                duplicateList
+                if !selectedPaths.isEmpty {
+                    selectionPanel
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 10)
+                }
+            }
+        }
+    }
+
+    private var diagnosticsWorkspace: some View {
+        Group {
+            if cleanupDiagnostics.isEmpty {
+                ContentUnavailableView(
+                    t("Диагностика очистки пуста", "No Cleanup Diagnostics"),
+                    systemImage: "list.bullet.clipboard",
+                    description: Text(t(
+                        "После очистки дубликатов здесь появится детальная диагностика операций.",
+                        "Run duplicate cleanup to see detailed diagnostics here."
+                    ))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                cleanupDiagnosticsPanel
+            }
+        }
     }
 
     private var progressPanel: some View {
@@ -514,6 +623,41 @@ struct ClutterView: View {
     private func t(_ ru: String, _ en: String) -> String {
         isRussian ? ru : en
     }
+
+    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 }
 
 private struct CleanupDiagnosticRow: Identifiable {
@@ -526,4 +670,10 @@ private struct CleanupDiagnosticRow: Identifiable {
     var fileName: String {
         URL(fileURLWithPath: path).lastPathComponent
     }
+}
+
+private enum ClutterWorkspaceTab: Hashable {
+    case overview
+    case groups
+    case diagnostics
 }

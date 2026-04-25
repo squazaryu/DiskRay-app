@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var pendingDeleteNodes: [FileNode] = []
     @State private var showDeleteConfirm = false
     @State private var resultMessage: String?
+    @State private var workspaceTab: SearchWorkspaceTab = .results
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: SearchViewModel(root: rootModel))
@@ -26,21 +27,16 @@ struct SearchView: View {
 
             searchToolbar
                 .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
+            workspaceNavigation
+            statusStrip
 
-            filtersPanel
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 12)
-
-            if model.search.query.isEmpty {
-                ContentUnavailableView(
-                    t("Поиск", "Search"),
-                    systemImage: "magnifyingglass",
-                    description: Text(t("Введи запрос и нажми «Поиск».", "Type query and press Search."))
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
-            } else {
-                resultsPanel
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 8)
+            Group {
+                switch workspaceTab {
+                case .query:
+                    queryWorkspace
+                case .results:
+                    resultsWorkspace
+                }
             }
 
             Spacer()
@@ -77,6 +73,88 @@ struct SearchView: View {
             Button(t("ОК", "OK"), role: .cancel) {}
         } message: {
             Text(resultMessage ?? "")
+        }
+    }
+
+    private var workspaceNavigation: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $workspaceTab) {
+                Text(t("Запрос и фильтры", "Query & Filters")).tag(SearchWorkspaceTab.query)
+                Text(t("Результаты", "Results")).tag(SearchWorkspaceTab.results)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 360)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 8) {
+            statusTile(
+                title: t("Область", "Scope"),
+                value: model.activeScopeLabel,
+                tint: .blue
+            )
+            statusTile(
+                title: t("Найдено", "Found"),
+                value: "\(model.search.results.count)",
+                tint: .green
+            )
+            statusTile(
+                title: t("Выбрано", "Selected"),
+                value: "\(selection.count)",
+                tint: selection.isEmpty ? .secondary : .orange
+            )
+            statusTile(
+                title: t("Режим", "Mode"),
+                value: model.search.mode == .live ? t("Live", "Live") : t("Manual", "Manual"),
+                tint: .purple
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var queryWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            filtersPanel
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 12)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(t("Как работать", "How to use"))
+                    .font(.subheadline.weight(.semibold))
+                Text(t(
+                    "Выбери scope, задай фильтры и выполни поиск. Результаты появятся во вкладке «Результаты».",
+                    "Pick scope, set filters, and run search. Results appear in the Results workspace."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+        }
+    }
+
+    private var resultsWorkspace: some View {
+        Group {
+            if model.search.query.isEmpty {
+                ContentUnavailableView(
+                    t("Поиск", "Search"),
+                    systemImage: "magnifyingglass",
+                    description: Text(t("Введи запрос и нажми «Поиск».", "Type query and press Search."))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+            } else {
+                VStack(spacing: 8) {
+                    resultsActionStrip
+                    resultsPanel
+                }
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 8)
+            }
         }
     }
 
@@ -214,6 +292,43 @@ struct SearchView: View {
         }
     }
 
+    private var resultsActionStrip: some View {
+        HStack {
+            Text(t("Найдено: \(model.search.results.count)", "Found: \(model.search.results.count)"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(t("Выбрать все", "Select All")) {
+                selection = Set(model.search.results.map(\.id))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(model.search.results.isEmpty)
+            Button(t("Снять выбор", "Clear Selection")) {
+                selection.removeAll()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selection.isEmpty)
+            Button(t("Показать", "Reveal")) {
+                guard let first = selectedNodes().first else { return }
+                model.revealInFinder(first)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selection.isEmpty)
+            Button(t("Удалить выбранное", "Trash Selected")) {
+                requestTrashConfirmation(for: selectedNodes())
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(selection.isEmpty)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
     private var resultsPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -221,34 +336,9 @@ struct SearchView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(t("Найдено: \(model.search.results.count)", "Found: \(model.search.results.count)"))
+                Text(t("Scope: \(model.activeScopePath)", "Scope: \(model.activeScopePath)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button(t("Выбрать все", "Select All")) {
-                    selection = Set(model.search.results.map(\.id))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.search.results.isEmpty)
-                Button(t("Снять выбор", "Clear Selection")) {
-                    selection.removeAll()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selection.isEmpty)
-                Button(t("Показать", "Reveal")) {
-                    guard let first = selectedNodes().first else { return }
-                    model.revealInFinder(first)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selection.isEmpty)
-                Button(t("Удалить выбранное", "Trash Selected")) {
-                    requestTrashConfirmation(for: selectedNodes())
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selection.isEmpty)
             }
 
             VStack(spacing: 0) {
@@ -390,4 +480,26 @@ struct SearchView: View {
     private func t(_ ru: String, _ en: String) -> String {
         isRussian ? ru : en
     }
+
+    private func statusTile(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private enum SearchWorkspaceTab: Hashable {
+    case query
+    case results
 }
