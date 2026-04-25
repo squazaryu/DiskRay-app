@@ -816,7 +816,7 @@ final class RootViewModel: ObservableObject {
             guard let self else { return }
             try? await Task.sleep(nanoseconds: delayNanos)
             guard !Task.isCancelled else { return }
-            await self.performScheduledRescanIfNeeded()
+            self.performScheduledRescanIfNeeded()
         }
     }
 
