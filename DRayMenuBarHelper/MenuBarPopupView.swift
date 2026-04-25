@@ -142,7 +142,12 @@ struct MenuBarPopupView: View {
             }
             .buttonStyle(.plain)
             .popover(isPresented: $showHealthDetails, arrowEdge: .top) {
-                healthDetailsPopover
+                MenuBarHealthDetailsPopoverView(
+                    issues: healthIssues,
+                    onOpenPerformance: {
+                        model.open(section: .performance, action: .runPerformanceScan)
+                    }
+                )
             }
             .help("Show health diagnostics")
         }
@@ -321,41 +326,6 @@ struct MenuBarPopupView: View {
             .controlSize(.small)
             .buttonStyle(.bordered)
         }
-    }
-
-    private var healthDetailsPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Health details")
-                .font(.headline)
-            ForEach(healthIssues) { issue in
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: issue.severity.icon)
-                        .foregroundStyle(issue.severity.color)
-                        .frame(width: 16)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(issue.title)
-                            .font(.subheadline.weight(.semibold))
-                        Text(issue.details)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(cardBackground)
-            }
-            HStack {
-                Spacer()
-                Button("Open Performance") {
-                    model.open(section: .performance, action: .runPerformanceScan)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-        }
-        .padding(12)
-        .frame(width: 360)
     }
 
     private func metricCard(
