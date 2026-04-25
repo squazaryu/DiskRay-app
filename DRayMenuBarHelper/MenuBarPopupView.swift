@@ -156,7 +156,7 @@ struct MenuBarPopupView: View {
     private var cardsGrid: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                metricCard(
+                MenuBarMetricCardView(
                     title: "Macintosh HD",
                     subtitle: diskSubtitle,
                     value: diskValue + diskUsePercentText,
@@ -165,7 +165,7 @@ struct MenuBarPopupView: View {
                         model.open(section: .spaceLens, action: .runSpaceLensScan)
                     }
                 )
-                metricCard(
+                MenuBarMetricCardView(
                     title: "Memory",
                     subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
                     value: memoryValue,
@@ -176,8 +176,13 @@ struct MenuBarPopupView: View {
                 )
             }
             HStack(spacing: 10) {
-                batteryMetricCard
-                metricCard(
+                MenuBarBatteryMetricCardView(
+                    stateText: batteryStateText,
+                    valueText: batteryValueText,
+                    healthPercent: batterySnapshot?.healthPercent,
+                    onDetails: { openBatteryDetails() }
+                )
+                MenuBarMetricCardView(
                     title: "CPU",
                     subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))% load",
@@ -326,77 +331,6 @@ struct MenuBarPopupView: View {
             .controlSize(.small)
             .buttonStyle(.bordered)
         }
-    }
-
-    private func metricCard(
-        title: String,
-        subtitle: String,
-        value: String,
-        actionTitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
-            HStack {
-                Spacer()
-                Button(actionTitle, action: action)
-                    .controlSize(.small)
-                    .buttonStyle(.bordered)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
-    }
-
-    private var batteryMetricCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("Battery")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Spacer()
-            }
-            Text(batteryStateText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Text(batteryValueText)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            HStack {
-                if let health = batterySnapshot?.healthPercent {
-                    Text("Health \(health)%")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(health >= 80 ? .green : .orange)
-                } else {
-                    Text("Tap Details for diagnostics")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Details") {
-                    openBatteryDetails()
-                }
-                .controlSize(.small)
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
     }
 
     private var shellBackground: some View {
