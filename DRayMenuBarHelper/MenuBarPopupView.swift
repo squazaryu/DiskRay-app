@@ -61,7 +61,12 @@ struct MenuBarPopupView: View {
         }
         .overlay(alignment: .bottom) {
             if let message = model.reliefResultMessage {
-                reliefResultBanner(message)
+                ReliefResultBannerView(
+                    message: message,
+                    colorScheme: colorScheme
+                ) {
+                    model.reliefResultMessage = nil
+                }
                     .padding(.horizontal, 10)
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -69,7 +74,17 @@ struct MenuBarPopupView: View {
         }
         .overlay {
             if showReliefConfirm {
-                reliefConfirmOverlay
+                ReliefConfirmOverlayView(
+                    colorScheme: colorScheme,
+                    title: "Load Reduction",
+                    message: reliefDialogTitle,
+                    actionTitle: reliefActionTitle,
+                    onCancel: {
+                        pendingReliefAction = nil
+                        showReliefConfirm = false
+                    },
+                    onConfirm: { executeReliefAction() }
+                )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
@@ -705,67 +720,6 @@ struct MenuBarPopupView: View {
         case .memory:
             model.reduceMemory(consumers: memoryReliefCandidates, limit: 3)
         }
-    }
-
-    private var reliefConfirmOverlay: some View {
-        ZStack {
-            Color.black.opacity(colorScheme == .dark ? 0.30 : 0.16)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    pendingReliefAction = nil
-                    showReliefConfirm = false
-                }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Load Reduction")
-                    .font(.headline)
-                Text(reliefDialogTitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack {
-                    Spacer()
-                    Button("Cancel") {
-                        pendingReliefAction = nil
-                        showReliefConfirm = false
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
-                    Button(reliefActionTitle) {
-                        executeReliefAction()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-            }
-            .padding(14)
-            .frame(width: 360, alignment: .leading)
-            .background(cardBackground)
-        }
-    }
-
-    private func reliefResultBanner(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Load Reduction")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("OK") {
-                    model.reliefResultMessage = nil
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
     }
 
     private func openBatteryDetails() {
