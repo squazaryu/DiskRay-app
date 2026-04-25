@@ -3,22 +3,31 @@ import AppKit
 
 actor AppUninstallerService: UninstallerServicing {
     func installedApps() -> [InstalledApp] {
-        let appsURL = URL(fileURLWithPath: "/Applications")
-        guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: appsURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        let roots = [
+            URL(fileURLWithPath: "/Applications"),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")
+        ]
 
         var result: [InstalledApp] = []
-        for appURL in urls where appURL.pathExtension == "app" {
-            guard let bundle = Bundle(url: appURL),
-                  let bundleID = bundle.bundleIdentifier else { continue }
-            result.append(InstalledApp(
-                name: appURL.deletingPathExtension().lastPathComponent,
-                bundleID: bundleID,
-                appURL: appURL
-            ))
+        var uniquePaths = Set<String>()
+
+        for root in roots {
+            guard let urls = try? FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for appURL in urls where appURL.pathExtension == "app" {
+                guard uniquePaths.insert(appURL.path).inserted else { continue }
+                let bundle = Bundle(url: appURL)
+                let bundleID = bundle?.bundleIdentifier ?? fallbackBundleIdentifier(for: appURL)
+                result.append(InstalledApp(
+                    name: appURL.deletingPathExtension().lastPathComponent,
+                    bundleID: bundleID,
+                    appURL: appURL
+                ))
+            }
         }
 
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -294,6 +303,18 @@ actor AppUninstallerService: UninstallerServicing {
 
     private func depth(of relativePath: String) -> Int {
         relativePath.split(separator: "/").filter { !$0.isEmpty }.count
+    }
+
+    private func fallbackBundleIdentifier(for appURL: URL) -> String {
+        let basename = appURL.deletingPathExtension().lastPathComponent
+        let sanitized = basename
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        if sanitized.isEmpty {
+            return "local.unknown.\(UUID().uuidString.lowercased())"
+        }
+        return "local.\(sanitized)"
     }
 
     private func directorySize(at url: URL) -> Int64 {
