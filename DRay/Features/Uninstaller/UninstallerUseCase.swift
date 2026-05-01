@@ -4,11 +4,13 @@ protocol UninstallerServicing: Sendable {
     func installedApps() async -> [InstalledApp]
     func findRemnants(for app: InstalledApp) async -> [AppRemnant]
     func findStartupReferences(for app: InstalledApp) async -> [UninstallStartupReference]
+    func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate]
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport
 }
 
 extension UninstallerServicing {
     func findStartupReferences(for app: InstalledApp) async -> [UninstallStartupReference] { [] }
+    func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate] { [] }
 }
 
 struct UninstallExecutionResult: Sendable {
@@ -33,6 +35,10 @@ struct UninstallerUseCase {
 
     func findRemnants(for app: InstalledApp) async -> [AppRemnant] {
         await service.findRemnants(for: app)
+    }
+
+    func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate] {
+        await service.deepSweepOrphanRemnants(installedApps: installedApps)
     }
 
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {

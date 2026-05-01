@@ -1,6 +1,7 @@
 import Foundation
 
 enum AppSection: String {
+    case overview
     case smartCare
     case clutter
     case uninstaller

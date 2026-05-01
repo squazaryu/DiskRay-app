@@ -5,37 +5,48 @@ struct SettingsView: View {
     let onChooseFolder: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             ModuleHeaderCard(
                 title: model.localized(.settingsTitle),
                 subtitle: model.localized(.settingsSubtitle)
             ) {
-                EmptyView()
+                Button(model.localized(.settingsRefresh)) {
+                    model.refreshPermissions()
+                    model.refreshLaunchAtLoginStatus()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
 
-            settingsToolbar
-            settingsStatusStrip
-
-            ScrollView {
-                VStack(spacing: 10) {
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(columns: settingsColumns, alignment: .leading, spacing: 12) {
                     generalGroup
+                    appearanceGroup
                     permissionsCard
-
-                    HStack(alignment: .top, spacing: 10) {
-                        scanningCleanupCard
-                        recoverySafetyCard
-                    }
-
+                    scanningCleanupCard
+                    recoverySafetyCard
                     diagnosticsCard
                 }
-                .padding(12)
+                .padding(.horizontal, 2)
+
+                settingsStatusStrip
+                    .padding(.top, 12)
+                    .padding(.horizontal, 2)
+                .padding(.bottom, 8)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .onAppear {
             model.refreshPermissions()
             model.refreshLaunchAtLoginStatus()
         }
+    }
+
+    private var settingsColumns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 360, maximum: 620), spacing: 12, alignment: .top)
+        ]
     }
 
     private var settingsStatusStrip: some View {
@@ -76,7 +87,7 @@ struct SettingsView: View {
         return tr("Требуется доступ", "Action Needed")
     }
 
-    private var permissionsStatusTint: Color {
+    var permissionsStatusTint: Color {
         if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
             return .green
         }

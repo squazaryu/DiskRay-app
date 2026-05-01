@@ -422,6 +422,8 @@ private struct ThemedRootContainer: View {
     var body: some View {
         RootView(model: model)
             .preferredColorScheme(preferredColorScheme)
+            .tint(model.appAccentColor.color)
+            .environment(\.drayAccentColor, model.appAccentColor.color)
             .onAppear {
                 AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
                 guard !didAppear else { return }

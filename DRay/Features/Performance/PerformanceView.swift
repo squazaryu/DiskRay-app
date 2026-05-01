@@ -4,6 +4,7 @@ import AppKit
 struct PerformanceView: View {
     @StateObject var model: PerformanceViewModel
     @StateObject var monitor = LiveSystemMetricsMonitor()
+    @Environment(\.drayLayoutMetrics) var layoutMetrics
 
     @State var selectedPaths = Set<String>()
     @State var showCleanupConfirm = false
@@ -22,15 +23,14 @@ struct PerformanceView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: layoutMetrics.sectionSpacing) {
                 header
-                globalCommandStrip
                 workspaceNavigation
                 workspaceContent
                     .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
             }
             .padding(.top, 6)
-            .padding(12)
+            .padding(layoutMetrics.cardSpacing)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -104,7 +104,7 @@ struct PerformanceView: View {
                 "Diagnostics command center: load, battery, startup and network."
             )
         ) {
-            EmptyView()
+            globalCommandStrip
         }
     }
 
@@ -131,8 +131,6 @@ struct PerformanceView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Spacer(minLength: 10)
-
             if model.performance.isScanRunning {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -144,23 +142,21 @@ struct PerformanceView: View {
                 .background(.regularMaterial, in: Capsule())
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
     }
 
     private var workspaceNavigation: some View {
-        HStack(spacing: 10) {
-            Picker("", selection: $workspaceTab) {
-                Text(t("Обзор", "Overview")).tag(PerformanceWorkspaceTab.overview)
-                Text(t("Нагрузка", "System Load")).tag(PerformanceWorkspaceTab.systemLoad)
-                Text(t("Батарея", "Battery & Energy")).tag(PerformanceWorkspaceTab.batteryEnergy)
-                Text(t("Автозапуск", "Startup")).tag(PerformanceWorkspaceTab.startup)
-                Text(t("Сеть", "Network")).tag(PerformanceWorkspaceTab.network)
-            }
-            .pickerStyle(.segmented)
+        Picker("", selection: $workspaceTab) {
+            Text(t("Обзор", "Overview")).tag(PerformanceWorkspaceTab.overview)
+            Text(t("Нагрузка", "System Load")).tag(PerformanceWorkspaceTab.systemLoad)
+            Text(t("Батарея", "Battery & Energy")).tag(PerformanceWorkspaceTab.batteryEnergy)
+            Text(t("Автозапуск", "Startup")).tag(PerformanceWorkspaceTab.startup)
+            Text(t("Сеть", "Network")).tag(PerformanceWorkspaceTab.network)
         }
-        .padding(.horizontal, 2)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 620)
+        .padding(6)
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
     }
 
     @ViewBuilder

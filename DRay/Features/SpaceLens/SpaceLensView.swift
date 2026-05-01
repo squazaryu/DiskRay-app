@@ -3,6 +3,8 @@ import SwiftUI
 struct SpaceLensView: View {
     @ObservedObject var model: RootViewModel
     let onChooseFolder: () -> Void
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
+    @Environment(\.drayInterfaceDensity) private var density
 
     @State private var selectedPaths = Set<String>()
     @State private var pendingTrashNodes: [FileNode] = []
@@ -15,21 +17,17 @@ struct SpaceLensView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let sidebarWidth = min(212, max(156, proxy.size.width * 0.185))
-
-            VStack(spacing: 10) {
+            VStack(spacing: layoutMetrics.sectionSpacing) {
                 header
-                controlsToolbar
                 workspaceNavigation
-                statusStrip
                 if workspaceTab == .map {
-                    HStack(alignment: .top, spacing: 12) {
-                        sidebar
-                            .frame(width: sidebarWidth)
+                    HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                         detail
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .frame(width: max(density == .compact ? 480 : 520, proxy.size.width * (density == .compact ? 0.60 : 0.62)), alignment: .topLeading)
                             .layoutPriority(1)
-                            .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 8)
+                            .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: layoutMetrics.bottomStripVerticalPadding)
+                        spaceLensSummaryPanel
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                 } else {
                     insightsWorkspace
@@ -37,7 +35,7 @@ struct SpaceLensView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(layoutMetrics.cardSpacing)
         .onAppear {
             selectedPaths.removeAll()
             model.hoveredPath = nil
@@ -53,16 +51,15 @@ struct SpaceLensView: View {
     }
 
     private var workspaceNavigation: some View {
-        HStack(spacing: 10) {
-            Picker("", selection: $workspaceTab) {
-                Text(t("Карта", "Map")).tag(SpaceLensWorkspaceTab.map)
-                Text(t("Инсайты", "Insights")).tag(SpaceLensWorkspaceTab.insights)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 300)
-            Spacer(minLength: 8)
+        Picker("", selection: $workspaceTab) {
+            Text(t("Карта", "Map")).tag(SpaceLensWorkspaceTab.map)
+            Text(t("Инсайты", "Insights")).tag(SpaceLensWorkspaceTab.insights)
         }
-        .padding(.horizontal, 2)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 320)
+        .padding(layoutMetrics.bottomStripVerticalPadding)
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
     }
 
     private var statusStrip: some View {
@@ -88,8 +85,8 @@ struct SpaceLensView: View {
                 tint: .purple
             )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
@@ -98,7 +95,142 @@ struct SpaceLensView: View {
             title: model.localized(.navSpaceLens),
             subtitle: "\(model.localized(.spaceLensTarget)): \(model.selectedTarget.url.path)"
         ) {
-            EmptyView()
+            HStack(spacing: 8) {
+                targetPicker
+
+                Button(model.localized(.spaceLensScan)) { model.scanSelected() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.isLoading)
+
+                Button(model.localized(.spaceLensRescan)) { model.rescan() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.lastScannedTarget == nil || model.isLoading)
+            }
+        }
+    }
+
+    private var spaceLensSummaryPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
+                storageSummaryCard
+                sectionCard(title: model.localized(.spaceLensLargest)) {
+                    if let root = model.root {
+                        largestSection(root: root)
+                    } else {
+                        Text(model.localized(.spaceLensEmptyNeedScan))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                quickActionsCard
+                sectionCard(title: t("Доступ", "Access")) {
+                    permissionsSection
+                }
+            }
+            .padding(2)
+        }
+    }
+
+    private var storageSummaryCard: some View {
+        sectionCard(title: t("Сводка хранилища", "Storage Summary")) {
+            if let root = model.root {
+                VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .center, spacing: layoutMetrics.cardSpacing) {
+                                DRayDonutChartView(
+                            segments: storageSegments(for: root),
+                            centerTitle: root.formattedSize,
+                            centerSubtitle: t("занято", "used"),
+                            lineWidth: 16
+                        )
+                        .frame(width: density == .compact ? 112 : 132, height: density == .compact ? 112 : 132)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label(model.selectedTarget.name, systemImage: "internaldrive")
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer(minLength: 0)
+                                GlassPillBadge(title: t("Скан готов", "Scan ready"), tint: .green)
+                            }
+
+                            ForEach(Array(root.largestChildren.prefix(5).enumerated()), id: \.element.id) { index, node in
+                                DRayRankedBarRow(
+                                    rank: index + 1,
+                                    title: node.name,
+                                    subtitle: node.url.deletingLastPathComponent().path,
+                                    value: node.formattedSize,
+                                    progress: root.sizeInBytes > 0 ? Double(node.sizeInBytes) / Double(root.sizeInBytes) : 0,
+                                    tint: storagePalette[index % storagePalette.count],
+                                    icon: node.isDirectory ? "folder.fill" : "doc.fill"
+                                )
+                            }
+                        }
+                    }
+
+                    Text(model.selectedTargetPath)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label(model.selectedTarget.name, systemImage: "internaldrive")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(t("Не просканировано", "Not scanned"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    DRayProgressBar(value: storageSummaryProgress, tint: .blue, height: 7)
+
+                    Text(model.selectedTargetPath)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private var storageSummaryProgress: Double {
+        model.root == nil ? 0 : 1
+    }
+
+    private var quickActionsCard: some View {
+        sectionCard(title: t("Быстрые действия", "Quick Actions")) {
+            VStack(spacing: layoutMetrics.bottomStripVerticalPadding) {
+                Button {
+                    bubbleTapMode = .select
+                } label: {
+                    Label(t("Режим выбора", "Select Mode"), systemImage: "checkmark.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    bubbleTapMode = .openFolders
+                } label: {
+                    Label(t("Открывать папки", "Open Folders"), systemImage: "folder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button(role: .destructive) {
+                    requestTrashConfirmation(for: selectedNodes, clearSelection: true)
+                } label: {
+                    Label(model.localized(.spaceLensMoveToTrash), systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedNodes.isEmpty)
+            }
         }
     }
 
@@ -122,7 +254,8 @@ struct SpaceLensView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 210)
+                .labelsHidden()
+                .frame(minWidth: 240)
 
                 if model.isLoading {
                     Button(model.isPaused ? model.localized(.spaceLensResume) : model.localized(.spaceLensPause)) { model.togglePauseScan() }
@@ -135,15 +268,15 @@ struct SpaceLensView: View {
                     .controlSize(.small)
                     .disabled(model.lastScannedTarget == nil || model.isLoading)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMetrics.cardSpacing)
+            .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var sidebar: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
                 sectionCard(title: model.localized(.spaceLensPermissions)) {
                     permissionsSection
                 }
@@ -156,7 +289,7 @@ struct SpaceLensView: View {
                     }
                 }
             }
-            .padding(10)
+            .padding(layoutMetrics.cardSpacing)
         }
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.04, shadowOpacity: 0.03, padding: 0)
         .overlay {
@@ -168,7 +301,7 @@ struct SpaceLensView: View {
 
     private var insightsWorkspace: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
                 HStack(spacing: 8) {
                     summaryCard(
                         title: t("Узлы", "Nodes"),
@@ -213,7 +346,7 @@ struct SpaceLensView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .padding(10)
+            .padding(layoutMetrics.cardSpacing)
         }
     }
 
@@ -372,7 +505,7 @@ struct SpaceLensView: View {
                 .foregroundStyle(.secondary)
             content()
         }
-        .padding(10)
+        .padding(layoutMetrics.cardSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -548,6 +681,21 @@ struct SpaceLensView: View {
     private func formattedVisitedItems(_ count: Int) -> String {
         let formatted = count.formatted(.number.grouping(.automatic))
         return isRussian ? "\(formatted) файлов" : "\(formatted) files"
+    }
+
+    private var storagePalette: [Color] {
+        [.blue, .purple, .teal, .orange, .green, .pink]
+    }
+
+    private func storageSegments(for root: FileNode) -> [DRayDonutSegment] {
+        let largest = Array(root.largestChildren.prefix(6))
+        return largest.enumerated().map { index, node in
+            DRayDonutSegment(
+                title: node.name,
+                value: Double(max(node.sizeInBytes, 0)),
+                color: storagePalette[index % storagePalette.count]
+            )
+        }
     }
 
     private func summaryCard(title: String, value: String, subtitle: String) -> some View {

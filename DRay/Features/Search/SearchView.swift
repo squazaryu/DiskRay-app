@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchView: View {
     @StateObject private var model: SearchViewModel
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
     @State private var selection = Set<FileNode.ID>()
     @State private var presetName = ""
     @State private var pendingDeleteNodes: [FileNode] = []
@@ -14,7 +15,7 @@ struct SearchView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: layoutMetrics.sectionSpacing) {
             ModuleHeaderCard(
                 title: t("Search", "Search"),
                 subtitle: t(
@@ -26,7 +27,7 @@ struct SearchView: View {
             }
 
             searchToolbar
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: 12)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: layoutMetrics.cardSpacing)
             workspaceNavigation
             statusStrip
 
@@ -41,7 +42,7 @@ struct SearchView: View {
 
             Spacer()
         }
-        .padding(12)
+        .padding(layoutMetrics.cardSpacing)
         .onChange(of: model.search.results) {
             let valid = Set(model.search.results.map(\.id))
             selection = selection.intersection(valid)
@@ -91,50 +92,83 @@ struct SearchView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(
+            DRayCompactInfoTile(
                 title: t("Область", "Scope"),
                 value: model.activeScopeLabel,
+                subtitle: t("active target", "active target"),
+                icon: "scope",
                 tint: .blue
             )
-            statusTile(
+            DRayCompactInfoTile(
                 title: t("Найдено", "Found"),
                 value: "\(model.search.results.count)",
-                tint: .green
+                subtitle: t("matching items", "matching items"),
+                icon: "doc.text.magnifyingglass",
+                tint: .green,
+                progress: min(1, Double(model.search.results.count) / 200)
             )
-            statusTile(
+            DRayCompactInfoTile(
                 title: t("Выбрано", "Selected"),
                 value: "\(selection.count)",
-                tint: selection.isEmpty ? .secondary : .orange
+                subtitle: t("bulk actions", "bulk actions"),
+                icon: "checkmark.circle",
+                tint: selection.isEmpty ? .secondary : .orange,
+                progress: model.search.results.isEmpty ? 0 : Double(selection.count) / Double(model.search.results.count)
             )
-            statusTile(
+            DRayCompactInfoTile(
                 title: t("Режим", "Mode"),
                 value: model.search.mode == .live ? t("Live", "Live") : t("Manual", "Manual"),
+                subtitle: t("search engine", "search engine"),
+                icon: "bolt.horizontal.circle",
                 tint: .purple
             )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var queryWorkspace: some View {
         VStack(alignment: .leading, spacing: 10) {
             filtersPanel
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 12)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(t("Как работать", "How to use"))
-                    .font(.subheadline.weight(.semibold))
-                Text(t(
-                    "Выбери scope, задай фильтры и выполни поиск. Результаты появятся во вкладке «Результаты».",
-                    "Pick scope, set filters, and run search. Results appear in the Results workspace."
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        DRayIconBadge(icon: "line.3.horizontal.decrease.circle", tint: .blue, size: 30)
+                        Text(t("Search Scope", "Search Scope"))
+                            .font(.headline)
+                        Spacer()
+                    }
+                    Text(model.activeScopePath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    DRayProgressBar(value: model.search.results.isEmpty ? 0.08 : min(1, Double(model.search.results.count) / 200), tint: .blue, height: 6)
+                }
+                .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    DRayActionRow(
+                        title: t("Run Search", "Run Search"),
+                        subtitle: t("Apply query, scope and filters.", "Apply query, scope and filters."),
+                        icon: "magnifyingglass",
+                        tint: .blue,
+                        actionTitle: t("Search", "Search")
+                    ) { model.triggerSearch() }
+                    DRayActionRow(
+                        title: t("Open Results", "Open Results"),
+                        subtitle: t("Review and bulk-manage matches.", "Review and bulk-manage matches."),
+                        icon: "list.bullet.rectangle",
+                        tint: .green,
+                        actionTitle: t("Open", "Open")
+                    ) { workspaceTab = .results }
+                }
+                .frame(width: 330, alignment: .topLeading)
+                .frame(minHeight: 120, alignment: .topLeading)
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }
-            .padding(10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
         }
     }
 
@@ -153,14 +187,14 @@ struct SearchView: View {
                     resultsActionStrip
                     resultsPanel
                 }
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 8)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: layoutMetrics.bottomStripVerticalPadding)
             }
         }
     }
 
     private var searchToolbar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: layoutMetrics.bottomStripVerticalPadding) {
+            HStack(spacing: layoutMetrics.cardSpacing) {
                 Menu {
                     ForEach(model.searchScopeChoices) { choice in
                         Button {
@@ -216,8 +250,8 @@ struct SearchView: View {
     }
 
     private var filtersPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMetrics.bottomStripVerticalPadding) {
+            HStack(spacing: layoutMetrics.bottomStripVerticalPadding) {
                 TextField(t("Путь содержит", "Path contains"), text: model.binding(\.pathContains))
                     .textFieldStyle(.roundedBorder)
                 TextField(t("Владелец содержит", "Owner contains"), text: model.binding(\.ownerContains))
@@ -257,7 +291,7 @@ struct SearchView: View {
             }
             .font(.caption)
 
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMetrics.bottomStripVerticalPadding) {
                 Toggle("Regex", isOn: model.binding(\.useRegex))
                     .toggleStyle(.checkbox)
                 Text(t("Глубина", "Depth"))
@@ -324,8 +358,8 @@ struct SearchView: View {
             .controlSize(.small)
             .disabled(selection.isEmpty)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -353,8 +387,8 @@ struct SearchView: View {
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, layoutMetrics.cardSpacing)
+                .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
                 .background(.regularMaterial)
 
                 Divider()
@@ -411,8 +445,8 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
@@ -493,8 +527,8 @@ struct SearchView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

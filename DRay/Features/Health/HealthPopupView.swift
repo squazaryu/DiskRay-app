@@ -6,22 +6,22 @@ struct HealthPopupView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             statusStrip
 
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
                 diagnosticsCards
                 focusPanel
             }
 
             actionsRow
         }
-        .padding(18)
-        .frame(width: 760, height: 560)
+        .padding(12)
+        .frame(width: 700, height: 500)
         .background(
             LinearGradient(
-                colors: [Color(red: 0.11, green: 0.21, blue: 0.33), Color(red: 0.07, green: 0.12, blue: 0.22)],
+                colors: [Color(red: 0.05, green: 0.09, blue: 0.16), Color(red: 0.03, green: 0.06, blue: 0.12)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -40,10 +40,10 @@ struct HealthPopupView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Mac Health")
-                    .font(.title2.weight(.bold))
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
                 Text("\(Host.current().localizedName ?? "Mac") · \(healthStateLabel)")
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.white.opacity(0.85))
             }
             Spacer()
@@ -61,13 +61,13 @@ struct HealthPopupView: View {
     }
 
     private var diagnosticsCards: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
                 diagnosticsCard("Storage", detail: storageValue, hint: "Capacity and cleanup headroom")
                 diagnosticsCard("Memory", detail: memoryValue, hint: "Current pressure indicator")
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 diagnosticsCard("Startup", detail: startupValue, hint: "Boot-time impact footprint")
                 diagnosticsCard("Privacy", detail: privacyValue, hint: "Trace categories currently found")
             }
@@ -76,12 +76,12 @@ struct HealthPopupView: View {
     }
 
     private var focusPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Text("Focus Now")
                 .font(.headline)
                 .foregroundStyle(.white)
             Text(recommendation)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.white.opacity(0.88))
 
             Divider().overlay(.white.opacity(0.16))
@@ -95,14 +95,13 @@ struct HealthPopupView: View {
             Spacer(minLength: 8)
 
             Text("Use full scan when you need a complete storage + performance + privacy baseline.")
-                .font(.headline)
-                .foregroundStyle(.white.opacity(0.78))
                 .font(.caption)
+                .foregroundStyle(.white.opacity(0.78))
         }
-        .padding(14)
-        .frame(width: 248)
+        .padding(10)
+        .frame(width: 220)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var actionsRow: some View {
@@ -111,18 +110,21 @@ struct HealthPopupView: View {
                 model.runUnifiedScan()
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.small)
 
             Button("Open Performance") {
                 model.selectedSection = .performance
                 dismiss()
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Button("Open Privacy") {
                 model.selectedSection = .privacy
                 dismiss()
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Button("Export Report") {
                 if let url = model.exportDiagnosticReport() {
@@ -130,6 +132,7 @@ struct HealthPopupView: View {
                 }
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Spacer()
 
@@ -137,19 +140,20 @@ struct HealthPopupView: View {
                 dismiss()
             }
             .buttonStyle(.bordered)
+            .controlSize(.small)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func diagnosticsCard(_ title: String, detail: String, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
             Text(detail)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.white.opacity(0.88))
                 .lineLimit(2)
             Spacer(minLength: 4)
@@ -158,9 +162,9 @@ struct HealthPopupView: View {
                 .foregroundStyle(.white.opacity(0.70))
                 .lineLimit(2)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 122, alignment: .topLeading)
-        .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func popupStatusTile(title: String, value: String) -> some View {

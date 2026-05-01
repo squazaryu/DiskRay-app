@@ -8,6 +8,7 @@ private enum PrivacyCleanMode {
 
 struct PrivacyView: View {
     @StateObject private var model: PrivacyViewModel
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
     @State private var expanded = Set<String>()
     @State private var showConfirm = false
     @State private var pendingCleanMode: PrivacyCleanMode = .selected
@@ -18,7 +19,7 @@ struct PrivacyView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: layoutMetrics.sectionSpacing) {
             header
             privacyToolbar
             workspaceNavigation
@@ -38,9 +39,9 @@ struct PrivacyView: View {
                     categoriesWorkspace
                 }
             }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : 12)
+            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : layoutMetrics.cardSpacing)
         }
-        .padding(12)
+        .padding(layoutMetrics.cardSpacing)
         .confirmationDialog(
             confirmTitle,
             isPresented: $showConfirm,
@@ -70,37 +71,29 @@ struct PrivacyView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(title: "Categories", value: "\(model.state.categories.count)", tint: .blue)
-            statusTile(title: "Selected", value: "\(selectedCount)", tint: .green)
-            statusTile(
+            DRayCompactInfoTile(title: "Categories", value: "\(model.state.categories.count)", subtitle: "privacy groups", icon: "lock.shield", tint: .blue)
+            DRayCompactInfoTile(title: "Selected", value: "\(selectedCount)", subtitle: "cleanup scope", icon: "checkmark.circle", tint: .green, progress: model.state.categories.isEmpty ? 0 : Double(selectedCount) / Double(model.state.categories.count))
+            DRayCompactInfoTile(
                 title: "Items",
                 value: "\(selectedArtifactsCount)",
-                tint: selectedArtifactsCount > 0 ? .orange : .secondary
+                subtitle: "artifacts",
+                icon: "doc.text",
+                tint: selectedArtifactsCount > 0 ? .orange : .secondary,
+                progress: min(1, Double(selectedArtifactsCount) / 200)
             )
-            statusTile(
+            DRayCompactInfoTile(
                 title: "Estimated",
                 value: ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file),
-                tint: .purple
+                subtitle: "footprint",
+                icon: "externaldrive.badge.minus",
+                tint: .purple,
+                progress: min(1, Double(selectedBytes) / Double(1024 * 1024 * 1024))
             )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var overviewWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                summaryCard(title: "Categories", value: "\(model.state.categories.count)", subtitle: "Privacy cleanup groups")
-                summaryCard(title: "Selected", value: "\(selectedCount)", subtitle: "Chosen categories")
-                summaryCard(title: "Items", value: "\(selectedArtifactsCount)", subtitle: "Artifacts in scope")
-                summaryCard(
-                    title: "Estimated",
-                    value: ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file),
-                    subtitle: "Potential cleanup footprint"
-                )
-            }
-
+        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
             if let cleanReport = model.state.cleanReport {
                 HStack(spacing: 8) {
                     GlassPillBadge(title: "Moved \(cleanReport.moved)", tint: .green)
@@ -138,15 +131,57 @@ struct PrivacyView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Privacy guidance")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Use Categories workspace for detailed review and selective cleanup. Keep high-risk groups for manual review.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "lock.shield", tint: .purple, size: 30)
+                            Text("Privacy Exposure")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        ForEach(Array(model.state.categories.prefix(5).enumerated()), id: \.element.id) { index, row in
+                            DRayRankedBarRow(
+                                rank: index + 1,
+                                title: row.category.title,
+                                subtitle: "\(row.category.artifacts.count) items · \(riskLabel(row.category.risk))",
+                                value: ByteCountFormatter.string(fromByteCount: row.category.totalBytes, countStyle: .file),
+                                progress: privacyCategoryProgress(row),
+                                tint: riskColor(row.category.risk),
+                                icon: "eye.slash"
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "sparkles", tint: .green, size: 30)
+                            Text("Recommended Flow")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        DRayActionRow(
+                            title: "Select Recommended",
+                            subtitle: "Low and medium risk traces only.",
+                            icon: "checkmark.shield",
+                            tint: .green,
+                            actionTitle: "Select"
+                        ) { model.selectRecommended(includeMediumRisk: true) }
+                        DRayActionRow(
+                            title: "Review Categories",
+                            subtitle: "Inspect before destructive cleanup.",
+                            icon: "list.bullet.rectangle",
+                            tint: .purple,
+                            actionTitle: "Open"
+                        ) { workspaceTab = .categories }
+                    }
+                    .frame(width: 340, alignment: .topLeading)
+                    .frame(minHeight: 190, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
                 }
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
     }
@@ -208,8 +243,8 @@ struct PrivacyView: View {
                 .controlSize(.small)
                 .disabled(selectedCount == 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMetrics.cardSpacing)
+            .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
@@ -247,10 +282,10 @@ struct PrivacyView: View {
             .controlSize(.small)
             .disabled(model.state.categories.isEmpty)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, 10)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.top, 8)
     }
 
@@ -268,7 +303,7 @@ struct PrivacyView: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(layoutMetrics.cardSpacing)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -383,6 +418,11 @@ struct PrivacyView: View {
         model.state.categories.filter(\.isSelected).reduce(0) { $0 + $1.category.totalBytes }
     }
 
+    private func privacyCategoryProgress(_ row: PrivacyCategoryState) -> Double {
+        let maxBytes = max(model.state.categories.map { $0.category.totalBytes }.max() ?? 0, 1)
+        return min(1, Double(row.category.totalBytes) / Double(maxBytes))
+    }
+
     private func riskLabel(_ risk: PrivacyRisk) -> String {
         switch risk {
         case .low: return "Low Risk"
@@ -410,8 +450,8 @@ struct PrivacyView: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

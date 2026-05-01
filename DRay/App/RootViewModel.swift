@@ -3,7 +3,7 @@ import AppKit
 
 @MainActor
 final class RootViewModel: ObservableObject {
-    @Published var selectedSection: AppSection = .smartCare
+    @Published var selectedSection: AppSection = .overview
     @Published private(set) var root: FileNode?
     @Published private(set) var isLoading = false
     @Published private(set) var selectedTarget = ScanTarget(name: "Macintosh HD", url: URL(fileURLWithPath: "/"))
@@ -33,6 +33,16 @@ final class RootViewModel: ObservableObject {
     @Published var appAppearance: AppAppearance = .system {
         didSet {
             uiSettingsStore.saveAppAppearance(appAppearance)
+        }
+    }
+    @Published var appAccentColor: AppAccentColor = .blue {
+        didSet {
+            uiSettingsStore.saveAppAccentColor(appAccentColor)
+        }
+    }
+    @Published var appInterfaceDensity: AppInterfaceDensity = .adaptive {
+        didSet {
+            uiSettingsStore.saveAppInterfaceDensity(appInterfaceDensity)
         }
     }
     @Published var defaultScanTarget: ScanDefaultTarget = .lastSelectedFolder {
@@ -152,9 +162,17 @@ final class RootViewModel: ObservableObject {
             historyStore: dependencies.historyStore,
             safeFileOperations: dependencies.safeFileOperations
         )
+        let uninstallRemainingUseCase = UninstallRemainingUseCase(
+            historyStore: dependencies.historyStore
+        )
+        let uninstallObservedAppsUseCase = UninstallObservedAppsUseCase(
+            historyStore: dependencies.historyStore
+        )
         self.uninstaller = UninstallerFeatureController(
             uninstallerUseCase: uninstallerUseCase,
             uninstallSessionUseCase: uninstallSessionUseCase,
+            uninstallRemainingUseCase: uninstallRemainingUseCase,
+            uninstallObservedAppsUseCase: uninstallObservedAppsUseCase,
             safeFileOperations: dependencies.safeFileOperations
         )
         self.repair = RepairFeatureController(
@@ -174,6 +192,12 @@ final class RootViewModel: ObservableObject {
         }
         if let appearance = uiSettingsStore.loadAppAppearance() {
             appAppearance = appearance
+        }
+        if let accentColor = uiSettingsStore.loadAppAccentColor() {
+            appAccentColor = accentColor
+        }
+        if let interfaceDensity = uiSettingsStore.loadAppInterfaceDensity() {
+            appInterfaceDensity = interfaceDensity
         }
         if let target = uiSettingsStore.loadDefaultScanTarget() {
             defaultScanTarget = target
@@ -214,6 +238,7 @@ final class RootViewModel: ObservableObject {
         recovery.loadHistory()
         smartCareController.loadExclusions()
         uninstaller.loadSessions()
+        uninstaller.loadRemainingRecords()
         repair.loadSessions()
         refreshLaunchAtLoginStatus()
         permissions.refreshPermissionStatus(for: selectedTarget.url)

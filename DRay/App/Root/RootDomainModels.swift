@@ -210,6 +210,7 @@ enum SmartCleanProfile: String, CaseIterable, Identifiable {
 }
 
 enum AppSection: String, Hashable {
+    case overview
     case smartCare
     case clutter
     case uninstaller

@@ -104,6 +104,8 @@ struct UninstallerFeatureState {
     var verifyReport: UninstallVerifyReport?
     var isVerifyRunning = false
     var sessions: [UninstallSession] = []
+    var remainingRecords: [UninstallRemainingRecord] = []
+    var removedAppCandidates: [UninstallRemovedAppCandidate] = []
 }
 
 struct RepairFeatureState {

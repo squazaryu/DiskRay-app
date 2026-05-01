@@ -28,6 +28,7 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 }
 
 enum AppL10nKey: String {
+    case navOverview
     case navSmartCare
     case navClutter
     case navUninstaller
@@ -156,6 +157,7 @@ enum AppL10n {
 
     static func sectionTitle(_ section: AppSection, language: AppLanguage) -> String {
         switch section {
+        case .overview: return text(.navOverview, language: language)
         case .smartCare: return text(.navSmartCare, language: language)
         case .clutter: return text(.navClutter, language: language)
         case .uninstaller: return text(.navUninstaller, language: language)
@@ -175,6 +177,7 @@ enum AppL10n {
 
     private static func english(_ key: AppL10nKey) -> String {
         switch key {
+        case .navOverview: return "Overview"
         case .navSmartCare: return "Smart Care"
         case .navClutter: return "My Clutter"
         case .navUninstaller: return "Uninstaller"
@@ -299,6 +302,7 @@ enum AppL10n {
 
     private static func russian(_ key: AppL10nKey) -> String {
         switch key {
+        case .navOverview: return "Обзор"
         case .navSmartCare: return "Умный уход"
         case .navClutter: return "Мой хлам"
         case .navUninstaller: return "Удаление"

@@ -2,6 +2,10 @@ import Foundation
 import AppKit
 
 actor AppUninstallerService: UninstallerServicing {
+    private static let deepSweepBundlePattern = try! NSRegularExpression(
+        pattern: #"[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*){2,}"#
+    )
+
     func installedApps() -> [InstalledApp] {
         let roots = [
             URL(fileURLWithPath: "/Applications"),
@@ -138,6 +142,78 @@ actor AppUninstallerService: UninstallerServicing {
         }
     }
 
+    func deepSweepOrphanRemnants(installedApps: [InstalledApp]) -> [UninstallDeepSweepCandidate] {
+        let installedBundleIDs = Set(installedApps.map { normalizedBundleID($0.bundleID) })
+        let roots = deepSweepRoots()
+        let maxDepth = 4
+        let maxMatches = 2_500
+        let maxIssuesPerBundle = 60
+
+        var grouped: [String: [UninstallVerifyIssue]] = [:]
+        var seenPaths = Set<String>()
+        var totalMatches = 0
+
+        outerLoop: for root in roots where FileManager.default.fileExists(atPath: root.path) {
+            guard let enumerator = FileManager.default.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { continue }
+
+            for case let url as URL in enumerator {
+                let relative = url.path.replacingOccurrences(of: root.path, with: "")
+                if depth(of: relative) > maxDepth {
+                    enumerator.skipDescendants()
+                    continue
+                }
+
+                let normalizedPath = URL(fileURLWithPath: url.path).standardizedFileURL.path
+                guard seenPaths.insert(normalizedPath).inserted else { continue }
+
+                let bundleIDCandidates = extractBundleIDs(from: normalizedPath)
+                guard
+                    let bundleID = bundleIDCandidates.first(where: { candidate in
+                        shouldIncludeDeepSweepBundleID(candidate, installedBundleIDs: installedBundleIDs)
+                    })
+                else { continue }
+
+                let issue = UninstallVerifyIssue(
+                    url: url,
+                    sizeInBytes: directorySize(at: url),
+                    reason: "Detected by deep sweep as an orphaned artifact for a missing app bundle.",
+                    risk: deepSweepRisk(for: normalizedPath)
+                )
+                grouped[bundleID, default: []].append(issue)
+                totalMatches += 1
+                if totalMatches >= maxMatches {
+                    break outerLoop
+                }
+            }
+        }
+
+        return grouped.map { bundleID, issues in
+            UninstallDeepSweepCandidate(
+                appName: appNameFromBundleID(bundleID),
+                bundleID: bundleID,
+                issues: Array(
+                    issues.sorted { lhs, rhs in
+                        if lhs.sizeInBytes != rhs.sizeInBytes {
+                            return lhs.sizeInBytes > rhs.sizeInBytes
+                        }
+                        return lhs.url.path.localizedCaseInsensitiveCompare(rhs.url.path) == .orderedAscending
+                    }
+                    .prefix(maxIssuesPerBundle)
+                )
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.totalSizeInBytes != rhs.totalSizeInBytes {
+                return lhs.totalSizeInBytes > rhs.totalSizeInBytes
+            }
+            return lhs.appName.localizedCaseInsensitiveCompare(rhs.appName) == .orderedAscending
+        }
+    }
+
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
@@ -258,6 +334,98 @@ actor AppUninstallerService: UninstallerServicing {
         let sanitizedName = app.name.lowercased().replacingOccurrences(of: " ", with: "")
         return [app.bundleID.lowercased(), app.name.lowercased(), sanitizedName]
             .filter { !$0.isEmpty }
+    }
+
+    private func deepSweepRoots() -> [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return [
+            home.appendingPathComponent("Library/Application Support"),
+            home.appendingPathComponent("Library/Caches"),
+            home.appendingPathComponent("Library/Preferences"),
+            home.appendingPathComponent("Library/Logs"),
+            home.appendingPathComponent("Library/Containers"),
+            home.appendingPathComponent("Library/Group Containers"),
+            home.appendingPathComponent("Library/Saved Application State"),
+            home.appendingPathComponent("Library/LaunchAgents"),
+            URL(fileURLWithPath: "/Library/Application Support"),
+            URL(fileURLWithPath: "/Library/Caches"),
+            URL(fileURLWithPath: "/Library/Preferences"),
+            URL(fileURLWithPath: "/Library/Logs"),
+            URL(fileURLWithPath: "/Library/LaunchAgents"),
+            URL(fileURLWithPath: "/Library/LaunchDaemons"),
+            URL(fileURLWithPath: "/Library/PrivilegedHelperTools")
+        ]
+    }
+
+    private func extractBundleIDs(from path: String) -> [String] {
+        let lowercased = path.lowercased()
+        let range = NSRange(lowercased.startIndex..<lowercased.endIndex, in: lowercased)
+        let matches = Self.deepSweepBundlePattern.matches(in: lowercased, options: [], range: range)
+        var seen = Set<String>()
+        var result: [String] = []
+
+        for match in matches {
+            guard let swiftRange = Range(match.range, in: lowercased) else { continue }
+            var bundleID = String(lowercased[swiftRange])
+            if bundleID.hasPrefix("group.") {
+                bundleID.removeFirst("group.".count)
+            }
+            guard seen.insert(bundleID).inserted else { continue }
+            result.append(bundleID)
+        }
+
+        return result
+    }
+
+    private func shouldIncludeDeepSweepBundleID(
+        _ bundleID: String,
+        installedBundleIDs: Set<String>
+    ) -> Bool {
+        if installedBundleIDs.contains(bundleID) {
+            return false
+        }
+        if bundleID.hasPrefix("com.apple.") {
+            return false
+        }
+        if bundleID.hasPrefix("apple.") {
+            return false
+        }
+        if bundleID.hasPrefix("group.com.apple.") {
+            return false
+        }
+        return true
+    }
+
+    private func appNameFromBundleID(_ bundleID: String) -> String {
+        let tail = bundleID.split(separator: ".").last.map(String.init) ?? bundleID
+        let normalized = tail
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalized.isEmpty else { return bundleID }
+        return normalized
+            .split(separator: " ")
+            .map { word in
+                guard let first = word.first else { return String(word) }
+                return String(first).uppercased() + String(word.dropFirst())
+            }
+            .joined(separator: " ")
+    }
+
+    private func deepSweepRisk(for path: String) -> UninstallRiskLevel {
+        let lower = path.lowercased()
+        if lower.contains("/launchagents/") || lower.contains("/launchdaemons/") || lower.contains("/startupitems/") {
+            return .high
+        }
+        if lower.contains("/containers/") || lower.contains("/group containers/") || lower.contains("/application support/") {
+            return .medium
+        }
+        return .low
+    }
+
+    private func normalizedBundleID(_ bundleID: String) -> String {
+        bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func fileContainsAnyToken(_ url: URL, tokens: [String]) -> Bool {

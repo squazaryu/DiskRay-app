@@ -31,6 +31,32 @@ final class UninstallerViewModel: ObservableObject {
         uninstallerController.loadRemnants(for: app)
     }
 
+    func refreshRemainingRecords() {
+        uninstallerController.refreshRemainingRecords()
+    }
+
+    func deepSweepRemainingRecords() {
+        uninstallerController.deepSweepRemainingRecords()
+    }
+
+    @discardableResult
+    func cleanRemainingRecord(_ record: UninstallRemainingRecord) -> TrashOperationResult {
+        uninstallerController.cleanRemainingRecord(record)
+    }
+
+    @discardableResult
+    func cleanAllRemainingRecords() -> TrashOperationResult {
+        uninstallerController.cleanAllRemainingRecords()
+    }
+
+    func removeRemainingRecord(_ record: UninstallRemainingRecord) {
+        uninstallerController.removeRemainingRecord(record)
+    }
+
+    func clearRemainingRecords() {
+        uninstallerController.clearRemainingRecords()
+    }
+
     func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
         uninstallerController.uninstallPreview(for: app)
     }

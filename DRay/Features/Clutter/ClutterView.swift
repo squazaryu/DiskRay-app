@@ -3,6 +3,7 @@ import AppKit
 
 struct ClutterView: View {
     @StateObject private var model: ClutterViewModel
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
 
     @State private var selectedPaths = Set<String>()
     @State private var pendingTrashPaths: [String] = []
@@ -16,7 +17,7 @@ struct ClutterView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: layoutMetrics.sectionSpacing) {
             controls
             controlsToolbar
             workspaceNavigation
@@ -29,16 +30,16 @@ struct ClutterView: View {
             switch workspaceTab {
             case .overview:
                 overviewWorkspace
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: layoutMetrics.cardSpacing)
             case .groups:
                 groupsWorkspace
                     .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
             case .diagnostics:
                 diagnosticsWorkspace
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: layoutMetrics.cardSpacing)
             }
         }
-        .padding(12)
+        .padding(layoutMetrics.cardSpacing)
         .onAppear { selectRecommendedDuplicates() }
         .onChange(of: groupsSignature) {
             syncSelectionWithExistingFiles()
@@ -115,8 +116,8 @@ struct ClutterView: View {
                 tint: cleanupDiagnostics.isEmpty ? .secondary : .purple
             )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
@@ -168,34 +169,46 @@ struct ClutterView: View {
                 }
                 .controlSize(.small)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMetrics.cardSpacing)
+            .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
 
     private var overviewWorkspace: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                summaryCard(
+        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
+            HStack(spacing: layoutMetrics.cardSpacing) {
+                DRayCompactInfoTile(
                     title: t("Группы", "Groups"),
                     value: "\(model.duplicateGroups.count)",
-                    subtitle: t("Группы с идентичным содержимым", "Groups with identical content")
+                    subtitle: t("duplicate sets", "duplicate sets"),
+                    icon: "square.on.square",
+                    tint: .blue,
+                    progress: min(1, Double(model.duplicateGroups.count) / 25)
                 )
-                summaryCard(
+                DRayCompactInfoTile(
                     title: t("Выбрано", "Selected"),
                     value: "\(selectedPaths.count)",
-                    subtitle: t("Файлы к удалению", "Files selected for cleanup")
+                    subtitle: t("cleanup scope", "cleanup scope"),
+                    icon: "checkmark.circle",
+                    tint: selectedPaths.isEmpty ? .secondary : .green,
+                    progress: duplicateFileCount == 0 ? 0 : Double(selectedPaths.count) / Double(duplicateFileCount)
                 )
-                summaryCard(
+                DRayCompactInfoTile(
                     title: t("К освобождению", "Reclaimable"),
                     value: ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file),
-                    subtitle: t("Потенциал очистки", "Potential cleanup")
+                    subtitle: t("safe potential", "safe potential"),
+                    icon: "externaldrive.badge.minus",
+                    tint: .orange,
+                    progress: reclaimableRatio
                 )
-                summaryCard(
+                DRayCompactInfoTile(
                     title: t("Выбрано (объём)", "Selected Size"),
                     value: ByteCountFormatter.string(fromByteCount: selectedSelectedBytes, countStyle: .file),
-                    subtitle: t("Текущий выбор", "Current selection")
+                    subtitle: t("current selection", "current selection"),
+                    icon: "trash",
+                    tint: .purple,
+                    progress: totalReclaimableBytes == 0 ? 0 : Double(selectedSelectedBytes) / Double(totalReclaimableBytes)
                 )
             }
 
@@ -210,18 +223,58 @@ struct ClutterView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(t("Рекомендация", "Focus"))
-                        .font(.subheadline.weight(.semibold))
-                    Text(t(
-                        "Перейди во вкладку «Группы», проверь рекомендованный выбор и выполни очистку пакетно.",
-                        "Open Groups workspace, verify recommended selection, then run batch cleanup."
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "scope", tint: .blue, size: 30)
+                            Text(t("Duplicate Map", "Duplicate Map"))
+                                .font(.headline)
+                            Spacer()
+                        }
+                        ForEach(Array(model.duplicateGroups.prefix(5).enumerated()), id: \.element.id) { index, group in
+                            DRayRankedBarRow(
+                                rank: index + 1,
+                                title: group.files.first?.name ?? t("Группа", "Group"),
+                                subtitle: "\(group.files.count) \(t("файлов", "files")) · \(ByteCountFormatter.string(fromByteCount: group.reclaimableBytes, countStyle: .file))",
+                                value: ByteCountFormatter.string(fromByteCount: group.sizeInBytes, countStyle: .file),
+                                progress: duplicateMaxReclaimableBytes == 0 ? 0 : Double(group.reclaimableBytes) / Double(duplicateMaxReclaimableBytes),
+                                tint: index == 0 ? .orange : .blue,
+                                icon: "doc.on.doc"
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "sparkles", tint: .green, size: 30)
+                            Text(t("Recommended Flow", "Recommended Flow"))
+                                .font(.headline)
+                            Spacer()
+                        }
+                        DRayActionRow(
+                            title: t("Review Groups", "Review Groups"),
+                            subtitle: t("Проверь, какой файл оставить.", "Verify which file should be kept."),
+                            icon: "list.bullet.rectangle",
+                            tint: .blue,
+                            actionTitle: t("Open", "Open")
+                        ) { workspaceTab = .groups }
+                        DRayActionRow(
+                            title: t("Clean Selected", "Clean Selected"),
+                            subtitle: t("Move recommended duplicates to Trash.", "Move recommended duplicates to Trash."),
+                            icon: "trash",
+                            tint: .orange,
+                            actionTitle: t("Clean", "Clean")
+                        ) { requestDuplicateTrash(paths: selectedPaths.sorted()) }
+                        .disabled(selectedPaths.isEmpty)
+                    }
+                    .frame(width: 340, alignment: .topLeading)
+                    .frame(minHeight: 190, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
                 }
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
     }
@@ -292,7 +345,7 @@ struct ClutterView: View {
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
     }
 
     private var duplicateList: some View {
@@ -415,7 +468,7 @@ struct ClutterView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -489,7 +542,7 @@ struct ClutterView: View {
             }
             .frame(minHeight: 120, maxHeight: 240)
         }
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: 10)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
     }
 
     private var groupsSignature: String {
@@ -506,6 +559,20 @@ struct ClutterView: View {
 
     private var totalReclaimableBytes: Int64 {
         model.duplicateGroups.reduce(0) { $0 + $1.reclaimableBytes }
+    }
+
+    private var duplicateFileCount: Int {
+        model.duplicateGroups.reduce(0) { $0 + $1.files.count }
+    }
+
+    private var duplicateMaxReclaimableBytes: Int64 {
+        model.duplicateGroups.map(\.reclaimableBytes).max() ?? 0
+    }
+
+    private var reclaimableRatio: Double {
+        let total = model.duplicateGroups.reduce(Int64(0)) { $0 + ($1.sizeInBytes * Int64($1.files.count)) }
+        guard total > 0 else { return 0 }
+        return min(1, Double(totalReclaimableBytes) / Double(total))
     }
 
     private var fileByPath: [String: DuplicateFile] {
@@ -638,7 +705,7 @@ struct ClutterView: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(layoutMetrics.cardSpacing)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -654,8 +721,8 @@ struct ClutterView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

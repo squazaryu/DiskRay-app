@@ -15,23 +15,26 @@ struct MenuBarPopupView: View {
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     @State private var batteryAutoRefreshTask: Task<Void, Never>?
+    @State private var cpuTrend: [Double] = []
+    @State private var memoryTrend: [Double] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            cardsGrid
-            recommendationCard
+        VStack(alignment: .leading, spacing: 8) {
+            popupHeader
+            healthHeroCard
+            metricTilesGrid
             consumersSection
+            recommendationCard
             footer
         }
-        .padding(14)
+        .padding(10)
         .background(shellBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(borderColor.opacity(0.9), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .frame(width: 432)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(width: 430)
         .onReceive(NotificationCenter.default.publisher(for: .helperDismissTransientUI)) { _ in
             showHealthDetails = false
             showBatteryDetails = false
@@ -58,6 +61,10 @@ struct MenuBarPopupView: View {
             if !showBatteryDetails {
                 suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
             }
+        }
+        .onReceive(monitor.$snapshot) { snapshot in
+            appendTrend(snapshot.cpuLoadPercent, to: &cpuTrend)
+            appendTrend(snapshot.memoryPressurePercent, to: &memoryTrend)
         }
         .overlay(alignment: .bottom) {
             if let message = model.reliefResultMessage {
@@ -110,37 +117,29 @@ struct MenuBarPopupView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
+    private var popupHeader: some View {
+        HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Mac Health: \(healthTitle)")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(healthSummaryLine)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text("DRay")
+                    .font(.system(size: 20, weight: .semibold))
                 Text("Updated \(monitor.snapshot.updatedAt, style: .time)")
-                    .font(.caption2)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
             }
+
             Spacer()
+        }
+    }
+
+    private var healthHeroCard: some View {
+        HStack(spacing: 14) {
             Button {
                 showHealthDetails.toggle()
             } label: {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 38, height: 38)
-                    .overlay(
-                        Circle()
-                            .stroke(borderColor.opacity(0.6), lineWidth: 0.9)
-                    )
-                    .overlay(
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(healthColor)
-                    )
+                MenuBarMiniRing(icon: healthTitle == "Good" ? "checkmark" : "exclamationmark", tint: healthColor, size: 68)
             }
             .buttonStyle(.plain)
+            .contentShape(Circle())
             .popover(isPresented: $showHealthDetails, arrowEdge: .top) {
                 MenuBarHealthDetailsPopoverView(
                     issues: healthIssues,
@@ -149,92 +148,121 @@ struct MenuBarPopupView: View {
                     }
                 )
             }
-            .help("Show health diagnostics")
+            .help("Health Details")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Mac Health")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(healthTitle)
+                    .font(.system(size: 24, weight: .semibold))
+                Text(healthSummaryLine)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text("Last checked: \(monitor.snapshot.updatedAt, style: .time)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.blue)
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                model.open(section: .smartCare, action: .runUnifiedScan)
+            } label: {
+                Label("Smart Scan", systemImage: "wand.and.sparkles")
+                    .frame(minWidth: 94)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
         }
+        .padding(12)
+        .background(cardBackground(accent: .blue, cornerRadius: 16))
     }
 
-    private var cardsGrid: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                MenuBarMetricCardView(
-                    title: "Macintosh HD",
-                    subtitle: diskSubtitle,
-                    value: diskValue + diskUsePercentText,
-                    actionTitle: "Free Up",
-                    action: {
-                        model.open(section: .spaceLens, action: .runSpaceLensScan)
-                    }
-                )
-                MenuBarMetricCardView(
-                    title: "Memory",
-                    subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
-                    value: memoryValue,
-                    actionTitle: "Inspect",
-                    action: {
-                        model.open(section: .performance, action: .runPerformanceScan)
-                    }
-                )
+    private var metricTilesGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            MenuBarMetricTileCard(
+                title: "Storage",
+                value: diskUsedValue,
+                subtitle: diskUsePercentText.replacingOccurrences(of: " · ", with: ""),
+                icon: "internaldrive",
+                tint: .blue,
+                progress: diskUsedRatio,
+                actionTitle: "Free Up"
+            ) {
+                model.open(section: .spaceLens, action: .runSpaceLensScan)
             }
-            HStack(spacing: 10) {
-                MenuBarBatteryMetricCardView(
-                    stateText: batteryStateText,
-                    valueText: batteryValueText,
-                    healthPercent: batterySnapshot?.healthPercent,
-                    onDetails: { openBatteryDetails() }
-                )
-                MenuBarMetricCardView(
-                    title: "CPU",
-                    subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
-                    value: "\(Int(monitor.snapshot.cpuLoadPercent))% load",
-                    actionTitle: "Diagnose",
-                    action: {
-                        model.open(section: .performance, action: .runPerformanceScan)
-                    }
-                )
+
+            MenuBarMetricTileCard(
+                title: "Memory",
+                value: memoryValue,
+                subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
+                icon: "memorychip",
+                tint: .purple,
+                progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
+                sparkline: memoryTrend,
+                actionTitle: "Inspect"
+            ) {
+                model.open(section: .performance, action: .runPerformanceScan)
+            }
+
+            MenuBarMetricTileCard(
+                title: "Battery",
+                value: batteryValueText,
+                subtitle: batteryStateText,
+                icon: "battery.75percent",
+                tint: .green,
+                progress: monitor.snapshot.batteryLevelPercent.map { Double($0) / 100.0 },
+                actionTitle: "Details"
+            ) {
+                openBatteryDetails()
+            }
+
+            MenuBarMetricTileCard(
+                title: "CPU",
+                value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
+                subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
+                icon: "waveform.path.ecg",
+                tint: .orange,
+                progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
+                sparkline: cpuTrend,
+                actionTitle: "Diagnose"
+            ) {
+                model.open(section: .performance, action: .runPerformanceScan)
             }
         }
     }
 
     private var consumersSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("Top Consumers")
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text("Preview")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.regularMaterial, in: Capsule())
-                Button("Open Performance") {
+                Button("Performance") {
                     model.open(section: .performance, action: .runPerformanceScan)
                 }
+                .font(popupButtonFont)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
-            if consumerRows.isEmpty {
+            if monitor.snapshot.topCPUConsumers.isEmpty {
                 Text("Collecting process telemetry...")
-                    .font(.caption)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 6) {
-                    ForEach(Array(consumerRows.prefix(4))) { row in
-                        HStack(spacing: 8) {
-                            Text(row.name)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text("CPU \(row.cpuText)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("MEM \(row.memoryText)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("BAT \(row.batteryText)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.orange)
-                        }
+                    ForEach(Array(monitor.snapshot.topCPUConsumers.prefix(3))) { consumer in
+                        MenuBarRankedConsumerRow(
+                            name: consumer.name,
+                            detail: "MEM \(Int(consumer.memoryMB))MB · EI \(String(format: "%.1f", consumer.batteryImpactScore))",
+                            value: "\(Int(consumer.cpuPercent))%",
+                            progress: min(1, consumer.cpuPercent / maxTopCPU),
+                            tint: .blue
+                        )
                     }
                 }
             }
@@ -244,6 +272,7 @@ struct MenuBarPopupView: View {
                     showReliefConfirm = true
                 }
                 .disabled(cpuReliefCandidates.isEmpty)
+                .font(popupButtonFont)
                 .controlSize(.small)
                 .buttonStyle(.bordered)
 
@@ -252,6 +281,7 @@ struct MenuBarPopupView: View {
                     showReliefConfirm = true
                 }
                 .disabled(memoryReliefCandidates.isEmpty)
+                .font(popupButtonFont)
                 .controlSize(.small)
                 .buttonStyle(.bordered)
 
@@ -261,53 +291,58 @@ struct MenuBarPopupView: View {
                     model.restorePriorities()
                 }
                 .disabled(!model.canRestorePriorities)
+                .font(popupButtonFont)
                 .controlSize(.small)
                 .buttonStyle(.bordered)
             }
         }
-        .padding(12)
-        .background(cardBackground)
+        .padding(10)
+        .background(cardBackground(accent: .blue, cornerRadius: 16))
     }
 
     private var recommendationCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Today's Recommendation")
-                .font(.headline)
-                .foregroundStyle(.primary)
-            Text(recommendationText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            HStack {
-                Spacer()
-                Button(recommendationActionTitle) {
-                    recommendationAction()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recommendation")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(recommendationText)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            Spacer(minLength: 8)
+            Button(recommendationActionTitle) {
+                recommendationAction()
+            }
+            .font(popupButtonFont)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
-        .padding(12)
-        .background(cardBackground)
+        .padding(9)
+        .background(cardBackground(accent: .cyan, cornerRadius: 14))
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Button("Open DRay") {
                 model.openMain()
             }
+            .font(popupButtonFont)
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
 
             Button("Smart Scan") {
                 model.open(section: .smartCare, action: .runUnifiedScan)
             }
+            .font(popupButtonFont)
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Button("Open Performance") {
+            Button("Performance") {
                 model.open(section: .performance, action: .runPerformanceScan)
             }
+            .font(popupButtonFont)
             .buttonStyle(.bordered)
             .controlSize(.small)
 
@@ -327,63 +362,65 @@ struct MenuBarPopupView: View {
                 }
             } label: {
                 Label("Actions", systemImage: "ellipsis.circle")
+                    .font(popupButtonFont)
             }
             .controlSize(.small)
             .buttonStyle(.bordered)
         }
     }
 
+    private var popupButtonFont: Font {
+        .system(size: 12, weight: .semibold)
+    }
+
     private var shellBackground: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.thinMaterial)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.42),
-                            Color.clear,
-                            Color.black.opacity(colorScheme == .dark ? 0.20 : 0.06)
+                            Color.white.opacity(colorScheme == .dark ? 0.14 : 0.34),
+                            Color.white.opacity(colorScheme == .dark ? 0.03 : 0.10),
+                            Color.black.opacity(colorScheme == .dark ? 0.16 : 0.07)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-            if colorScheme == .light {
-                RadialGradient(
-                    colors: [Color.cyan.opacity(0.10), .clear],
-                    center: .bottomLeading,
-                    startRadius: 24,
-                    endRadius: 280
-                )
-            }
-            LinearGradient(
+            RadialGradient(
                 colors: [
-                    tintColor.opacity(colorScheme == .dark ? 0.24 : 0.15),
-                    Color.clear,
-                    tintColor.opacity(colorScheme == .dark ? 0.12 : 0.06)
+                    Color.cyan.opacity(colorScheme == .dark ? 0.10 : 0.07),
+                    .clear
                 ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 260
             )
             RadialGradient(
-                colors: [Color.indigo.opacity(colorScheme == .dark ? 0.20 : 0.10), .clear],
+                colors: [
+                    Color.indigo.opacity(colorScheme == .dark ? 0.08 : 0.05),
+                    .clear
+                ],
                 center: .bottomTrailing,
-                startRadius: 40,
-                endRadius: 320
+                startRadius: 20,
+                endRadius: 280
             )
         }
     }
 
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+    private func cardBackground(accent: Color, cornerRadius: CGFloat = 10) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.regularMaterial)
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.08 : 0.26),
+                                accent.opacity(colorScheme == .dark ? 0.16 : 0.10),
+                                Color.white.opacity(colorScheme == .dark ? 0.10 : 0.28),
+                                Color.white.opacity(colorScheme == .dark ? 0.03 : 0.10),
                                 Color.clear
                             ],
                             startPoint: .topLeading,
@@ -392,15 +429,15 @@ struct MenuBarPopupView: View {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(borderColor.opacity(colorScheme == .dark ? 0.78 : 0.45), lineWidth: 0.65)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(colorScheme == .dark ? Color.white.opacity(0.20) : Color.white.opacity(0.66), lineWidth: 0.7)
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.16 : 0.08), radius: 10, y: 5)
-            .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.26), radius: 5, x: -1, y: -1)
-    }
-
-    private var tintColor: Color {
-        colorScheme == .dark ? Color.cyan : Color.blue
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(colorScheme == .dark ? Color.black.opacity(0.26) : Color.black.opacity(0.08), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.16 : 0.10), radius: 7, y: 3)
+            .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.18), radius: 3, x: -1, y: -1)
     }
 
     private var borderColor: Color {
@@ -478,20 +515,11 @@ struct MenuBarPopupView: View {
         return "\(used) of \(total)"
     }
 
-    private var diskSubtitle: String {
-        let free = monitor.snapshot.diskFreeBytes
-        if free > 0 {
-            return "Available \(ByteCountFormatter.string(fromByteCount: free, countStyle: .file))"
-        }
-        return "Storage details unavailable"
-    }
-
-    private var diskValue: String {
+    private var diskUsedValue: String {
         let total = monitor.snapshot.diskTotalBytes
-        if total > 0 {
-            return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-        }
-        return "n/a"
+        let free = monitor.snapshot.diskFreeBytes
+        guard total > 0 else { return "n/a" }
+        return ByteCountFormatter.string(fromByteCount: max(0, total - free), countStyle: .file)
     }
 
     private var diskUsePercentText: String {
@@ -501,6 +529,13 @@ struct MenuBarPopupView: View {
         let used = max(0, total - free)
         let percent = Int((Double(used) / Double(total)) * 100)
         return " · \(percent)% used"
+    }
+
+    private var diskUsedRatio: Double {
+        let total = monitor.snapshot.diskTotalBytes
+        let free = monitor.snapshot.diskFreeBytes
+        guard total > 0 else { return 0 }
+        return Double(max(0, total - free)) / Double(total)
     }
 
     private var diskFreeRatio: Double {
@@ -543,46 +578,8 @@ struct MenuBarPopupView: View {
         }
     }
 
-    private var consumerRows: [ConsumerRow] {
-        var rows: [ConsumerRow] = []
-        var seen = Set<String>()
-
-        for cpu in monitor.snapshot.topCPUConsumers {
-            let key = cpu.name.lowercased()
-            guard !seen.contains(key) else { continue }
-            seen.insert(key)
-            let battery = monitor.snapshot.topBatteryConsumers.first { $0.name.caseInsensitiveCompare(cpu.name) == .orderedSame }
-            rows.append(
-                ConsumerRow(
-                    id: cpu.name,
-                    name: cpu.name,
-                    cpuText: "\(Int(cpu.cpuPercent))%",
-                    memoryText: "\(Int(cpu.memoryMB))MB",
-                    batteryText: battery.map { String(format: "%.1f", $0.batteryImpactScore) } ?? String(format: "%.1f", cpu.batteryImpactScore)
-                )
-            )
-            if rows.count >= 5 { break }
-        }
-
-        if rows.count < 5 {
-            for memory in monitor.snapshot.topMemoryConsumers {
-                let key = memory.name.lowercased()
-                guard !seen.contains(key) else { continue }
-                seen.insert(key)
-                let battery = monitor.snapshot.topBatteryConsumers.first { $0.name.caseInsensitiveCompare(memory.name) == .orderedSame }
-                rows.append(
-                    ConsumerRow(
-                        id: memory.name,
-                        name: memory.name,
-                        cpuText: "\(Int(memory.cpuPercent))%",
-                        memoryText: "\(Int(memory.memoryMB))MB",
-                        batteryText: battery.map { String(format: "%.1f", $0.batteryImpactScore) } ?? String(format: "%.1f", memory.batteryImpactScore)
-                    )
-                )
-                if rows.count >= 5 { break }
-            }
-        }
-        return rows
+    private var maxTopCPU: Double {
+        max(monitor.snapshot.topCPUConsumers.prefix(3).map(\.cpuPercent).max() ?? 100, 100)
     }
 
     private var cpuReliefCandidates: [ProcessConsumer] {
@@ -676,6 +673,14 @@ struct MenuBarPopupView: View {
     private func stopBatteryAutoRefresh() {
         batteryAutoRefreshTask?.cancel()
         batteryAutoRefreshTask = nil
+    }
+
+    private func appendTrend(_ value: Double, to series: inout [Double], limit: Int = 28) {
+        guard value.isFinite else { return }
+        series.append(value)
+        if series.count > limit {
+            series.removeFirst(series.count - limit)
+        }
     }
 }
 

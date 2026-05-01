@@ -4,10 +4,13 @@ import AppKit
 struct UninstallerView: View {
     @StateObject private var model: UninstallerViewModel
     @StateObject private var iconCache = AppIconCache()
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
     @State private var selectedAppPath: String?
     @State private var appSearchQuery = ""
     @State private var showUninstallPreview = false
     @State private var workspaceTab: UninstallerWorkspaceTab = .applications
+    @State private var remainingActionMessage: String?
+    @State private var pendingRemainingOperation: RemainingOperation?
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: UninstallerViewModel(root: rootModel))
@@ -45,6 +48,19 @@ struct UninstallerView: View {
         uninstallerState.sessions
     }
 
+    private var remainingRecords: [UninstallRemainingRecord] {
+        uninstallerState.remainingRecords
+    }
+
+    private var remainingIssueCount: Int {
+        remainingRecords.reduce(0) { $0 + $1.remainingCount }
+    }
+
+    private var remainingTotalSizeText: String {
+        let total = remainingRecords.reduce(Int64(0)) { $0 + $1.totalSizeInBytes }
+        return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+    }
+
     private var remnantTotalSizeText: String {
         let total = remnants.reduce(Int64(0)) { $0 + $1.sizeInBytes }
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
@@ -62,6 +78,33 @@ struct UninstallerView: View {
             .map { $0 }
     }
 
+    private var remnantCoverage: [(name: String, bytes: Int64)] {
+        let groups = Dictionary(grouping: remnants) { remnant in
+            let path = remnant.url.path.lowercased()
+            if path.contains("/library/group containers/") || path.contains("/library/containers/") {
+                return "Containers"
+            }
+            if path.contains("/library/caches/") {
+                return "Caches"
+            }
+            if path.contains("/library/preferences/") {
+                return "Preferences"
+            }
+            if path.contains("/library/application support/") {
+                return "App Support"
+            }
+            if path.contains("/library/") {
+                return "Library Other"
+            }
+            return "Other"
+        }
+
+        return groups.map { key, values in
+            (name: key, bytes: values.reduce(0) { $0 + $1.sizeInBytes })
+        }
+        .sorted { $0.bytes > $1.bytes }
+    }
+
     private var filteredApps: [InstalledApp] {
         let query = appSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return installedApps }
@@ -74,22 +117,28 @@ struct UninstallerView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            actionsToolbar
-            workspaceNavigation
+        GeometryReader { proxy in
+            VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing - 2) {
+                header
+                actionsToolbar
+                workspaceNavigation
+                if workspaceTab == .applications {
+                    uninstallerInfographics
+                }
 
-            if workspaceTab == .applications {
-                HStack(alignment: .top, spacing: 12) {
+                if workspaceTab == .applications {
+                HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                     applicationsSidebar
                     applicationsWorkspace
-                    summarySidebar
                 }
-            } else {
-                rollbackWorkspace
+                } else if workspaceTab == .rollback {
+                    rollbackWorkspace
+                } else {
+                    remainingWorkspace
+                }
             }
         }
-        .padding(12)
+        .padding(layoutMetrics.cardSpacing)
         .onAppear {
             if installedApps.isEmpty {
                 model.loadInstalledApps()
@@ -105,6 +154,19 @@ struct UninstallerView: View {
         .onChange(of: installedApps) {
             guard selectedAppPath == nil else { return }
             selectedAppPath = installedApps.first?.appURL.path
+        }
+        .onChange(of: workspaceTab) {
+            guard workspaceTab == .remaining else { return }
+            beginRemainingOperation(.scan)
+        }
+        .onChange(of: isUninstallerLoading) {
+            guard workspaceTab == .remaining, !isUninstallerLoading, let pendingRemainingOperation else { return }
+            remainingActionMessage = pendingRemainingOperation.completionMessage(
+                appCount: remainingRecords.count,
+                itemCount: remainingIssueCount,
+                totalSizeText: remainingTotalSizeText
+            )
+            self.pendingRemainingOperation = nil
         }
         .sheet(isPresented: $showUninstallPreview) {
             if let selectedApp {
@@ -139,29 +201,65 @@ struct UninstallerView: View {
     private var actionsToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
-                GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
+                if workspaceTab == .applications {
+                    GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
+                    GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
 
-                Button("Rescan Apps") {
-                    model.loadInstalledApps()
-                }
-                .buttonStyle(.bordered)
+                    Button("Rescan Apps") {
+                        model.loadInstalledApps()
+                    }
+                    .buttonStyle(.bordered)
 
-                Button("Open App Repair") {
-                    model.openSection(.repair)
-                }
-                .buttonStyle(.bordered)
+                    Button("Open App Repair") {
+                        model.openSection(.repair)
+                    }
+                    .buttonStyle(.bordered)
 
-                if workspaceTab == .applications, let selectedApp {
-                    Button("Uninstall Selected", role: .destructive) {
-                        selectedAppPath = selectedApp.appURL.path
-                        showUninstallPreview = true
+                    if let selectedApp {
+                        Button("Uninstall Selected", role: .destructive) {
+                            selectedAppPath = selectedApp.appURL.path
+                            showUninstallPreview = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else if workspaceTab == .rollback {
+                    GlassPillBadge(title: "Sessions \(uninstallSessions.count)", tint: .blue)
+                    GlassPillBadge(
+                        title: "Recoverable \(uninstallSessions.reduce(0) { $0 + $1.rollbackItems.count })",
+                        tint: .green
+                    )
+                } else {
+                    GlassPillBadge(title: "\(remainingRecords.count) apps", tint: .blue)
+                    GlassPillBadge(title: "\(remainingIssueCount) remaining", tint: .orange)
+                    GlassPillBadge(title: remainingTotalSizeText, tint: .indigo)
+
+                    Button("Scan Remaining") {
+                        beginRemainingOperation(.scan)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Deep Sweep") {
+                        beginRemainingOperation(.deepSweep)
                     }
                     .buttonStyle(.borderedProminent)
+
+                    Button("Clean All Remaining", role: .destructive) {
+                        let result = model.cleanAllRemainingRecords()
+                        remainingActionMessage = "Moved \(result.moved) · Skipped \(result.skippedProtected.count) · Failed \(result.failed.count)"
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(remainingIssueCount == 0)
+
+                    Button("Clear List", role: .destructive) {
+                        model.clearRemainingRecords()
+                        remainingActionMessage = "Remaining list cleared."
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(remainingRecords.isEmpty)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMetrics.cardSpacing)
+            .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         }
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
     }
@@ -171,23 +269,35 @@ struct UninstallerView: View {
             Picker("", selection: $workspaceTab) {
                 Text("Applications").tag(UninstallerWorkspaceTab.applications)
                 Text("Rollback Sessions").tag(UninstallerWorkspaceTab.rollback)
+                Text("Remaining").tag(UninstallerWorkspaceTab.remaining)
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 360)
+            .frame(maxWidth: 460)
             Spacer(minLength: 8)
         }
     }
 
+    private func beginRemainingOperation(_ operation: RemainingOperation) {
+        pendingRemainingOperation = operation
+        remainingActionMessage = operation.inProgressMessage
+        switch operation {
+        case .scan:
+            model.refreshRemainingRecords()
+        case .deepSweep:
+            model.deepSweepRemainingRecords()
+        }
+    }
+
     private var applicationsSidebar: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: layoutMetrics.cardSpacing) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Filter applications", text: $appSearchQuery)
                     .textFieldStyle(.plain)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMetrics.cardSpacing)
+            .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             ScrollView {
@@ -199,8 +309,8 @@ struct UninstallerView: View {
                 .padding(6)
             }
         }
-        .frame(minWidth: 240, idealWidth: 280, maxWidth: 320, maxHeight: .infinity)
-        .padding(10)
+        .frame(minWidth: 220, idealWidth: 240, maxWidth: 260, maxHeight: .infinity)
+        .padding(layoutMetrics.cardSpacing)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.04, shadowOpacity: 0.04, padding: 0)
         .overlay {
             if isUninstallerLoading {
@@ -211,13 +321,13 @@ struct UninstallerView: View {
 
     @ViewBuilder
     private var applicationsWorkspace: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
             if let selectedApp {
-                HStack {
+                HStack(spacing: 10) {
                     Image(nsImage: iconCache.icon(for: selectedApp.appURL.path))
                         .resizable()
-                        .frame(width: 32, height: 32)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .frame(width: 38, height: 38)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading) {
                         Text(selectedApp.name)
                             .font(.title3.bold())
@@ -232,15 +342,70 @@ struct UninstallerView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
+                .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
 
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Detected remnants: \(remnants.count)", tint: .orange)
-                    GlassPillBadge(title: "Size \(remnantTotalSizeText)", tint: .blue)
-                    if let report = uninstallReport {
-                        GlassPillBadge(title: "Removed \(report.removedCount)", tint: .green)
-                        GlassPillBadge(title: "Failed \(report.failedCount)", tint: .red)
+                HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "folder.badge.minus", tint: .orange, size: 28)
+                            Text("Remnant Footprint")
+                                .font(.headline)
+                            Spacer()
+                            GlassPillBadge(title: "\(remnants.count) items", tint: .orange)
+                            GlassPillBadge(title: remnantTotalSizeText, tint: .blue)
+                        }
+                        if remnantCoverage.isEmpty {
+                            Text("No known leftovers found for the selected app.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            let total = max(remnants.reduce(0) { $0 + $1.sizeInBytes }, 1)
+                            ForEach(Array(remnantCoverage.prefix(5).enumerated()), id: \.offset) { index, row in
+                                DRayRankedBarRow(
+                                    rank: index + 1,
+                                    title: row.name,
+                                    subtitle: "Known Library/Application support locations",
+                                    value: ByteCountFormatter.string(fromByteCount: row.bytes, countStyle: .file),
+                                    progress: Double(row.bytes) / Double(total),
+                                    tint: index == 0 ? .orange : .blue,
+                                    icon: "folder.fill"
+                                )
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            DRayIconBadge(icon: "shield.checkered", tint: .green, size: 28)
+                            Text("Safety")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        DRayActionRow(
+                            title: "Open App Repair",
+                            subtitle: "Reset app data without uninstalling.",
+                            icon: "wrench.and.screwdriver",
+                            tint: .green,
+                            actionTitle: "Open"
+                        ) { model.openSection(.repair) }
+                        if let report = uninstallReport {
+                            DRayRankedBarRow(
+                                rank: 1,
+                                title: "Last uninstall",
+                                subtitle: "Skipped \(report.skippedCount) · Failed \(report.failedCount)",
+                                value: "Removed \(report.removedCount)",
+                                progress: min(1, Double(report.removedCount) / Double(max(report.results.count, 1))),
+                                tint: report.failedCount > 0 ? .red : .green,
+                                icon: "checkmark.seal"
+                            )
+                        }
+                    }
+                    .frame(width: 330, alignment: .topLeading)
+                    .padding(layoutMetrics.cardSpacing)
+                    .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
                 }
 
                 ScrollView {
@@ -251,7 +416,7 @@ struct UninstallerView: View {
                     }
                     .padding(8)
                 }
-                .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
                 .overlay {
                     if remnants.isEmpty && !isUninstallerLoading {
                         ContentUnavailableView(
@@ -271,7 +436,7 @@ struct UninstallerView: View {
                             .foregroundStyle(.secondary)
                         uninstallReportSections(report)
                     }
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
+                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
                 }
 
                 if isUninstallVerifyRunning {
@@ -282,7 +447,7 @@ struct UninstallerView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: 12)
+                    .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
                 } else if let verify = uninstallVerifyReport {
                     uninstallVerifyPanel(verify, app: selectedApp)
                 }
@@ -290,8 +455,8 @@ struct UninstallerView: View {
                 ContentUnavailableView("Uninstaller", systemImage: "trash", description: Text("Select app to inspect remnants."))
             }
         }
-        .padding(12)
-        .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(layoutMetrics.cardSpacing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var summarySidebar: some View {
@@ -310,6 +475,24 @@ struct UninstallerView: View {
             }
             .padding(10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if let top = remnantCoverage.first, top.bytes > 0 {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Primary footprint")
+                        .font(.subheadline.bold())
+                    HStack {
+                        Text(top.name)
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: top.bytes, countStyle: .file))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    geometryBar(value: top.bytes, total: remnants.reduce(0) { $0 + $1.sizeInBytes }, tint: .orange)
+                }
+                .padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
 
             if !topRemnantsBySize.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -381,6 +564,138 @@ struct UninstallerView: View {
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.05, shadowOpacity: 0.04, padding: 0)
     }
 
+    private var remainingWorkspace: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                GlassPillBadge(title: "\(remainingRecords.count) apps", tint: .blue)
+                GlassPillBadge(title: "\(remainingIssueCount) items", tint: .orange)
+                GlassPillBadge(title: remainingTotalSizeText, tint: .indigo)
+                Spacer(minLength: 8)
+            }
+
+            if let remainingActionMessage {
+                Text(remainingActionMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+            }
+
+            if isUninstallerLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Scanning remaining artifacts...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 2)
+            }
+
+            if remainingRecords.isEmpty {
+                ContentUnavailableView(
+                    "No remaining artifacts",
+                    systemImage: "checkmark.seal",
+                    description: Text("After uninstall, unresolved tails appear here. Use Deep Sweep to detect orphaned leftovers from manually deleted apps.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(remainingRecords) { record in
+                            remainingRecordCard(record)
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .glassSurface(cornerRadius: 16, strokeOpacity: 0.05, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private func remainingRecordCard(_ record: UninstallRemainingRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(record.appName)
+                        .font(.subheadline.bold())
+                    Text("Updated \(record.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                GlassPillBadge(title: "\(record.remainingCount) remaining", tint: .orange)
+                GlassPillBadge(
+                    title: ByteCountFormatter.string(fromByteCount: record.totalSizeInBytes, countStyle: .file),
+                    tint: .indigo
+                )
+            }
+
+            VStack(spacing: 6) {
+                ForEach(record.issues.prefix(10)) { issue in
+                    remainingIssueRow(issue)
+                }
+                if record.issues.count > 10 {
+                    Text("+\(record.issues.count - 10) more")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button("Clean Remaining", role: .destructive) {
+                    let result = model.cleanRemainingRecord(record)
+                    remainingActionMessage = "\(record.appName): moved \(result.moved) · skipped \(result.skippedProtected.count) · failed \(result.failed.count)"
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(record.issues.isEmpty)
+
+                Button("Remove Record", role: .destructive) {
+                    model.removeRemainingRecord(record)
+                    remainingActionMessage = "Removed \(record.appName) from remaining list."
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func remainingIssueRow(_ issue: UninstallRemainingIssueRecord) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(riskTitle(issue.risk))
+                .font(.caption2.bold())
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(riskColor(issue.risk).opacity(0.14), in: Capsule())
+                .foregroundStyle(riskColor(issue.risk))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(issue.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(issue.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(issue.reason)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(ByteCountFormatter.string(fromByteCount: issue.sizeInBytes, countStyle: .file))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
     private func summaryMetric(title: String, value: String) -> some View {
         HStack {
             Text(title)
@@ -390,6 +705,104 @@ struct UninstallerView: View {
             Text(value)
                 .font(.subheadline.weight(.semibold))
         }
+    }
+
+    private var uninstallerInfographics: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: layoutMetrics.cardSpacing) {
+                uninstallerInfographicTiles
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(layoutMetrics.bottomStripVerticalPadding)
+        .glassSurface(cornerRadius: 14, strokeOpacity: 0.06, shadowOpacity: 0.04, padding: 0)
+    }
+
+    @ViewBuilder
+    private var uninstallerInfographicTiles: some View {
+        infographicTile(
+            title: "Installed",
+            value: "\(installedApps.count)",
+            subtitle: "apps",
+            tint: .blue
+        )
+        infographicTile(
+            title: "Filtered",
+            value: "\(filteredApps.count)",
+            subtitle: "visible",
+            tint: .indigo
+        )
+        infographicTile(
+            title: "Remnants",
+            value: "\(remnants.count)",
+            subtitle: remnantTotalSizeText,
+            tint: .orange
+        )
+        infographicTile(
+            title: "Sessions",
+            value: "\(uninstallSessions.count)",
+            subtitle: "rollback",
+            tint: .green
+        )
+    }
+
+    private func infographicTile(title: String, value: String, subtitle: String, tint: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: iconForInfographic(title))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+            Text(subtitle)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, 5)
+        .frame(height: 34)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(0.12))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.16), lineWidth: 0.7))
+        )
+    }
+
+    private func iconForInfographic(_ title: String) -> String {
+        switch title {
+        case "Installed": return "app.dashed"
+        case "Filtered": return "line.3.horizontal.decrease.circle"
+        case "Remnants": return "folder.badge.minus"
+        case "Sessions": return "arrow.uturn.backward.circle"
+        default: return "circle.grid.2x2"
+        }
+    }
+
+    private func geometryBar(value: Int64, total: Int64, tint: Color) -> some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let ratio = total > 0 ? min(1, CGFloat(Double(value) / Double(total))) : 0
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.85), tint.opacity(0.45)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(6, width * ratio))
+            }
+        }
+        .frame(height: 8)
     }
 
     private func appSidebarRow(_ app: InstalledApp) -> some View {
@@ -405,7 +818,7 @@ struct UninstallerView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.name)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     Text(app.bundleID)
                         .font(.caption)
@@ -725,6 +1138,30 @@ struct UninstallerView: View {
 private enum UninstallerWorkspaceTab: Hashable {
     case applications
     case rollback
+    case remaining
+}
+
+private enum RemainingOperation {
+    case scan
+    case deepSweep
+
+    var inProgressMessage: String {
+        switch self {
+        case .scan:
+            return "Scanning remaining artifacts..."
+        case .deepSweep:
+            return "Deep sweep in progress: checking orphaned remnants in Library locations..."
+        }
+    }
+
+    func completionMessage(appCount: Int, itemCount: Int, totalSizeText: String) -> String {
+        switch self {
+        case .scan:
+            return "Remaining scan complete: \(appCount) apps, \(itemCount) items, \(totalSizeText)."
+        case .deepSweep:
+            return "Deep sweep complete: \(appCount) apps, \(itemCount) items, \(totalSizeText)."
+        }
+    }
 }
 
 @MainActor

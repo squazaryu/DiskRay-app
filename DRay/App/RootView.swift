@@ -8,6 +8,7 @@ struct RootView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let sections: [RootSectionItem] = [
+        .init(id: .overview, icon: "gauge.open.with.lines.needle.33percent"),
         .init(id: .smartCare, icon: "sparkles"),
         .init(id: .clutter, icon: "square.on.square"),
         .init(id: .uninstaller, icon: "trash"),
@@ -22,20 +23,21 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let adaptiveSidebarWidth = min(156, max(64, proxy.size.width * 0.102))
-            let compactSidebar = adaptiveSidebarWidth < 118
-            let sidebarWidth: CGFloat = compactSidebar ? 62 : adaptiveSidebarWidth
+            let sidebarWidth: CGFloat = 46
+            let isCollapsed = true
+            let effectiveDensity = model.appInterfaceDensity.resolved(for: proxy.size)
+            let layoutMetrics = DRayLayoutMetrics.metrics(for: effectiveDensity)
 
             ZStack {
                 GlassShellBackground()
 
-                HStack(spacing: 12) {
-                    sidebarNavigation(isCompact: compactSidebar)
+                HStack(spacing: layoutMetrics.rootSpacing) {
+                    sidebarNavigation(isCollapsed: isCollapsed)
                         .frame(width: sidebarWidth)
                         .frame(maxHeight: .infinity, alignment: .top)
-                        .glassSurface(cornerRadius: 20, strokeOpacity: 0.18, shadowOpacity: 0.10, padding: 10)
+                        .glassSurface(cornerRadius: 20, strokeOpacity: 0.16, shadowOpacity: 0.10, padding: 6)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         if model.permissions.firstLaunchNeedsSetup
                             && (!model.permissions.hasFolderPermission || !model.permissions.hasFullDiskAccess) {
                             permissionsOnboardingCard
@@ -44,12 +46,13 @@ struct RootView: View {
 
                         sectionView(for: model.selectedSection)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .glassSurface(cornerRadius: 22, strokeOpacity: 0.14, shadowOpacity: 0.14, padding: 0)
                             .zIndex(1)
                     }
                 }
-                .padding(14)
+                .padding(layoutMetrics.rootPadding)
             }
+            .environment(\.drayInterfaceDensity, effectiveDensity)
+            .environment(\.drayLayoutMetrics, layoutMetrics)
         }
         .fileImporter(
             isPresented: $isFolderPickerPresented,
@@ -90,33 +93,8 @@ struct RootView: View {
         }
     }
 
-    private func sidebarNavigation(isCompact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if isCompact {
-                VStack(spacing: 4) {
-                    Image(systemName: "bolt.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(PremiumTheme.accent(colorScheme))
-                    Text(compactSidebarVersionText)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("DiskRay")
-                        .font(.title3.weight(.bold))
-                    Text(model.appVersionDisplay)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.top, 4)
-            }
-
-            Divider()
-
+    private func sidebarNavigation(isCollapsed sidebarCollapsed: Bool) -> some View {
+        VStack(alignment: .center, spacing: 8) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(sections) { item in
@@ -124,7 +102,7 @@ struct RootView: View {
                             icon: item.icon,
                             title: model.localizedSectionTitle(for: item.id),
                             isSelected: model.selectedSection == item.id,
-                            isCollapsed: isCompact
+                            isCollapsed: sidebarCollapsed
                         ) {
                             withAnimation(.snappy(duration: 0.18)) {
                                 model.selectedSection = item.id
@@ -134,23 +112,22 @@ struct RootView: View {
                     }
                 }
                 .padding(.horizontal, 2)
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
             }
 
             Divider()
 
-            HStack(spacing: 8) {
+            VStack(spacing: 6) {
+                Text(compactSidebarVersionText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
                 Image(systemName: model.permissions.hasFullDiskAccess ? "checkmark.shield.fill" : "exclamationmark.shield")
                     .foregroundStyle(model.permissions.hasFullDiskAccess ? PremiumTheme.success : PremiumTheme.warning)
-                if !isCompact {
-                    Text(model.permissions.hasFullDiskAccess ? "Full Disk Access: On" : "Full Disk Access: Required")
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
-                }
             }
-            .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
-            .padding(.horizontal, isCompact ? 0 : 6)
+            .frame(maxWidth: .infinity, alignment: .center)
             .padding(.bottom, 4)
             .help(model.permissions.hasFullDiskAccess ? "Full Disk Access: On" : "Full Disk Access: Required")
         }
@@ -252,42 +229,47 @@ struct RootView: View {
     }
 
     private var compactSidebarVersionText: String {
-        let baseVersion = model.appVersionDisplay.split(separator: " ").first.map(String.init) ?? model.appVersionDisplay
-        let parts = baseVersion.split(separator: ".")
-        guard parts.count >= 2 else { return baseVersion }
-        return "\(parts[0]).\(parts[1])"
+        model.appVersionDisplay
+            .split(separator: " ")
+            .first
+            .map(String.init) ?? model.appVersionDisplay
     }
 
     @ViewBuilder
     private func sectionView(for section: AppSection) -> some View {
-        switch section {
-        case .smartCare:
-            SmartCareView(rootModel: model)
-        case .clutter:
-            ClutterView(rootModel: model)
-        case .uninstaller:
-            UninstallerView(rootModel: model)
-        case .repair:
-            RepairView(model: model)
-        case .spaceLens:
-            SpaceLensView(
-                model: model,
-                onChooseFolder: { isFolderPickerPresented = true }
-            )
-        case .search:
-            SearchView(rootModel: model)
-        case .performance:
-            PerformanceView(rootModel: model)
-        case .privacy:
-            PrivacyView(rootModel: model)
-        case .recovery:
-            RecoveryView(model: model)
-        case .settings:
-            SettingsView(
-                model: model,
-                onChooseFolder: { isFolderPickerPresented = true }
-            )
+        Group {
+            switch section {
+            case .overview:
+                OverviewView(rootModel: model)
+            case .smartCare:
+                SmartCareView(rootModel: model)
+            case .clutter:
+                ClutterView(rootModel: model)
+            case .uninstaller:
+                UninstallerView(rootModel: model)
+            case .repair:
+                RepairView(model: model)
+            case .spaceLens:
+                SpaceLensView(
+                    model: model,
+                    onChooseFolder: { isFolderPickerPresented = true }
+                )
+            case .search:
+                SearchView(rootModel: model)
+            case .performance:
+                PerformanceView(rootModel: model)
+            case .privacy:
+                PrivacyView(rootModel: model)
+            case .recovery:
+                RecoveryView(model: model)
+            case .settings:
+                SettingsView(
+                    model: model,
+                    onChooseFolder: { isFolderPickerPresented = true }
+                )
+            }
         }
+        .environment(\.showFeatureHeader, true)
     }
 }
 

@@ -4,7 +4,9 @@ extension SettingsView {
     var permissionsCard: some View {
         sectionCard(
             title: model.localized(.settingsPermissions),
-            subtitle: model.localized(.settingsPermissionsHint)
+            subtitle: model.localized(.settingsPermissionsHint),
+            icon: "lock.shield",
+            tint: permissionsStatusTint
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 permissionStatusRow(
@@ -28,7 +30,7 @@ extension SettingsView {
                 )
 
                 if !permissionFeatureImpacts.isEmpty {
-                    Divider()
+                    settingDivider()
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(tr(
@@ -62,24 +64,18 @@ extension SettingsView {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: 8) {
-                    Button(model.localized(.settingsGrantFolder)) {
+                compactActionGrid {
+                    iconActionButton(model.localized(.settingsGrantFolder), systemImage: "folder.badge.plus") {
                         onChooseFolder()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button(model.localized(.settingsOpenFullDisk)) {
+                    iconActionButton(model.localized(.settingsOpenFullDisk), systemImage: "gearshape") {
                         model.permissions.openFullDiskAccessSettings()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button(model.localized(.settingsRestore)) {
+                    iconActionButton(model.localized(.settingsRestore), systemImage: "arrow.clockwise") {
                         model.restorePermissions()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

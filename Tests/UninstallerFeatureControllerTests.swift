@@ -127,6 +127,66 @@ struct UninstallerFeatureControllerTests {
         #expect(controller.state.verifyReport?.remainingCount == 1)
     }
 
+    @Test
+    func deepSweepRemainingRecordsAddsOrphanCandidates() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let remnantURL = tempDir
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("com.example.orphan", isDirectory: true)
+            .appendingPathComponent("state.db")
+        try FileManager.default.createDirectory(
+            at: remnantURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("orphan".utf8).write(to: remnantURL)
+
+        let app = InstalledApp(
+            name: "DemoApp",
+            bundleID: "com.example.demo",
+            appURL: URL(fileURLWithPath: "/Applications/DemoApp.app")
+        )
+        let validation = makeValidation(app: app, removedPath: app.appURL.path, trashedPath: "/Users/test/.Trash/DemoApp.app")
+        let candidate = UninstallDeepSweepCandidate(
+            appName: "Orphan",
+            bundleID: "com.example.orphan",
+            issues: [
+                UninstallVerifyIssue(
+                    url: remnantURL,
+                    sizeInBytes: 6,
+                    reason: "Detected by deep sweep as an orphaned artifact for a missing app bundle.",
+                    risk: .medium
+                )
+            ]
+        )
+
+        let controller = makeController(
+            tempDir: tempDir,
+            service: UninstallerControllerServiceStub(
+                apps: [app],
+                remnants: [],
+                validation: validation,
+                deepSweepCandidates: [candidate]
+            )
+        )
+
+        controller.loadInstalledApps()
+        try await waitUntil("installed apps loaded for deep sweep") {
+            !controller.state.isLoading && controller.state.installedApps.count == 1
+        }
+
+        controller.deepSweepRemainingRecords()
+        try await waitUntil("deep sweep completed") {
+            !controller.state.isLoading && !controller.state.remainingRecords.isEmpty
+        }
+
+        #expect(controller.state.remainingRecords.count == 1)
+        #expect(controller.state.remainingRecords[0].bundleID == "com.example.orphan")
+        #expect(controller.state.remainingRecords[0].remainingCount == 1)
+    }
+
     private func makeController(
         tempDir: URL,
         service: UninstallerControllerServiceStub
@@ -136,10 +196,14 @@ struct UninstallerFeatureControllerTests {
             historyStore: store,
             safeFileOperations: SafeFileOperationService()
         )
+        let remainingUseCase = UninstallRemainingUseCase(historyStore: store)
+        let observedAppsUseCase = UninstallObservedAppsUseCase(historyStore: store)
         let useCase = UninstallerUseCase(service: service)
         return UninstallerFeatureController(
             uninstallerUseCase: useCase,
             uninstallSessionUseCase: sessionUseCase,
+            uninstallRemainingUseCase: remainingUseCase,
+            uninstallObservedAppsUseCase: observedAppsUseCase,
             safeFileOperations: SafeFileOperationService()
         )
     }
@@ -189,11 +253,18 @@ private actor UninstallerControllerServiceStub: UninstallerServicing {
     let apps: [InstalledApp]
     let remnants: [AppRemnant]
     let validation: UninstallValidationReport
+    let deepSweepCandidates: [UninstallDeepSweepCandidate]
 
-    init(apps: [InstalledApp], remnants: [AppRemnant], validation: UninstallValidationReport) {
+    init(
+        apps: [InstalledApp],
+        remnants: [AppRemnant],
+        validation: UninstallValidationReport,
+        deepSweepCandidates: [UninstallDeepSweepCandidate] = []
+    ) {
         self.apps = apps
         self.remnants = remnants
         self.validation = validation
+        self.deepSweepCandidates = deepSweepCandidates
     }
 
     func installedApps() async -> [InstalledApp] {
@@ -202,6 +273,10 @@ private actor UninstallerControllerServiceStub: UninstallerServicing {
 
     func findRemnants(for app: InstalledApp) async -> [AppRemnant] {
         remnants
+    }
+
+    func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate] {
+        deepSweepCandidates
     }
 
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {

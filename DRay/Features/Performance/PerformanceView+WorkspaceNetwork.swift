@@ -2,7 +2,7 @@ import SwiftUI
 
 extension PerformanceView {
     var networkWorkspace: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(t("Network Diagnostics", "Network Diagnostics"))
@@ -42,43 +42,53 @@ extension PerformanceView {
                 .padding(.vertical, 6)
             }
 
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(t("Latest Result", "Latest Result"))
-                            .font(.subheadline.weight(.semibold))
+                        performanceCardTitle(t("Latest Result", "Latest Result"), icon: "network", tint: .teal)
                         Spacer()
                         if let chip = networkStatusChip {
                             StatusChip(title: chip.title, tint: chip.tint)
                         }
                     }
 
-                    HStack(spacing: 8) {
-                        metricCard(
+                    HStack(spacing: layoutMetrics.cardSpacing) {
+                        DRayCompactInfoTile(
                             title: t("Скачивание", "Download"),
                             value: optionalMbps(latestNetworkResult?.downlinkMbps),
-                            subtitle: t("Пропускная способность вниз", "Downlink throughput")
+                            subtitle: t("downlink", "downlink"),
+                            icon: "arrow.down.circle",
+                            tint: .blue,
+                            progress: min(1, max(0, (latestNetworkResult?.downlinkMbps ?? 0) / 250))
                         )
-                        metricCard(
+                        DRayCompactInfoTile(
                             title: t("Отдача", "Upload"),
                             value: optionalMbps(latestNetworkResult?.uplinkMbps),
-                            subtitle: t("Пропускная способность вверх", "Uplink throughput")
+                            subtitle: t("uplink", "uplink"),
+                            icon: "arrow.up.circle",
+                            tint: .green,
+                            progress: min(1, max(0, (latestNetworkResult?.uplinkMbps ?? 0) / 120))
                         )
-                        metricCard(
+                        DRayCompactInfoTile(
                             title: t("Отклик", "Responsiveness"),
                             value: optionalMilliseconds(latestNetworkResult?.responsivenessMs),
-                            subtitle: t("Влияет на интерактивность", "Impacts interactive tasks")
+                            subtitle: t("latency-sensitive", "latency-sensitive"),
+                            icon: "gauge.with.dots.needle.67percent",
+                            tint: .orange,
+                            progress: min(1, max(0, networkLatencyBurdenValue / 100))
                         )
-                        metricCard(
+                        DRayCompactInfoTile(
                             title: "Base RTT",
                             value: optionalMilliseconds(latestNetworkResult?.baseRTTMs),
-                            subtitle: t("Базовая задержка сети", "Baseline network latency")
+                            subtitle: t("baseline latency", "baseline latency"),
+                            icon: "timer",
+                            tint: .purple,
+                            progress: min(1, max(0, (latestNetworkResult?.baseRTTMs ?? 0) / 120))
                         )
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(t("Quality Interpretation", "Quality Interpretation"))
-                            .font(.subheadline.weight(.semibold))
+                        performanceCardTitle(t("Quality Interpretation", "Quality Interpretation"), icon: "lightbulb", tint: networkStatusChip?.tint ?? .blue)
                         Text(networkInterpretation)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -91,8 +101,8 @@ extension PerformanceView {
                             .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(layoutMetrics.cardSpacing)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                     if !networkHistory.isEmpty {
                         HStack(spacing: 8) {
@@ -115,10 +125,11 @@ extension PerformanceView {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(t("Burden Analysis", "Burden Analysis"))
-                        .font(.subheadline.weight(.semibold))
+                    performanceCardTitle(t("Burden Analysis", "Burden Analysis"), icon: "speedometer", tint: .orange)
                     Text(networkBurdenSummaryText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -152,14 +163,13 @@ extension PerformanceView {
                     }
                 }
                 .frame(minWidth: 250, maxWidth: 290, alignment: .topLeading)
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }
 
             if !recentNetworkRows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(t("Recent Session History", "Recent Session History"))
-                        .font(.subheadline.weight(.semibold))
+                    performanceCardTitle(t("Recent Session History", "Recent Session History"), icon: "chart.line.uptrend.xyaxis", tint: .teal)
 
                     ForEach(recentNetworkRows) { point in
                         HStack(alignment: .top, spacing: 10) {
@@ -199,7 +209,7 @@ extension PerformanceView {
                     }
                 }
                 .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }
 
             if let error = latestNetworkResult?.errorMessage {

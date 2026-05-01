@@ -198,3 +198,102 @@ struct UninstallVerifyReport: Sendable {
         startupReferences.count
     }
 }
+
+struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    let path: String
+    let sizeInBytes: Int64
+    let reason: String
+    let risk: UninstallRiskLevel
+
+    init(
+        id: UUID = UUID(),
+        path: String,
+        sizeInBytes: Int64,
+        reason: String,
+        risk: UninstallRiskLevel
+    ) {
+        self.id = id
+        self.path = URL(fileURLWithPath: path).standardizedFileURL.path
+        self.sizeInBytes = sizeInBytes
+        self.reason = reason
+        self.risk = risk
+    }
+
+    var url: URL {
+        URL(fileURLWithPath: path)
+    }
+
+    var name: String {
+        url.lastPathComponent
+    }
+}
+
+struct UninstallRemainingRecord: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    let appName: String
+    let bundleID: String?
+    let updatedAt: Date
+    let issues: [UninstallRemainingIssueRecord]
+
+    init(
+        id: UUID = UUID(),
+        appName: String,
+        bundleID: String?,
+        updatedAt: Date,
+        issues: [UninstallRemainingIssueRecord]
+    ) {
+        self.id = id
+        self.appName = appName
+        self.bundleID = bundleID
+        self.updatedAt = updatedAt
+        self.issues = issues
+    }
+
+    var remainingCount: Int {
+        issues.count
+    }
+
+    var totalSizeInBytes: Int64 {
+        issues.reduce(0) { $0 + $1.sizeInBytes }
+    }
+}
+
+struct UninstallObservedApp: Codable, Hashable, Sendable {
+    let appName: String
+    let bundleID: String
+    let appPath: String
+    let observedAt: Date
+}
+
+struct UninstallRemovedAppCandidate: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    let appName: String
+    let bundleID: String?
+    let lastKnownAppPath: String?
+    let detectedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        appName: String,
+        bundleID: String?,
+        lastKnownAppPath: String?,
+        detectedAt: Date
+    ) {
+        self.id = id
+        self.appName = appName
+        self.bundleID = bundleID
+        self.lastKnownAppPath = lastKnownAppPath
+        self.detectedAt = detectedAt
+    }
+}
+
+struct UninstallDeepSweepCandidate: Sendable {
+    let appName: String
+    let bundleID: String
+    let issues: [UninstallVerifyIssue]
+
+    var totalSizeInBytes: Int64 {
+        issues.reduce(0) { $0 + $1.sizeInBytes }
+    }
+}

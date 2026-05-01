@@ -2,10 +2,15 @@ import SwiftUI
 
 extension PerformanceView {
     var systemLoadWorkspace: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
             HStack {
-                Text(t("Live Load Diagnostics", "Live Load Diagnostics"))
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(t("Live Load Diagnostics", "Live Load Diagnostics"))
+                        .font(.headline)
+                    Text(t("CPU, memory pressure and process contribution in one live view.", "CPU, memory pressure and process contribution in one live view."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button(t("Снизить CPU", "Reduce CPU")) {
                     pendingReliefAction = .cpu
@@ -38,64 +43,124 @@ extension PerformanceView {
                 .disabled(model.performance.activeLoadReliefAdjustments == 0)
             }
 
-            HStack(spacing: 10) {
-                metricCard(
+            HStack(spacing: layoutMetrics.cardSpacing) {
+                DRayCompactInfoTile(
                     title: "CPU",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
-                    subtitle: t("Пользователь \(Int(monitor.snapshot.cpuUserPercent))% · Система \(Int(monitor.snapshot.cpuSystemPercent))%", "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%")
+                    subtitle: t("User \(Int(monitor.snapshot.cpuUserPercent)) · System \(Int(monitor.snapshot.cpuSystemPercent))", "User \(Int(monitor.snapshot.cpuUserPercent)) · System \(Int(monitor.snapshot.cpuSystemPercent))"),
+                    icon: "cpu",
+                    tint: .blue,
+                    progress: min(1, monitor.snapshot.cpuLoadPercent / 100)
                 )
-                metricCard(
+                DRayCompactInfoTile(
                     title: t("Память", "Memory"),
                     value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
-                    subtitle: "\(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory)) / \(ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryTotalBytes, countStyle: .memory))"
+                    subtitle: ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory),
+                    icon: "memorychip",
+                    tint: .purple,
+                    progress: min(1, monitor.snapshot.memoryPressurePercent / 100)
                 )
-                metricCard(
+                DRayCompactInfoTile(
                     title: t("Топ CPU", "Top CPU"),
                     value: topCPUConsumerName,
-                    subtitle: topCPUConsumerValue
+                    subtitle: topCPUConsumerValue,
+                    icon: "flame",
+                    tint: .orange,
+                    progress: (monitor.snapshot.topCPUConsumers.first?.cpuPercent ?? 0) / 100
                 )
-                metricCard(
+                DRayCompactInfoTile(
                     title: t("Топ RAM", "Top RAM"),
                     value: topMemoryConsumerName,
-                    subtitle: topMemoryConsumerValue
+                    subtitle: topMemoryConsumerValue,
+                    icon: "gauge.with.dots.needle.67percent",
+                    tint: .teal,
+                    progress: min(1, (monitor.snapshot.topMemoryConsumers.first?.memoryMB ?? 0) / 4096)
                 )
             }
 
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("CPU Trend")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    MiniSparkline(values: cpuTrend, tint: .orange)
-                        .frame(height: 34)
+            HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                VStack(alignment: .leading, spacing: 10) {
+                    performanceCardTitle(t("Pressure Trend", "Pressure Trend"), icon: "waveform.path.ecg", tint: .blue)
+                    ZStack {
+                        DRaySparklineView(values: cpuTrend, tint: .blue, lineWidth: 1.9)
+                        DRaySparklineView(values: memoryTrend, tint: .purple, lineWidth: 1.9)
+                    }
+                    .frame(height: 118)
+                    HStack(spacing: 10) {
+                        performanceLegendDot("CPU \(Int(monitor.snapshot.cpuLoadPercent))%", tint: .blue)
+                        performanceLegendDot(t("Память \(Int(monitor.snapshot.memoryPressurePercent))%", "Memory \(Int(monitor.snapshot.memoryPressurePercent))%"), tint: .purple)
+                        Spacer()
+                        Text(t("Live sample", "Live sample"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .padding(9)
-                .frame(maxWidth: .infinity)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(t("Память trend", "Memory Trend"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    MiniSparkline(values: memoryTrend, tint: .blue)
-                        .frame(height: 34)
+                VStack(alignment: .leading, spacing: 8) {
+                    performanceCardTitle(t("Relief Actions", "Relief Actions"), icon: "bolt.heart", tint: .green)
+                    DRayActionRow(
+                        title: t("Reduce CPU", "Reduce CPU"),
+                        subtitle: t("Lower priority for active CPU leaders.", "Lower priority for active CPU leaders."),
+                        icon: "cpu",
+                        tint: .blue,
+                        actionTitle: t("Run", "Run")
+                    ) {
+                        pendingReliefAction = .cpu
+                        showReliefConfirm = true
+                    }
+                    .disabled(cpuReliefCandidates.isEmpty)
+
+                    DRayActionRow(
+                        title: t("Reduce Memory", "Reduce Memory"),
+                        subtitle: t("Lower priority for memory-heavy apps.", "Lower priority for memory-heavy apps."),
+                        icon: "memorychip",
+                        tint: .purple,
+                        actionTitle: t("Run", "Run")
+                    ) {
+                        pendingReliefAction = .memory
+                        showReliefConfirm = true
+                    }
+                    .disabled(memoryReliefCandidates.isEmpty)
+
+                    DRayActionRow(
+                        title: t("Restore Priorities", "Restore Priorities"),
+                        subtitle: t("Undo DRay load-relief adjustments.", "Undo DRay load-relief adjustments."),
+                        icon: "arrow.counterclockwise",
+                        tint: .orange,
+                        actionTitle: t("Restore", "Restore")
+                    ) {
+                        let result = model.restoreAdjustedProcessPriorities(limit: 8)
+                        let adjustedText = result.adjusted.isEmpty ? "0" : "\(result.adjusted.count): " + result.adjusted.joined(separator: ", ")
+                        let failedText = result.failed.isEmpty ? "0" : "\(result.failed.count): " + result.failed.joined(separator: ", ")
+                        let skippedText = result.skipped.isEmpty ? "0" : "\(result.skipped.count): " + result.skipped.joined(separator: ", ")
+                        reliefResultMessage = t(
+                            "Восстановлено \(adjustedText)\nОшибки \(failedText)\nПропущено \(skippedText)",
+                            "Restored \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
+                        )
+                    }
+                    .disabled(model.performance.activeLoadReliefAdjustments == 0)
                 }
-                .padding(9)
-                .frame(maxWidth: .infinity)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 330, alignment: .topLeading)
+                .frame(minHeight: 190, alignment: .topLeading)
+                .padding(layoutMetrics.cardSpacing)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(t("Вклад потребителей", "Consumer Contribution"))
-                    .font(.subheadline.weight(.semibold))
+                performanceCardTitle(t("Вклад потребителей", "Consumer Contribution"), icon: "app.badge", tint: .blue)
                 let ranked = rankedLiveConsumers
                 ForEach(Array(ranked.prefix(6).enumerated()), id: \.offset) { index, consumer in
-                    let share = rankedContribution(for: consumer, in: ranked)
-                    RankedShareBar(
+                    DRayRankedBarRow(
+                        rank: index + 1,
                         title: consumer.displayName,
                         subtitle: "CPU \(Int(consumer.cpuPercent))% · MEM \(Int(consumer.memoryMB)) MB · BAT \(String(format: "%.1f", consumer.batteryImpactScore))",
-                        percentage: share,
-                        accent: index < 2 ? .orange : .blue
+                        value: "\(Int(rankedContribution(for: consumer, in: ranked)))%",
+                        progress: rankedContribution(for: consumer, in: ranked) / 100,
+                        tint: index < 2 ? .orange : .blue,
+                        icon: "app.fill"
                     )
                 }
                 if ranked.isEmpty {
@@ -104,6 +169,8 @@ extension PerformanceView {
                         .foregroundStyle(.secondary)
                 }
             }
+            .padding(layoutMetrics.cardSpacing)
+            .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
         }
     }
 }

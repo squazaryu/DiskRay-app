@@ -7,14 +7,6 @@ struct HealthIssue: Identifiable {
     let severity: HealthIssueSeverity
 }
 
-struct ConsumerRow: Identifiable {
-    let id: String
-    let name: String
-    let cpuText: String
-    let memoryText: String
-    let batteryText: String
-}
-
 enum ReliefAction {
     case cpu
     case memory

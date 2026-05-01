@@ -7,6 +7,11 @@
 ./scripts/package_release.sh 2.0.0
 ```
 
+Current release example:
+```bash
+./scripts/package_release.sh 2.1.0 1
+```
+
 2. Optional signed + notarized release:
 ```bash
 export DEVELOPER_ID_APP="Developer ID Application: YOUR_NAME (TEAMID)"
@@ -31,6 +36,15 @@ gh release create v2.0.0 \
   dist/DRay-2.0.0.dmg \
   --title "DRay 2.0.0" \
   --notes-file docs/releases/2.0.0.md
+```
+
+For the current channel:
+```bash
+gh release create v2.1.0 \
+  dist/DRay-2.1.0.zip \
+  dist/DRay-2.1.0.dmg \
+  --title "DRay 2.1.0" \
+  --notes-file docs/releases/2.1.0.md
 ```
 
 ## CI Release

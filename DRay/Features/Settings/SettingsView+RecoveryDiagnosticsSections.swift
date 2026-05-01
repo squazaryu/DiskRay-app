@@ -4,28 +4,24 @@ extension SettingsView {
     var recoverySafetyCard: some View {
         sectionCard(
             title: model.localized(.settingsRecoverySafetySection),
-            subtitle: model.localized(.settingsRecoverySafetyHint)
+            subtitle: model.localized(.settingsRecoverySafetyHint),
+            icon: "heart.shield",
+            tint: .green
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Toggle(model.localized(.settingsConfirmDestructiveActions), isOn: $model.confirmBeforeDestructiveActions)
-                    .toggleStyle(.switch)
+                compactToggle(model.localized(.settingsConfirmDestructiveActions), isOn: $model.confirmBeforeDestructiveActions)
 
-                Toggle(model.localized(.settingsConfirmStartupCleanup), isOn: $model.confirmBeforeStartupCleanup)
-                    .toggleStyle(.switch)
+                compactToggle(model.localized(.settingsConfirmStartupCleanup), isOn: $model.confirmBeforeStartupCleanup)
 
-                Toggle(model.localized(.settingsConfirmRepairFlows), isOn: $model.confirmBeforeRepairFlows)
-                    .toggleStyle(.switch)
+                compactToggle(model.localized(.settingsConfirmRepairFlows), isOn: $model.confirmBeforeRepairFlows)
 
-                Toggle(model.localized(.settingsAutoRescanAfterRestore), isOn: $model.autoRescanAfterRestore)
-                    .toggleStyle(.switch)
+                compactToggle(model.localized(.settingsAutoRescanAfterRestore), isOn: $model.autoRescanAfterRestore)
 
-                Divider()
+                settingDivider()
 
-                Button(model.localized(.settingsClearRecoveryHistory), role: .destructive) {
+                iconActionButton(model.localized(.settingsClearRecoveryHistory), systemImage: "trash", role: .destructive) {
                     model.clearRecoveryHistory()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
         }
     }
@@ -33,41 +29,31 @@ extension SettingsView {
     var diagnosticsCard: some View {
         sectionCard(
             title: model.localized(.settingsDiagnosticsSection),
-            subtitle: model.localized(.settingsDiagnosticsHint)
+            subtitle: model.localized(.settingsDiagnosticsHint),
+            icon: "waveform.path.ecg",
+            tint: .orange
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Button(model.localized(.settingsExportOperationLog)) {
+                compactActionGrid {
+                    iconActionButton(model.localized(.settingsExportOperationLog), systemImage: "doc.text") {
                         _ = model.exportOperationLogReport()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button(model.localized(.settingsExportDiagnosticReport)) {
+                    iconActionButton(model.localized(.settingsExportDiagnosticReport), systemImage: "square.and.arrow.up") {
                         _ = model.exportDiagnosticReport()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button(model.localized(.settingsRevealCrashTelemetry)) {
+                    iconActionButton(model.localized(.settingsRevealCrashTelemetry), systemImage: "ladybug") {
                         model.revealCrashTelemetry()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
 
-                HStack(spacing: 8) {
-                    Button(model.localized(.settingsClearCachedSnapshots)) {
+                    iconActionButton(model.localized(.settingsClearCachedSnapshots), systemImage: "xmark.bin") {
                         model.clearCachedSnapshots()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button(model.localized(.settingsResetSavedTargetBookmarks)) {
+                    iconActionButton(model.localized(.settingsResetSavedTargetBookmarks), systemImage: "bookmark.slash") {
                         model.resetSavedTargetBookmark()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
 
                 if let exportedOps = model.lastExportedOperationLogURL {

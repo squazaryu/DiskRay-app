@@ -18,6 +18,8 @@ struct StoreContractsTests {
 
         store.saveAppLanguage(.russian)
         store.saveAppAppearance(.dark)
+        store.saveAppAccentColor(.purple)
+        store.saveAppInterfaceDensity(.compact)
         store.saveDefaultScanTarget(.home)
         store.saveAutoRescanAfterCleanup(false)
         store.saveIncludeHiddenByDefault(false)
@@ -32,6 +34,8 @@ struct StoreContractsTests {
 
         #expect(store.loadAppLanguage() == .russian)
         #expect(store.loadAppAppearance() == .dark)
+        #expect(store.loadAppAccentColor() == .purple)
+        #expect(store.loadAppInterfaceDensity() == .compact)
         #expect(store.loadDefaultScanTarget() == .home)
         #expect(store.loadAutoRescanAfterCleanup() == false)
         #expect(store.loadIncludeHiddenByDefault() == false)

@@ -8,6 +8,12 @@ protocol UISettingsStoring {
     func loadAppAppearance() -> AppAppearance?
     func saveAppAppearance(_ appearance: AppAppearance)
 
+    func loadAppAccentColor() -> AppAccentColor?
+    func saveAppAccentColor(_ accent: AppAccentColor)
+
+    func loadAppInterfaceDensity() -> AppInterfaceDensity?
+    func saveAppInterfaceDensity(_ density: AppInterfaceDensity)
+
     func loadDefaultScanTarget() -> ScanDefaultTarget?
     func saveDefaultScanTarget(_ target: ScanDefaultTarget)
 
@@ -48,6 +54,8 @@ struct UISettingsStore: UISettingsStoring {
     private let userDefaults: UserDefaults
     private let appLanguageKey: String
     private let appAppearanceKey: String
+    private let appAccentColorKey: String
+    private let appInterfaceDensityKey: String
     private let defaultScanTargetKey: String
     private let autoRescanAfterCleanupKey: String
     private let includeHiddenByDefaultKey: String
@@ -64,6 +72,8 @@ struct UISettingsStore: UISettingsStoring {
         userDefaults: UserDefaults = .standard,
         appLanguageKey: String = "dray.ui.language",
         appAppearanceKey: String = "dray.ui.appearance",
+        appAccentColorKey: String = "dray.ui.accentColor",
+        appInterfaceDensityKey: String = "dray.ui.interfaceDensity",
         defaultScanTargetKey: String = "dray.scan.default.target",
         autoRescanAfterCleanupKey: String = "dray.scan.autoRescanAfterCleanup",
         includeHiddenByDefaultKey: String = "dray.search.defaults.includeHidden",
@@ -79,6 +89,8 @@ struct UISettingsStore: UISettingsStoring {
         self.userDefaults = userDefaults
         self.appLanguageKey = appLanguageKey
         self.appAppearanceKey = appAppearanceKey
+        self.appAccentColorKey = appAccentColorKey
+        self.appInterfaceDensityKey = appInterfaceDensityKey
         self.defaultScanTargetKey = defaultScanTargetKey
         self.autoRescanAfterCleanupKey = autoRescanAfterCleanupKey
         self.includeHiddenByDefaultKey = includeHiddenByDefaultKey
@@ -108,6 +120,24 @@ struct UISettingsStore: UISettingsStoring {
 
     func saveAppAppearance(_ appearance: AppAppearance) {
         userDefaults.set(appearance.rawValue, forKey: appAppearanceKey)
+    }
+
+    func loadAppAccentColor() -> AppAccentColor? {
+        guard let raw = userDefaults.string(forKey: appAccentColorKey) else { return nil }
+        return AppAccentColor(rawValue: raw)
+    }
+
+    func saveAppAccentColor(_ accent: AppAccentColor) {
+        userDefaults.set(accent.rawValue, forKey: appAccentColorKey)
+    }
+
+    func loadAppInterfaceDensity() -> AppInterfaceDensity? {
+        guard let raw = userDefaults.string(forKey: appInterfaceDensityKey) else { return nil }
+        return AppInterfaceDensity(rawValue: raw)
+    }
+
+    func saveAppInterfaceDensity(_ density: AppInterfaceDensity) {
+        userDefaults.set(density.rawValue, forKey: appInterfaceDensityKey)
     }
 
     func loadDefaultScanTarget() -> ScanDefaultTarget? {

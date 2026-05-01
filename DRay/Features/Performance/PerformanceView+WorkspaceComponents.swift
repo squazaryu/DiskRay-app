@@ -2,27 +2,61 @@ import SwiftUI
 import AppKit
 
 extension PerformanceView {
+    func performanceCardTitle(_ title: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            DRayIconBadge(icon: icon, tint: tint, size: 28)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+    }
+
+    func performanceLegendDot(_ title: String, tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
     func batterySummaryStrip(_ snapshot: BatteryEnergySnapshot) -> some View {
-        HStack(spacing: 10) {
-            metricCard(
+        HStack(spacing: layoutMetrics.cardSpacing) {
+            DRayCompactInfoTile(
                 title: t("Заряд", "Charge"),
                 value: optionalPercent(snapshot.chargePercent),
-                subtitle: batteryStateText(snapshot)
+                subtitle: batteryStateText(snapshot),
+                icon: "battery.75percent",
+                tint: .green,
+                progress: snapshot.chargePercent.map { Double($0) / 100 }
             )
-            metricCard(
+            DRayCompactInfoTile(
                 title: "Health",
                 value: optionalPercent(snapshot.healthPercent),
-                subtitle: t("Циклы \(snapshot.cycleCount.map(String.init) ?? "n/a")", "Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")")
+                subtitle: t("Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")", "Cycles \(snapshot.cycleCount.map(String.init) ?? "n/a")"),
+                icon: "heart",
+                tint: batteryHealthColor,
+                progress: snapshot.healthPercent.map { Double($0) / 100 }
             )
-            metricCard(
+            DRayCompactInfoTile(
                 title: t("Power Draw", "Power Draw"),
                 value: optionalWatts(snapshot.powerDrawWatts),
-                subtitle: timeEstimateText(snapshot)
+                subtitle: timeEstimateText(snapshot),
+                icon: "bolt",
+                tint: .orange,
+                progress: snapshot.powerDrawWatts.map { min(1, max(0, $0 / 45)) }
             )
-            metricCard(
+            DRayCompactInfoTile(
                 title: t("Температура", "Temperature"),
                 value: optionalTemperature(snapshot.temperatureCelsius),
-                subtitle: "V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))"
+                subtitle: "V \(optionalVolts(snapshot.voltageVolts)) · A \(optionalAmps(snapshot.amperageAmps))",
+                icon: "thermometer.medium",
+                tint: .cyan,
+                progress: snapshot.temperatureCelsius.map { min(1, max(0, $0 / 70)) }
             )
         }
     }
@@ -31,6 +65,7 @@ extension PerformanceView {
         let normalized = (consumer.estimatedDrainShare / totalShare) * 100
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
+                DRayIconBadge(icon: consumer.preventingSleep ? "moon.zzz.fill" : "app.fill", tint: consumer.preventingSleep ? .red : .orange, size: 24)
                 Text(consumer.displayName)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
@@ -51,7 +86,7 @@ extension PerformanceView {
                         .frame(width: max(7, geo.size.width * CGFloat(min(max(normalized, 0), 100) / 100)))
                 }
             }
-            .frame(height: 7)
+            .frame(height: 6)
 
             HStack(spacing: 8) {
                 StatusChip(title: "CPU \(Int(consumer.cpuPercent))%", tint: .blue)
@@ -72,9 +107,9 @@ extension PerformanceView {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     func startupEntryRow(_ entry: StartupEntry) -> some View {
@@ -130,7 +165,7 @@ extension PerformanceView {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     func historySparklineCard(title: String, values: [Double], tint: Color) -> some View {
