@@ -20,7 +20,6 @@ struct MenuBarPopupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            popupHeader
             healthHeroCard
             metricTilesGrid
             consumersSection
@@ -118,38 +117,6 @@ struct MenuBarPopupView: View {
         }
     }
 
-    private var popupHeader: some View {
-        HStack(spacing: 8) {
-            DRayMenuBarMark()
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("DRay")
-                    .font(.system(size: 18, weight: .semibold))
-                Text(healthSummaryLine)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(healthColor.opacity(0.82))
-                    .frame(width: 7, height: 7)
-                Text("Mac Health")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(healthTitle)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(healthColor)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(cardBackground(accent: healthColor, cornerRadius: 12))
-        }
-    }
-
     private var healthHeroCard: some View {
         HStack(spacing: 14) {
             Button {
@@ -179,6 +146,10 @@ struct MenuBarPopupView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                Text(healthHeroBatteryLine)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(healthHeroBatteryTint)
                 Text("Last checked: \(monitor.snapshot.updatedAt, style: .time)")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.blue)
@@ -654,6 +625,22 @@ struct MenuBarPopupView: View {
             return "\(percent)% · \(h)h \(m)m left"
         }
         return charging ? "\(percent)% · charging" : "\(percent)%"
+    }
+
+    private var healthHeroBatteryLine: String {
+        guard let percent = monitor.snapshot.batteryLevelPercent else { return "Battery: n/a" }
+        if monitor.snapshot.batteryIsCharging == true {
+            return "Battery: \(percent)% (charging)"
+        }
+        return "Battery: \(percent)%"
+    }
+
+    private var healthHeroBatteryTint: Color {
+        guard let percent = monitor.snapshot.batteryLevelPercent else { return .secondary }
+        if percent < 20, monitor.snapshot.batteryIsCharging != true {
+            return Color(red: 0.78, green: 0.24, blue: 0.22)
+        }
+        return .secondary
     }
 
     private var batteryValueText: String {

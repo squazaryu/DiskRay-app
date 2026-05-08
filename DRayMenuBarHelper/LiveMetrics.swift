@@ -322,10 +322,14 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             return (nil, nil, nil)
         }
 
+        var selectedSample: (percent: Int?, isCharging: Bool?, minutesRemaining: Int?)?
+        var selectedScore = Int.min
+
         for source in list {
             guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
                 continue
             }
+            let type = (desc[kIOPSTypeKey as String] as? String)?.lowercased()
             let current = intValue(desc[kIOPSCurrentCapacityKey as String])
             let max = intValue(desc[kIOPSMaxCapacityKey as String])
             let isCharging = boolValue(desc[kIOPSIsChargingKey as String])
@@ -346,9 +350,18 @@ final class LiveSystemMetricsMonitor: ObservableObject {
                 minutes = normalizedMinutes(timeToEmpty)
             }
 
-            return (percent, isCharging, minutes)
+            var score = 0
+            if type?.contains("internal") == true { score += 4 }
+            if percent != nil { score += 3 }
+            if isCharging != nil { score += 1 }
+            if current != nil, max != nil { score += 1 }
+
+            if score > selectedScore {
+                selectedScore = score
+                selectedSample = (percent, isCharging, minutes)
+            }
         }
-        return (nil, nil, nil)
+        return selectedSample ?? (nil, nil, nil)
     }
 
     private func intValue(_ value: Any?) -> Int? {
