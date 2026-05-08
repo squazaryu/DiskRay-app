@@ -114,6 +114,28 @@ struct TrashOperationResult {
     let moved: Int
     let skippedProtected: [String]
     let failed: [String]
+    let elevatedMoved: Int
+    let failureReasons: [String: String]
+    let permissionFailures: [String]
+    let experimentalElevatedDeletionEnabled: Bool
+
+    init(
+        moved: Int,
+        skippedProtected: [String],
+        failed: [String],
+        elevatedMoved: Int = 0,
+        failureReasons: [String: String] = [:],
+        permissionFailures: [String] = [],
+        experimentalElevatedDeletionEnabled: Bool = false
+    ) {
+        self.moved = moved
+        self.skippedProtected = skippedProtected
+        self.failed = failed
+        self.elevatedMoved = elevatedMoved
+        self.failureReasons = failureReasons
+        self.permissionFailures = permissionFailures
+        self.experimentalElevatedDeletionEnabled = experimentalElevatedDeletionEnabled
+    }
 }
 
 struct RecentlyDeletedItem: Codable, Identifiable {

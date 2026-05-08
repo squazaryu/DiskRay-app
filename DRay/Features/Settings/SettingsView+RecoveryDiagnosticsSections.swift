@@ -19,6 +19,45 @@ extension SettingsView {
 
                 settingDivider()
 
+                settingsRow(
+                    title: tr("Экспериментальный полный доступ", "Experimental Full Access"),
+                    subtitle: tr(
+                        "Пробует переносить отказанные файлы в Корзину через запрос администратора. SIP-защиту macOS не обходит.",
+                        "Tries to move denied files to Trash through administrator authorization. Does not bypass macOS SIP."
+                    )
+                ) {
+                    Toggle(
+                        tr("Экспериментальный полный доступ", "Experimental Full Access"),
+                        isOn: Binding(
+                            get: { model.experimentalElevatedDeletionEnabled },
+                            set: { desired in
+                                if desired {
+                                    showExperimentalElevatedDeletionConsent = true
+                                } else {
+                                    model.experimentalElevatedDeletionEnabled = false
+                                }
+                            }
+                        )
+                    )
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .accessibilityLabel(tr("Экспериментальный полный доступ", "Experimental Full Access"))
+                }
+
+                if model.experimentalElevatedDeletionEnabled {
+                    Label(
+                        tr(
+                            "Включено: DRay может запросить пароль администратора для отказанных файлов, но SIP-пути останутся заблокированы.",
+                            "Enabled: DRay may ask for administrator authorization for denied files, but SIP paths remain blocked."
+                        ),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+
+                settingDivider()
+
                 iconActionButton(model.localized(.settingsClearRecoveryHistory), systemImage: "trash", role: .destructive) {
                     model.clearRecoveryHistory()
                 }

@@ -95,7 +95,12 @@ final class AppPermissionService: ObservableObject {
 
             if fm.fileExists(atPath: path) {
                 if !fm.isDeletableFile(atPath: path) {
-                    permissionHint = "Additional permissions are required for \(actionName): \(url.lastPathComponent)."
+                    refreshFullDiskAccess()
+                    if hasFullDiskAccess {
+                        permissionHint = "Full Disk Access is granted, but the current user cannot delete \(url.lastPathComponent). Administrator authorization may be required. SIP-protected paths still cannot be modified."
+                    } else {
+                        permissionHint = "Additional permissions are required for \(actionName): \(url.lastPathComponent)."
+                    }
                     return false
                 }
             } else {

@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: RootViewModel
     let onChooseFolder: () -> Void
+    @State var showExperimentalElevatedDeletionConsent = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -41,59 +42,27 @@ struct SettingsView: View {
             model.refreshPermissions()
             model.refreshLaunchAtLoginStatus()
         }
+        .alert(
+            tr("Экспериментальный полный доступ", "Experimental Full Access"),
+            isPresented: $showExperimentalElevatedDeletionConsent
+        ) {
+            Button(tr("Включить", "Enable"), role: .destructive) {
+                model.experimentalElevatedDeletionEnabled = true
+            }
+            Button(model.localized(.commonCancel), role: .cancel) {
+                model.experimentalElevatedDeletionEnabled = false
+            }
+        } message: {
+            Text(tr(
+                "DRay будет пытаться перемещать отказанные файлы в Корзину через системный запрос администратора. Это не обходит SIP: системно-защищённые пути macOS всё равно останутся заблокированы. Включайте только если понимаете риск удаления файлов за пределами вашей домашней папки.",
+                "DRay will try to move denied files to Trash through a macOS administrator authorization prompt. This does not bypass SIP: macOS system-protected paths remain blocked. Enable only if you understand the risk of deleting files outside your home folder."
+            ))
+        }
     }
 
     private var settingsColumns: [GridItem] {
         [
             GridItem(.adaptive(minimum: 360, maximum: 620), spacing: 12, alignment: .top)
         ]
-    }
-
-    private var settingsStatusStrip: some View {
-        HStack(spacing: 8) {
-            statusTile(
-                title: model.localized(.settingsPermissions),
-                value: permissionsStatusTitle,
-                tint: permissionsStatusTint
-            )
-            statusTile(
-                title: model.localized(.settingsAppearance),
-                value: appearanceTitle(model.appAppearance),
-                tint: .blue
-            )
-            statusTile(
-                title: model.localized(.settingsLanguage),
-                value: languageTitle(model.appLanguage),
-                tint: .teal
-            )
-            statusTile(
-                title: model.localized(.settingsVersion),
-                value: model.appVersionDisplay,
-                tint: .orange
-            )
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
-    }
-
-    private var permissionsStatusTitle: String {
-        if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
-            return tr("Готово", "Ready")
-        }
-        if model.permissions.hasFolderPermission || model.permissions.hasFullDiskAccess {
-            return tr("Частично", "Partial")
-        }
-        return tr("Требуется доступ", "Action Needed")
-    }
-
-    var permissionsStatusTint: Color {
-        if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
-            return .green
-        }
-        if model.permissions.hasFolderPermission || model.permissions.hasFullDiskAccess {
-            return .orange
-        }
-        return .red
     }
 }

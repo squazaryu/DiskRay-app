@@ -14,6 +14,9 @@ protocol UISettingsStoring {
     func loadAppInterfaceDensity() -> AppInterfaceDensity?
     func saveAppInterfaceDensity(_ density: AppInterfaceDensity)
 
+    func loadSidebarDisplayMode() -> SidebarDisplayMode?
+    func saveSidebarDisplayMode(_ mode: SidebarDisplayMode)
+
     func loadDefaultScanTarget() -> ScanDefaultTarget?
     func saveDefaultScanTarget(_ target: ScanDefaultTarget)
 
@@ -44,6 +47,9 @@ protocol UISettingsStoring {
     func loadAutoRescanAfterRestore() -> Bool?
     func saveAutoRescanAfterRestore(_ enabled: Bool)
 
+    func loadExperimentalElevatedDeletion() -> Bool?
+    func saveExperimentalElevatedDeletion(_ enabled: Bool)
+
     func loadSelectedTargetBookmark() -> Data?
     func saveSelectedTargetBookmark(_ bookmark: Data)
     func clearSelectedTargetBookmark()
@@ -56,6 +62,7 @@ struct UISettingsStore: UISettingsStoring {
     private let appAppearanceKey: String
     private let appAccentColorKey: String
     private let appInterfaceDensityKey: String
+    private let sidebarDisplayModeKey: String
     private let defaultScanTargetKey: String
     private let autoRescanAfterCleanupKey: String
     private let includeHiddenByDefaultKey: String
@@ -66,6 +73,7 @@ struct UISettingsStore: UISettingsStoring {
     private let confirmBeforeStartupCleanupKey: String
     private let confirmBeforeRepairFlowsKey: String
     private let autoRescanAfterRestoreKey: String
+    private let experimentalElevatedDeletionKey: String
     private let selectedTargetBookmarkKey: String
 
     init(
@@ -74,6 +82,7 @@ struct UISettingsStore: UISettingsStoring {
         appAppearanceKey: String = "dray.ui.appearance",
         appAccentColorKey: String = "dray.ui.accentColor",
         appInterfaceDensityKey: String = "dray.ui.interfaceDensity",
+        sidebarDisplayModeKey: String = "dray.ui.sidebarDisplayMode",
         defaultScanTargetKey: String = "dray.scan.default.target",
         autoRescanAfterCleanupKey: String = "dray.scan.autoRescanAfterCleanup",
         includeHiddenByDefaultKey: String = "dray.search.defaults.includeHidden",
@@ -84,6 +93,7 @@ struct UISettingsStore: UISettingsStoring {
         confirmBeforeStartupCleanupKey: String = "dray.safety.confirm.startupCleanup",
         confirmBeforeRepairFlowsKey: String = "dray.safety.confirm.repairFlows",
         autoRescanAfterRestoreKey: String = "dray.recovery.autoRescanAfterRestore",
+        experimentalElevatedDeletionKey: String = "dray.experimental.elevatedDeletion",
         selectedTargetBookmarkKey: String = "dray.scan.target.bookmark"
     ) {
         self.userDefaults = userDefaults
@@ -91,6 +101,7 @@ struct UISettingsStore: UISettingsStoring {
         self.appAppearanceKey = appAppearanceKey
         self.appAccentColorKey = appAccentColorKey
         self.appInterfaceDensityKey = appInterfaceDensityKey
+        self.sidebarDisplayModeKey = sidebarDisplayModeKey
         self.defaultScanTargetKey = defaultScanTargetKey
         self.autoRescanAfterCleanupKey = autoRescanAfterCleanupKey
         self.includeHiddenByDefaultKey = includeHiddenByDefaultKey
@@ -101,6 +112,7 @@ struct UISettingsStore: UISettingsStoring {
         self.confirmBeforeStartupCleanupKey = confirmBeforeStartupCleanupKey
         self.confirmBeforeRepairFlowsKey = confirmBeforeRepairFlowsKey
         self.autoRescanAfterRestoreKey = autoRescanAfterRestoreKey
+        self.experimentalElevatedDeletionKey = experimentalElevatedDeletionKey
         self.selectedTargetBookmarkKey = selectedTargetBookmarkKey
     }
 
@@ -138,6 +150,15 @@ struct UISettingsStore: UISettingsStoring {
 
     func saveAppInterfaceDensity(_ density: AppInterfaceDensity) {
         userDefaults.set(density.rawValue, forKey: appInterfaceDensityKey)
+    }
+
+    func loadSidebarDisplayMode() -> SidebarDisplayMode? {
+        guard let raw = userDefaults.string(forKey: sidebarDisplayModeKey) else { return nil }
+        return SidebarDisplayMode(rawValue: raw)
+    }
+
+    func saveSidebarDisplayMode(_ mode: SidebarDisplayMode) {
+        userDefaults.set(mode.rawValue, forKey: sidebarDisplayModeKey)
     }
 
     func loadDefaultScanTarget() -> ScanDefaultTarget? {
@@ -220,6 +241,14 @@ struct UISettingsStore: UISettingsStoring {
 
     func saveAutoRescanAfterRestore(_ enabled: Bool) {
         userDefaults.set(enabled, forKey: autoRescanAfterRestoreKey)
+    }
+
+    func loadExperimentalElevatedDeletion() -> Bool? {
+        loadBool(forKey: experimentalElevatedDeletionKey)
+    }
+
+    func saveExperimentalElevatedDeletion(_ enabled: Bool) {
+        userDefaults.set(enabled, forKey: experimentalElevatedDeletionKey)
     }
 
     func loadSelectedTargetBookmark() -> Data? {

@@ -30,7 +30,7 @@ DRay — macOS utility suite for storage cleanup and maintenance with a live Ove
 ## Menu Bar Helper
 `DRayMenuBarHelper` runs popup telemetry and quick actions independently from the main window lifecycle.
 
-- Battery indicator in menu bar (`BAT xx%`) with realtime refresh.
+- DRay icon + compact battery state in the menu bar, with realtime refresh.
 - Compact health hero, metric tiles, sparklines, top consumers, and quick actions open relevant DRay modules.
 - Battery details panel (charge/health/cycles/temp/power/ETA).
 - Refresh discipline: heavy sampling is reduced while popup is hidden; battery details auto-refresh runs only while its sheet is open.
@@ -57,12 +57,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 2.1.0 1
+./scripts/install_app.sh 2.1.1 1
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 2.1.0 1
+./scripts/package_release.sh 2.1.1 1
 ```
 Artifacts are created in `dist`.
 
@@ -78,7 +78,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.1.0 1`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.1.1 1`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -96,4 +96,4 @@ Optional:
 - Settings model: `docs/SETTINGS_MODEL.md`
 
 ## Current Channel
-`v2.1.0 (build 1)` is the active release channel with the redesigned app shell, live Overview dashboard, refreshed feature workspaces, appearance controls, Uninstaller Remaining/Deep Sweep workflows, updated app icons, and the compact menu-bar telemetry popup.
+`v2.1.1 (build 1)` is the active release channel with DRay-first menu bar identity, shared popup structure parity in light/dark themes, adaptive sidebar modes, tighter live-monitor lifecycle audit coverage, and Search/Uninstaller deletion-flow hardening with explicit SIP/TCC-safe behavior.
