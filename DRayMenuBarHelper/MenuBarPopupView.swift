@@ -25,7 +25,8 @@ struct MenuBarPopupView: View {
             metricTilesGrid
             consumersSection
             recommendationCard
-            footer
+            quickActionsSection
+            footerTelemetrySection
         }
         .padding(10)
         .background(shellBackground)
@@ -119,15 +120,33 @@ struct MenuBarPopupView: View {
 
     private var popupHeader: some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+            DRayMenuBarMark()
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text("DRay")
-                    .font(.system(size: 20, weight: .semibold))
-                Text("Updated \(monitor.snapshot.updatedAt, style: .time)")
+                    .font(.system(size: 18, weight: .semibold))
+                Text(healthSummaryLine)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
+
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(healthColor.opacity(0.82))
+                    .frame(width: 7, height: 7)
+                Text("Mac Health")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(healthTitle)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(healthColor)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(cardBackground(accent: healthColor, cornerRadius: 12))
         }
     }
 
@@ -323,50 +342,93 @@ struct MenuBarPopupView: View {
         .background(cardBackground(accent: .cyan, cornerRadius: 14))
     }
 
-    private var footer: some View {
-        HStack(spacing: 6) {
-            Button("Open DRay") {
-                model.openMain()
-            }
-            .font(popupButtonFont)
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Quick Actions")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
 
-            Button("Smart Scan") {
-                model.open(section: .smartCare, action: .runUnifiedScan)
-            }
-            .font(popupButtonFont)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button("Performance") {
-                model.open(section: .performance, action: .runPerformanceScan)
-            }
-            .font(popupButtonFont)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Spacer(minLength: 4)
-
-            Menu {
-                Button(model.launchAtLoginEnabled ? "Start at Login: On" : "Start at Login: Off") {
-                    model.toggleLaunchAtLogin()
+            HStack(spacing: 6) {
+                Button("Smart Scan") {
+                    model.open(section: .smartCare, action: .runUnifiedScan)
                 }
-                Button("Restore Priorities") {
-                    model.restorePriorities()
+                .font(popupButtonFont)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Button("Open DRay") {
+                    model.openMain()
                 }
-                .disabled(!model.canRestorePriorities)
-                Divider()
+                .font(popupButtonFont)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
                 Button("Quit Completely", role: .destructive) {
                     model.quitCompletely()
                 }
-            } label: {
-                Label("Actions", systemImage: "ellipsis.circle")
-                    .font(popupButtonFont)
+                .font(popupButtonFont)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Spacer(minLength: 4)
+
+                Menu {
+                    Button(model.launchAtLoginEnabled ? "Start at Login: On" : "Start at Login: Off") {
+                        model.toggleLaunchAtLogin()
+                    }
+                    Button("Restore Priorities") {
+                        model.restorePriorities()
+                    }
+                    .disabled(!model.canRestorePriorities)
+                    Divider()
+                    Button("Performance") {
+                        model.open(section: .performance, action: .runPerformanceScan)
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                        .font(popupButtonFont)
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
             }
-            .controlSize(.small)
-            .buttonStyle(.bordered)
         }
+        .padding(9)
+        .background(cardBackground(accent: .teal, cornerRadius: 14))
+    }
+
+    private var footerTelemetrySection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("Telemetry")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Updated \(monitor.snapshot.updatedAt, style: .time)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 7) {
+                telemetryPill(
+                    title: "Uptime",
+                    value: formattedUptime(monitor.snapshot.uptimeSeconds),
+                    tint: .blue
+                )
+                telemetryPill(
+                    title: "Down",
+                    value: formattedTransferRate(monitor.snapshot.networkDownBytesPerSecond),
+                    tint: .indigo
+                )
+                telemetryPill(
+                    title: "Up",
+                    value: formattedTransferRate(monitor.snapshot.networkUpBytesPerSecond),
+                    tint: .mint
+                )
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(cardBackground(accent: .gray, cornerRadius: 12))
     }
 
     private var popupButtonFont: Font {
@@ -442,6 +504,41 @@ struct MenuBarPopupView: View {
 
     private var borderColor: Color {
         colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.72)
+    }
+
+    private func telemetryPill(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func formattedUptime(_ uptimeSeconds: TimeInterval) -> String {
+        let uptime = max(0, Int(uptimeSeconds))
+        let days = uptime / 86_400
+        let hours = (uptime % 86_400) / 3_600
+        let minutes = (uptime % 3_600) / 60
+        if days > 0 {
+            return "\(days)d \(hours)h"
+        }
+        return "\(hours)h \(minutes)m"
+    }
+
+    private func formattedTransferRate(_ bytesPerSecond: Double) -> String {
+        guard bytesPerSecond.isFinite, bytesPerSecond > 1 else { return "0 KB/s" }
+        let formatted = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .binary)
+        return "\(formatted)/s"
     }
 
     private var healthSummaryLine: String {

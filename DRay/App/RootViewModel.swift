@@ -45,6 +45,11 @@ final class RootViewModel: ObservableObject {
             uiSettingsStore.saveAppInterfaceDensity(appInterfaceDensity)
         }
     }
+    @Published var sidebarDisplayMode: SidebarDisplayMode = .adaptive {
+        didSet {
+            uiSettingsStore.saveSidebarDisplayMode(sidebarDisplayMode)
+        }
+    }
     @Published var defaultScanTarget: ScanDefaultTarget = .lastSelectedFolder {
         didSet {
             uiSettingsStore.saveDefaultScanTarget(defaultScanTarget)
@@ -97,6 +102,11 @@ final class RootViewModel: ObservableObject {
     @Published var autoRescanAfterRestore = true {
         didSet {
             uiSettingsStore.saveAutoRescanAfterRestore(autoRescanAfterRestore)
+        }
+    }
+    @Published var experimentalElevatedDeletionEnabled = false {
+        didSet {
+            uiSettingsStore.saveExperimentalElevatedDeletion(experimentalElevatedDeletionEnabled)
         }
     }
 
@@ -199,6 +209,9 @@ final class RootViewModel: ObservableObject {
         if let interfaceDensity = uiSettingsStore.loadAppInterfaceDensity() {
             appInterfaceDensity = interfaceDensity
         }
+        if let savedSidebarMode = uiSettingsStore.loadSidebarDisplayMode() {
+            sidebarDisplayMode = savedSidebarMode
+        }
         if let target = uiSettingsStore.loadDefaultScanTarget() {
             defaultScanTarget = target
         }
@@ -228,6 +241,9 @@ final class RootViewModel: ObservableObject {
         }
         if let autoRescanRestore = uiSettingsStore.loadAutoRescanAfterRestore() {
             autoRescanAfterRestore = autoRescanRestore
+        }
+        if let experimentalElevatedDeletion = uiSettingsStore.loadExperimentalElevatedDeletion() {
+            experimentalElevatedDeletionEnabled = experimentalElevatedDeletion
         }
 
         applyInitialScanTarget()
@@ -672,6 +688,7 @@ final class RootViewModel: ObservableObject {
         let outcome = safeFileOperations.moveToTrash(
             nodes: nodes,
             actionName: "Move to Trash",
+            allowElevatedDeletion: experimentalElevatedDeletionEnabled,
             canModify: { [weak self] urls, actionName in
                 guard let self else { return false }
                 return permissions.canModify(urls: urls, actionName: actionName)
@@ -721,7 +738,13 @@ final class RootViewModel: ObservableObject {
         return TrashOperationResult(
             moved: moved,
             skippedProtected: outcome.skippedProtected,
-            failed: failed
+            failed: failed,
+            elevatedMoved: outcome.elevatedMoved.count,
+            failureReasons: Dictionary(
+                uniqueKeysWithValues: outcome.failures.map { ($0.path, $0.reason) }
+            ),
+            permissionFailures: outcome.failures.filter(\.isPermission).map(\.path),
+            experimentalElevatedDeletionEnabled: experimentalElevatedDeletionEnabled
         )
     }
 

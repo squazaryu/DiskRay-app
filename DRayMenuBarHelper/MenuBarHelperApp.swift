@@ -151,7 +151,7 @@ struct DRayMenuBarHelperApp: App {
         MenuBarExtra {
             MenuBarPopupView(model: model, monitor: monitor)
         } label: {
-            MenuBarStatusIcon(monitor: monitor)
+            MenuBarStatusLabel(monitor: monitor, mode: .appIconAndBattery)
         }
         #if DRAY_HELPER_MENU_STYLE_MENU
         .menuBarExtraStyle(.menu)
@@ -160,4 +160,3 @@ struct DRayMenuBarHelperApp: App {
         #endif
     }
 }
-

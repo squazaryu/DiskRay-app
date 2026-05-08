@@ -117,6 +117,77 @@ struct SafeFileOperationServiceTests {
     }
 
     @Test
+    func moveToTrashUsesElevatedMoverWhenExperimentalModeAllowsIt() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("admin.txt")
+        let trashedURL = tempDir.appendingPathComponent("admin-trashed.txt")
+        try Data("payload".utf8).write(to: fileURL)
+        let node = FileNode(
+            url: fileURL,
+            name: "admin.txt",
+            isDirectory: false,
+            sizeInBytes: 7,
+            children: []
+        )
+
+        let service = SafeFileOperationService(
+            elevatedTrashMover: { target in
+                SafeElevatedTrashMoveResult(
+                    success: true,
+                    trashedPath: trashedURL.path,
+                    details: "test elevated move for \(target.lastPathComponent)"
+                )
+            }
+        )
+
+        let outcome = service.moveToTrash(
+            nodes: [node],
+            actionName: "Move to Trash",
+            allowElevatedDeletion: true,
+            canModify: { _, _ in false },
+            permissionHint: { "Permission denied by test" }
+        )
+
+        #expect(outcome.moved.count == 1)
+        #expect(outcome.elevatedMoved.count == 1)
+        #expect(outcome.moved[0].originalPath == fileURL.path)
+        #expect(outcome.moved[0].trashedPath == trashedURL.path)
+        #expect(outcome.failures.isEmpty)
+    }
+
+    @Test
+    func moveToTrashDoesNotElevateProtectedPaths() {
+        var elevatedCallCount = 0
+        let service = SafeFileOperationService(
+            elevatedTrashMover: { _ in
+                elevatedCallCount += 1
+                return SafeElevatedTrashMoveResult(success: true, trashedPath: "/tmp/should-not-run", details: "unexpected")
+            }
+        )
+        let protectedNode = FileNode(
+            url: URL(fileURLWithPath: "/System/Library"),
+            name: "Library",
+            isDirectory: true,
+            sizeInBytes: 0,
+            children: []
+        )
+
+        let outcome = service.moveToTrash(
+            nodes: [protectedNode],
+            actionName: "Move to Trash",
+            allowElevatedDeletion: true,
+            canModify: { _, _ in true },
+            permissionHint: { nil }
+        )
+
+        #expect(outcome.skippedProtected == ["/System/Library"])
+        #expect(outcome.moved.isEmpty)
+        #expect(elevatedCallCount == 0)
+    }
+
+    @Test
     func moveToTrashIgnoresChildWhenParentAlsoSelected() throws {
         let tempDir = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: tempDir) }

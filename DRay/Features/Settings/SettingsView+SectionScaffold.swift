@@ -153,6 +153,17 @@ extension SettingsView {
         }
     }
 
+    func sidebarModeTitle(_ mode: SidebarDisplayMode) -> String {
+        switch mode {
+        case .adaptive:
+            return tr("Авто", "Adaptive")
+        case .expanded:
+            return tr("Развёрнутая", "Expanded")
+        case .collapsed:
+            return tr("Свернутая", "Collapsed")
+        }
+    }
+
     func scanTargetTitle(_ target: ScanDefaultTarget) -> String {
         switch target {
         case .startupDisk:

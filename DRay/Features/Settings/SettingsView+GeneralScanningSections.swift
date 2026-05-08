@@ -108,6 +108,24 @@ extension SettingsView {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
+
+                settingDivider()
+
+                settingsRow(
+                    title: tr("Боковая панель", "Sidebar mode"),
+                    subtitle: tr(
+                        "Adaptive автоматически разворачивает панель на широких окнах.",
+                        "Adaptive expands the sidebar automatically on wide windows."
+                    )
+                ) {
+                    Picker("Sidebar mode", selection: $model.sidebarDisplayMode) {
+                        ForEach(SidebarDisplayMode.allCases) { mode in
+                            Text(sidebarModeTitle(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
             }
         }
     }
