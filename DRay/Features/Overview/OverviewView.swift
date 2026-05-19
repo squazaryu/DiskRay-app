@@ -33,11 +33,7 @@ struct OverviewView: View {
                 heroCard
                 metricGrid
 
-                HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
-                    recommendationsCard
-                    topConsumersCard
-                    activityCard
-                }
+                overviewInsightsLayout
 
                 DRayBottomStatusStrip(items: bottomStatusItems)
             }
@@ -58,115 +54,43 @@ struct OverviewView: View {
     }
 
     private var heroCard: some View {
-        HStack(spacing: density == .compact ? 14 : 20) {
-            DRayLiquidStatusRing(icon: healthIcon, tint: healthColor, size: density == .compact ? 102 : 120)
-
-            VStack(alignment: .leading, spacing: density == .compact ? 6 : 8) {
-                Text(t("СОСТОЯНИЕ СИСТЕМЫ", "SYSTEM HEALTH"))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(healthColor)
-                Text(healthTitle)
-                    .font(.system(size: density == .compact ? 30 : 34, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                Text(healthSubtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    Button {
-                        rootModel.openSection(.smartCare)
-                    } label: {
-                        Label(t("Открыть Smart Care", "Open Smart Care"), systemImage: "sparkles")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
-                    Button {
-                        rootModel.openSection(focusSection)
-                    } label: {
-                        Label(focusActionTitle, systemImage: focusIcon)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: density == .compact ? 14 : 20) {
+                heroStatusBlock
+                Spacer(minLength: density == .compact ? 10 : 16)
+                heroTrendBlock
+                    .frame(maxWidth: density == .compact ? 300 : 340, alignment: .leading)
             }
-            .frame(maxWidth: density == .compact ? 320 : 360, alignment: .leading)
-
-            Spacer(minLength: density == .compact ? 10 : 16)
-
-            VStack(alignment: .leading, spacing: density == .compact ? 7 : 10) {
-                DRaySparklineView(values: healthTrend, tint: healthColor, lineWidth: 2.1)
-                    .frame(height: density == .compact ? 52 : 68)
-                    .overlay(alignment: .bottom) {
-                        VStack(spacing: 18) {
-                            ForEach(0..<4, id: \.self) { _ in
-                                Divider().opacity(0.16)
-                            }
-                        }
-                    }
-                HStack {
-                    Text(t("Тренд здоровья", "Health Trend"))
-                    Spacer()
-                    Text("Now \(Int(healthScore * 100))/100")
-                        .monospacedDigit()
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                if density == .compact {
-                    compactHealthFormulaCard
-                } else {
-                    healthFormulaCard
-                }
+            VStack(alignment: .leading, spacing: density == .compact ? 12 : 14) {
+                heroStatusBlock
+                heroTrendBlock
             }
-            .frame(width: density == .compact ? 300 : 340)
         }
         .padding(layoutMetrics.cardSpacing + 2)
         .glassSurface(cornerRadius: 22, strokeOpacity: 0.12, shadowOpacity: 0.10, padding: 0)
     }
 
     private var metricGrid: some View {
-        HStack(spacing: layoutMetrics.cardSpacing) {
-            DRayDashboardMetricTile(
-                title: t("Хранилище", "Storage"),
-                value: usedStorageText,
-                subtitle: totalStorageText,
-                icon: "internaldrive",
-                tint: .blue,
-                progress: diskUsedRatio,
-                action: { rootModel.openSection(.spaceLens) }
-            )
-            DRayDashboardMetricTile(
-                title: t("Память", "Memory"),
-                value: memoryUsedText,
-                subtitle: memoryTotalText,
-                icon: "memorychip",
-                tint: .purple,
-                progress: memoryUsedRatio,
-                sparkline: memoryTrend,
-                action: { rootModel.openSection(.performance) }
-            )
-            DRayDashboardMetricTile(
-                title: t("Батарея", "Battery"),
-                value: batteryValueText,
-                subtitle: batterySubtitle,
-                icon: "battery.75percent",
-                tint: .green,
-                progress: batteryProgress,
-                action: { rootModel.openSection(.performance) }
-            )
-            DRayDashboardMetricTile(
-                title: "CPU",
-                value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
-                subtitle: t("текущая нагрузка", "current load"),
-                icon: "waveform.path.ecg",
-                tint: .orange,
-                progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
-                sparkline: cpuTrend,
-                action: { rootModel.openSection(.performance) }
-            )
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                metricTiles(minWidth: 250)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(minimum: 260), spacing: layoutMetrics.cardSpacing), GridItem(.flexible(minimum: 260), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
+                metricTiles()
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(minimum: 240), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
+                metricTiles()
+            }
         }
     }
 
@@ -180,7 +104,7 @@ struct OverviewView: View {
                 overviewActionRow(item)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: density == .compact ? 180 : 220, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
     }
@@ -195,16 +119,16 @@ struct OverviewView: View {
                 Text(t("Собираем live-метрики процессов...", "Collecting live process telemetry..."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 160, alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
             } else {
                 VStack(spacing: 10) {
-                    ForEach(Array(topConsumers.enumerated()), id: \.element.id) { index, consumer in
+                    ForEach(Array(topConsumers.prefix(4).enumerated()), id: \.element.id) { index, consumer in
                         consumerRow(consumer, rank: index + 1)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: density == .compact ? 180 : 220, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
     }
@@ -246,9 +170,43 @@ struct OverviewView: View {
                 )
             )
         }
-        .frame(maxWidth: .infinity, minHeight: density == .compact ? 180 : 220, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
+    }
+
+    private var overviewInsightsLayout: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
+                recommendationsCard
+                    .frame(minWidth: 320)
+                topConsumersCard
+                    .frame(minWidth: 320)
+                activityCard
+                    .frame(minWidth: 320)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(minimum: 300), spacing: layoutMetrics.cardSpacing), GridItem(.flexible(minimum: 300), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
+                recommendationsCard
+                topConsumersCard
+                activityCard
+                    .gridCellColumns(2)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(minimum: 260), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
+                recommendationsCard
+                topConsumersCard
+                activityCard
+            }
+        }
     }
 
     private func cardHeader(title: String, action: String, onAction: @escaping () -> Void) -> some View {
@@ -261,6 +219,119 @@ struct OverviewView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(drayAccentColor)
         }
+    }
+
+    private var heroStatusBlock: some View {
+        HStack(spacing: density == .compact ? 12 : 16) {
+            DRayLiquidStatusRing(icon: healthIcon, tint: healthColor, size: density == .compact ? 102 : 120)
+
+            VStack(alignment: .leading, spacing: density == .compact ? 6 : 8) {
+                Text(t("СОСТОЯНИЕ СИСТЕМЫ", "SYSTEM HEALTH"))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(healthColor)
+                Text(healthTitle)
+                    .font(.system(size: density == .compact ? 30 : 34, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                Text(healthSubtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    Button {
+                        rootModel.openSection(.smartCare)
+                    } label: {
+                        Label(t("Открыть Smart Care", "Open Smart Care"), systemImage: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button {
+                        rootModel.openSection(focusSection)
+                    } label: {
+                        Label(focusActionTitle, systemImage: focusIcon)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .frame(maxWidth: density == .compact ? 320 : 360, alignment: .leading)
+        }
+    }
+
+    private var heroTrendBlock: some View {
+        VStack(alignment: .leading, spacing: density == .compact ? 7 : 10) {
+            DRaySparklineView(values: healthTrend, tint: healthColor, lineWidth: 2.1)
+                .frame(height: density == .compact ? 52 : 68)
+                .overlay(alignment: .bottom) {
+                    VStack(spacing: 18) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            Divider().opacity(0.16)
+                        }
+                    }
+                }
+            HStack {
+                Text(t("Тренд здоровья", "Health Trend"))
+                Spacer()
+                Text("Now \(Int(healthScore * 100))/100")
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if density == .compact {
+                compactHealthFormulaCard
+            } else {
+                healthFormulaCard
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func metricTiles(minWidth: CGFloat? = nil) -> some View {
+        DRayDashboardMetricTile(
+            title: t("Хранилище", "Storage"),
+            value: usedStorageText,
+            subtitle: totalStorageText,
+            icon: "internaldrive",
+            tint: .blue,
+            progress: diskUsedRatio,
+            action: { rootModel.openSection(.spaceLens) }
+        )
+        .frame(minWidth: minWidth)
+        DRayDashboardMetricTile(
+            title: t("Память", "Memory"),
+            value: memoryUsedText,
+            subtitle: memoryTotalText,
+            icon: "memorychip",
+            tint: .purple,
+            progress: memoryUsedRatio,
+            sparkline: memoryTrend,
+            action: { rootModel.openSection(.performance) }
+        )
+        .frame(minWidth: minWidth)
+        DRayDashboardMetricTile(
+            title: t("Батарея", "Battery"),
+            value: batteryValueText,
+            subtitle: batterySubtitle,
+            icon: "battery.75percent",
+            tint: .green,
+            progress: batteryProgress,
+            action: { rootModel.openSection(.performance) }
+        )
+        .frame(minWidth: minWidth)
+        DRayDashboardMetricTile(
+            title: "CPU",
+            value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
+            subtitle: t("текущая нагрузка", "current load"),
+            icon: "waveform.path.ecg",
+            tint: .orange,
+            progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
+            sparkline: cpuTrend,
+            action: { rootModel.openSection(.performance) }
+        )
+        .frame(minWidth: minWidth)
     }
 
     private func overviewActionRow(_ item: OverviewRecommendation) -> some View {

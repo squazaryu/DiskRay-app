@@ -27,6 +27,15 @@ struct LiveSystemSnapshot: Sendable {
     let batteryMinutesRemaining: Int?
     let networkDownBytesPerSecond: Double
     let networkUpBytesPerSecond: Double
+    let networkDownPacketsPerSecond: Double
+    let networkUpPacketsPerSecond: Double
+    let networkDroppedPacketsPerSecond: Double
+    let networkInboundBytesTotal: UInt64
+    let networkOutboundBytesTotal: UInt64
+    let networkInboundPacketsTotal: UInt64
+    let networkOutboundPacketsTotal: UInt64
+    let networkDroppedPacketsTotal: UInt64
+    let networkPrimaryInterface: String?
     let uptimeSeconds: TimeInterval
     let topCPUConsumers: [ProcessConsumer]
     let topMemoryConsumers: [ProcessConsumer]
@@ -47,6 +56,15 @@ struct LiveSystemSnapshot: Sendable {
         batteryMinutesRemaining: nil,
         networkDownBytesPerSecond: 0,
         networkUpBytesPerSecond: 0,
+        networkDownPacketsPerSecond: 0,
+        networkUpPacketsPerSecond: 0,
+        networkDroppedPacketsPerSecond: 0,
+        networkInboundBytesTotal: 0,
+        networkOutboundBytesTotal: 0,
+        networkInboundPacketsTotal: 0,
+        networkOutboundPacketsTotal: 0,
+        networkDroppedPacketsTotal: 0,
+        networkPrimaryInterface: nil,
         uptimeSeconds: ProcessInfo.processInfo.systemUptime,
         topCPUConsumers: [],
         topMemoryConsumers: [],
@@ -62,6 +80,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
     private let heavySampleTickInterval: Int
     private let powerNotifier = PowerSourceNotifier()
     private var timer: Timer?
+    private var updateTask: Task<Void, Never>?
     private var previousCPU: CPUCounters?
     private var previousNetwork: NetworkCounters?
     private var cachedCPUConsumers: [ProcessConsumer] = []
@@ -85,23 +104,32 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             }
         }
         powerNotifier.start()
-        update()
+        scheduleUpdate()
         timer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.update()
+                self?.scheduleUpdate()
             }
         }
         RunLoop.main.add(timer!, forMode: .common)
     }
 
     func stop() {
+        updateTask?.cancel()
+        updateTask = nil
         timer?.invalidate()
         timer = nil
         powerNotifier.stop()
         powerNotifier.onPowerSourceChanged = nil
     }
 
-    private func update() {
+    private func scheduleUpdate() {
+        updateTask?.cancel()
+        updateTask = Task { [weak self] in
+            await self?.update()
+        }
+    }
+
+    private func update() async {
         let now = Date()
         let cpu = cpuSample()
         let memory = memorySample()
@@ -114,7 +142,8 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         let network = networkSample(at: now)
         tickCounter += 1
         if tickCounter.isMultiple(of: heavySampleTickInterval) || cachedCPUConsumers.isEmpty {
-            let consumers = processConsumersSample()
+            let consumers = await processConsumersSample()
+            guard !Task.isCancelled else { return }
             cachedCPUConsumers = consumers.topCPU
             cachedMemoryConsumers = consumers.topMemory
             cachedBatteryConsumers = consumers.topBattery
@@ -135,6 +164,15 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             batteryMinutesRemaining: battery.minutesRemaining,
             networkDownBytesPerSecond: network.downPerSecond,
             networkUpBytesPerSecond: network.upPerSecond,
+            networkDownPacketsPerSecond: network.downPacketsPerSecond,
+            networkUpPacketsPerSecond: network.upPacketsPerSecond,
+            networkDroppedPacketsPerSecond: network.droppedPacketsPerSecond,
+            networkInboundBytesTotal: network.inboundBytesTotal,
+            networkOutboundBytesTotal: network.outboundBytesTotal,
+            networkInboundPacketsTotal: network.inboundPacketsTotal,
+            networkOutboundPacketsTotal: network.outboundPacketsTotal,
+            networkDroppedPacketsTotal: network.droppedPacketsTotal,
+            networkPrimaryInterface: network.primaryInterface,
             uptimeSeconds: ProcessInfo.processInfo.systemUptime,
             topCPUConsumers: cachedCPUConsumers,
             topMemoryConsumers: cachedMemoryConsumers,
@@ -164,6 +202,15 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             batteryMinutesRemaining: battery.minutesRemaining,
             networkDownBytesPerSecond: snapshot.networkDownBytesPerSecond,
             networkUpBytesPerSecond: snapshot.networkUpBytesPerSecond,
+            networkDownPacketsPerSecond: snapshot.networkDownPacketsPerSecond,
+            networkUpPacketsPerSecond: snapshot.networkUpPacketsPerSecond,
+            networkDroppedPacketsPerSecond: snapshot.networkDroppedPacketsPerSecond,
+            networkInboundBytesTotal: snapshot.networkInboundBytesTotal,
+            networkOutboundBytesTotal: snapshot.networkOutboundBytesTotal,
+            networkInboundPacketsTotal: snapshot.networkInboundPacketsTotal,
+            networkOutboundPacketsTotal: snapshot.networkOutboundPacketsTotal,
+            networkDroppedPacketsTotal: snapshot.networkDroppedPacketsTotal,
+            networkPrimaryInterface: snapshot.networkPrimaryInterface,
             uptimeSeconds: snapshot.uptimeSeconds,
             topCPUConsumers: snapshot.topCPUConsumers,
             topMemoryConsumers: snapshot.topMemoryConsumers,
@@ -341,21 +388,49 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return value
     }
 
-    private func networkSample(at now: Date) -> (downPerSecond: Double, upPerSecond: Double) {
+    private func networkSample(at now: Date) -> NetworkRuntimeSample {
         guard let current = readNetworkCounters(at: now) else {
-            return (0, 0)
+            return .empty
         }
         defer { previousNetwork = current }
 
         guard let previousNetwork else {
-            return (0, 0)
+            return NetworkRuntimeSample(
+                downPerSecond: 0,
+                upPerSecond: 0,
+                downPacketsPerSecond: 0,
+                upPacketsPerSecond: 0,
+                droppedPacketsPerSecond: 0,
+                inboundBytesTotal: current.inboundBytes,
+                outboundBytesTotal: current.outboundBytes,
+                inboundPacketsTotal: current.inboundPackets,
+                outboundPacketsTotal: current.outboundPackets,
+                droppedPacketsTotal: current.droppedPackets,
+                primaryInterface: current.primaryInterfaceName
+            )
         }
 
         let dt = max(now.timeIntervalSince(previousNetwork.timestamp), 0.2)
         let downDiff = max(0, Int64(current.inboundBytes) - Int64(previousNetwork.inboundBytes))
         let upDiff = max(0, Int64(current.outboundBytes) - Int64(previousNetwork.outboundBytes))
+        let downPacketsDiff = max(0, Int64(current.inboundPackets) - Int64(previousNetwork.inboundPackets))
+        let upPacketsDiff = max(0, Int64(current.outboundPackets) - Int64(previousNetwork.outboundPackets))
+        let droppedDiff = max(0, Int64(current.droppedPackets) - Int64(previousNetwork.droppedPackets))
+        let primaryInterface = primaryInterfaceName(current: current, previous: previousNetwork)
 
-        return (Double(downDiff) / dt, Double(upDiff) / dt)
+        return NetworkRuntimeSample(
+            downPerSecond: Double(downDiff) / dt,
+            upPerSecond: Double(upDiff) / dt,
+            downPacketsPerSecond: Double(downPacketsDiff) / dt,
+            upPacketsPerSecond: Double(upPacketsDiff) / dt,
+            droppedPacketsPerSecond: Double(droppedDiff) / dt,
+            inboundBytesTotal: current.inboundBytes,
+            outboundBytesTotal: current.outboundBytes,
+            inboundPacketsTotal: current.inboundPackets,
+            outboundPacketsTotal: current.outboundPackets,
+            droppedPacketsTotal: current.droppedPackets,
+            primaryInterface: primaryInterface
+        )
     }
 
     private func readNetworkCounters(at now: Date) -> NetworkCounters? {
@@ -365,6 +440,11 @@ final class LiveSystemMetricsMonitor: ObservableObject {
 
         var inbound: UInt64 = 0
         var outbound: UInt64 = 0
+        var inboundPackets: UInt64 = 0
+        var outboundPackets: UInt64 = 0
+        var droppedPackets: UInt64 = 0
+        var perInterface: [String: InterfaceTrafficCounters] = [:]
+        var seenInterfaces = Set<String>()
         var current: UnsafeMutablePointer<ifaddrs>? = start
 
         while let entry = current {
@@ -373,22 +453,70 @@ final class LiveSystemMetricsMonitor: ObservableObject {
             let isLoopback = (flags & IFF_LOOPBACK) != 0
 
             if isUp, !isLoopback, let data = entry.pointee.ifa_data {
-                let ifData = data.assumingMemoryBound(to: if_data.self).pointee
-                inbound += UInt64(ifData.ifi_ibytes)
-                outbound += UInt64(ifData.ifi_obytes)
+                let interfaceName = String(cString: entry.pointee.ifa_name)
+                if !seenInterfaces.contains(interfaceName) {
+                    seenInterfaces.insert(interfaceName)
+
+                    let ifData = data.assumingMemoryBound(to: if_data.self).pointee
+                    let inboundBytes = UInt64(ifData.ifi_ibytes)
+                    let outboundBytes = UInt64(ifData.ifi_obytes)
+                    let inboundPacketCount = UInt64(ifData.ifi_ipackets)
+                    let outboundPacketCount = UInt64(ifData.ifi_opackets)
+                    let droppedPacketCount = UInt64(ifData.ifi_iqdrops)
+
+                    inbound += inboundBytes
+                    outbound += outboundBytes
+                    inboundPackets += inboundPacketCount
+                    outboundPackets += outboundPacketCount
+                    droppedPackets += droppedPacketCount
+
+                    perInterface[interfaceName] = InterfaceTrafficCounters(
+                        inboundBytes: inboundBytes,
+                        outboundBytes: outboundBytes
+                    )
+                }
             }
             current = entry.pointee.ifa_next
         }
 
-        return NetworkCounters(timestamp: now, inboundBytes: inbound, outboundBytes: outbound)
+        let primaryInterface = perInterface.max { lhs, rhs in
+            (lhs.value.inboundBytes + lhs.value.outboundBytes) < (rhs.value.inboundBytes + rhs.value.outboundBytes)
+        }?.key
+
+        return NetworkCounters(
+            timestamp: now,
+            inboundBytes: inbound,
+            outboundBytes: outbound,
+            inboundPackets: inboundPackets,
+            outboundPackets: outboundPackets,
+            droppedPackets: droppedPackets,
+            perInterface: perInterface,
+            primaryInterfaceName: primaryInterface
+        )
     }
 
-    private func processConsumersSample() -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
-        let command = "/bin/ps"
-        let args = ["-A", "-o", "pid=,%cpu=,rss=,comm="]
-        let output = runCommand(command, arguments: args)
-        guard !output.isEmpty else { return ([], [], []) }
+    private func primaryInterfaceName(current: NetworkCounters, previous: NetworkCounters) -> String? {
+        var bestName: String?
+        var bestDelta: UInt64 = 0
 
+        for (name, counters) in current.perInterface {
+            let previousCounters = previous.perInterface[name] ?? InterfaceTrafficCounters(inboundBytes: 0, outboundBytes: 0)
+            let currentTotal = counters.inboundBytes + counters.outboundBytes
+            let previousTotal = previousCounters.inboundBytes + previousCounters.outboundBytes
+            let delta = currentTotal > previousTotal ? currentTotal - previousTotal : 0
+            if delta > bestDelta {
+                bestDelta = delta
+                bestName = name
+            }
+        }
+
+        if bestName != nil {
+            return bestName
+        }
+        return current.primaryInterfaceName
+    }
+
+    private func processConsumersSample() async -> (topCPU: [ProcessConsumer], topMemory: [ProcessConsumer], topBattery: [ProcessConsumer]) {
         let runningApps = Dictionary(
             uniqueKeysWithValues: NSWorkspace.shared.runningApplications.compactMap { app -> (Int32, String)? in
                 guard app.processIdentifier > 0, let name = app.localizedName, !name.isEmpty else { return nil }
@@ -399,6 +527,15 @@ final class LiveSystemMetricsMonitor: ObservableObject {
                 return nil
             }
         )
+
+        let command = "/bin/ps"
+        let args = ["-A", "-o", "pid=,%cpu=,rss=,comm="]
+        let output = await Task.detached(priority: .utility) {
+            Self.runCommand(command, arguments: args)
+        }.value
+
+        guard !Task.isCancelled else { return ([], [], []) }
+        guard !output.isEmpty else { return ([], [], []) }
 
         var rows: [ProcessConsumer] = []
         rows.reserveCapacity(64)
@@ -467,7 +604,7 @@ final class LiveSystemMetricsMonitor: ObservableObject {
         return raw
     }
 
-    private func runCommand(_ launchPath: String, arguments: [String]) -> String {
+    private nonisolated static func runCommand(_ launchPath: String, arguments: [String]) -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launchPath)
         process.arguments = arguments
@@ -499,6 +636,44 @@ private struct NetworkCounters {
     let timestamp: Date
     let inboundBytes: UInt64
     let outboundBytes: UInt64
+    let inboundPackets: UInt64
+    let outboundPackets: UInt64
+    let droppedPackets: UInt64
+    let perInterface: [String: InterfaceTrafficCounters]
+    let primaryInterfaceName: String?
+}
+
+private struct InterfaceTrafficCounters {
+    let inboundBytes: UInt64
+    let outboundBytes: UInt64
+}
+
+private struct NetworkRuntimeSample {
+    let downPerSecond: Double
+    let upPerSecond: Double
+    let downPacketsPerSecond: Double
+    let upPacketsPerSecond: Double
+    let droppedPacketsPerSecond: Double
+    let inboundBytesTotal: UInt64
+    let outboundBytesTotal: UInt64
+    let inboundPacketsTotal: UInt64
+    let outboundPacketsTotal: UInt64
+    let droppedPacketsTotal: UInt64
+    let primaryInterface: String?
+
+    static let empty = NetworkRuntimeSample(
+        downPerSecond: 0,
+        upPerSecond: 0,
+        downPacketsPerSecond: 0,
+        upPacketsPerSecond: 0,
+        droppedPacketsPerSecond: 0,
+        inboundBytesTotal: 0,
+        outboundBytesTotal: 0,
+        inboundPacketsTotal: 0,
+        outboundPacketsTotal: 0,
+        droppedPacketsTotal: 0,
+        primaryInterface: nil
+    )
 }
 
 private enum BatteryUpdateSource {

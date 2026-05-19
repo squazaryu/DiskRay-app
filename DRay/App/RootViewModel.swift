@@ -107,6 +107,7 @@ final class RootViewModel: ObservableObject {
     @Published var experimentalElevatedDeletionEnabled = false {
         didSet {
             uiSettingsStore.saveExperimentalElevatedDeletion(experimentalElevatedDeletionEnabled)
+            uninstaller.setExperimentalElevatedDeletionEnabled(experimentalElevatedDeletionEnabled)
         }
     }
 
@@ -245,6 +246,7 @@ final class RootViewModel: ObservableObject {
         if let experimentalElevatedDeletion = uiSettingsStore.loadExperimentalElevatedDeletion() {
             experimentalElevatedDeletionEnabled = experimentalElevatedDeletion
         }
+        uninstaller.setExperimentalElevatedDeletionEnabled(experimentalElevatedDeletionEnabled)
 
         applyInitialScanTarget()
         applySearchDefaults()
@@ -366,6 +368,10 @@ final class RootViewModel: ObservableObject {
         if permissions.hasFolderPermission && permissions.hasFullDiskAccess {
             permissions.markOnboardingCompleted()
         }
+    }
+
+    func refreshPermissionsAsync() {
+        permissions.refreshPermissionStatusAsync(for: selectedTarget.url)
     }
 
     func refreshLaunchAtLoginStatus() {

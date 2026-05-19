@@ -215,14 +215,22 @@ private actor SmartCareControllerServiceStub: SmartCareServicing {
         self.cleanResult = cleanResult
     }
 
-    func runSmartScan(excludedPrefixes: [String], excludedAnalyzerKeys: [String]) async -> SmartScanResult {
+    func runSmartScan(
+        excludedPrefixes: [String],
+        excludedAnalyzerKeys: [String],
+        onProgress: (@Sendable (SmartScanProgress) async -> Void)?
+    ) async -> SmartScanResult {
         if !queuedScanResponses.isEmpty {
             return queuedScanResponses.removeFirst()
         }
         return SmartScanResult(categories: [], analyzerTelemetry: [])
     }
 
-    func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult {
+    func clean(
+        items: [CleanupItem],
+        minSizeBytes: Int64,
+        onProgress: (@Sendable (SmartCleanupProgress) async -> Void)?
+    ) async -> CleanupExecutionResult {
         cleanCalls.append((items, minSizeBytes))
         return cleanResult
     }

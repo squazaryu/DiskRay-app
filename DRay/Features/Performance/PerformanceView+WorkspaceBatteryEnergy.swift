@@ -68,7 +68,6 @@ extension PerformanceView {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(5)
-                        Spacer()
                         if let top = report.consumers.first {
                             DRayRankedBarRow(
                                 rank: 1,
@@ -81,8 +80,7 @@ extension PerformanceView {
                             )
                         }
                     }
-                    .frame(width: 320, alignment: .topLeading)
-                    .frame(minHeight: 260, alignment: .topLeading)
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 320, alignment: .topLeading)
                     .padding(layoutMetrics.cardSpacing)
                     .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
                 }

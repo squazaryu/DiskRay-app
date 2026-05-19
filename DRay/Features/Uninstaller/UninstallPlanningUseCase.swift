@@ -5,13 +5,15 @@ struct UninstallPlanningUseCase {
         previewItem(for: remnant).risk
     }
 
-    func uninstallPreview(app: InstalledApp, remnants: [AppRemnant]) -> [UninstallPreviewItem] {
+    func uninstallPreview(app: InstalledApp, remnants: [AppRemnant], mode: UninstallMode) -> [UninstallPreviewItem] {
         let appItem = UninstallPreviewItem(
             url: app.appURL,
             type: .appBundle,
             sizeInBytes: 0,
             risk: .high,
-            reason: "Main app bundle will be moved to Trash"
+            reason: mode == .clean
+                ? "Main app bundle will be moved to Trash (Clean Uninstall mode)."
+                : "Main app bundle will be moved to Trash."
         )
         let remnantItems = remnants.map(previewItem).sorted { $0.sizeInBytes > $1.sizeInBytes }
         return [appItem] + remnantItems
@@ -39,13 +41,7 @@ struct UninstallPlanningUseCase {
                 case .skippedProtected:
                     reason = "Skipped: system-protected path (SIP/TCC)."
                 case .failed:
-                    if let remediation = action.remediationHint, !remediation.isEmpty {
-                        reason = "Failed to remove: \(action.details ?? "unknown error"). Fix: \(remediation)"
-                    } else if let details = action.details, !details.isEmpty {
-                        reason = "Failed to remove: \(details)"
-                    } else {
-                        reason = "Failed to remove: unknown filesystem error."
-                    }
+                    reason = failedRemovalReason(for: action, path: path)
                 case .missing:
                     reason = "Path changed during uninstall and was not removed."
                 case .removed:
@@ -81,6 +77,40 @@ struct UninstallPlanningUseCase {
             remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes },
             startupReferences: startupReferences
         )
+    }
+
+    private func failedRemovalReason(for action: UninstallActionResult, path: String) -> String {
+        let details = action.details?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detailText = details?.isEmpty == false ? details! : "unknown filesystem error"
+        let remediation = action.remediationHint?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fix = remediation?.isEmpty == false ? " Fix: \(remediation!)." : ""
+
+        switch action.failureCategory {
+        case .launchDaemon:
+            return "LaunchDaemon failed to remove: \(detailText). Next: reveal the plist, unload it with launchctl if it is active, then retry cleanup with administrator authorization.\(fix)"
+        case .privilegedHelper:
+            return "Privileged helper failed to remove: \(detailText). Next: reveal the helper and its LaunchDaemon plist, unload the daemon, then retry cleanup with administrator authorization.\(fix)"
+        case .permissionDenied:
+            return "Permission denied while removing: \(detailText). Next: grant Full Disk Access, verify ownership/ACL, then retry cleanup.\(fix)"
+        case .protectedBySystem:
+            return "System-protected path failed to remove: \(detailText). Next: keep it excluded unless you intentionally handle it outside DRay.\(fix)"
+        case .runningProcessLock:
+            return "Running helper/process kept this item: \(detailText). Next: quit the app and helpers, then retry cleanup.\(fix)"
+        case .appStoreManaged, .itemLocked, .readOnlyVolume, .unknown, nil:
+            if let remediation, !remediation.isEmpty {
+                return "Failed to remove: \(detailText). Fix: \(remediation)"
+            }
+            if isDaemonPath(path) {
+                return "LaunchDaemon/helper failed to remove: \(detailText). Next: reveal the item, unload related launchd job if active, then retry with administrator authorization."
+            }
+            return "Failed to remove: \(detailText)"
+        }
+    }
+
+    private func isDaemonPath(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return lower.contains("/library/launchdaemons/")
+            || lower.contains("/library/privilegedhelpertools/")
     }
 
     private func previewItem(for remnant: AppRemnant) -> UninstallPreviewItem {

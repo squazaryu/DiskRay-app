@@ -31,6 +31,10 @@ final class UninstallerViewModel: ObservableObject {
         uninstallerController.loadRemnants(for: app)
     }
 
+    func setUninstallMode(_ mode: UninstallMode) {
+        uninstallerController.setUninstallMode(mode)
+    }
+
     func refreshRemainingRecords() {
         uninstallerController.refreshRemainingRecords()
     }

@@ -275,6 +275,7 @@ struct ModuleHeaderCard<Actions: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.showFeatureHeader) private var showFeatureHeader
     @Environment(\.drayInterfaceDensity) private var density
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
     let title: String
     let subtitle: String
     @ViewBuilder let actions: Actions
@@ -282,26 +283,40 @@ struct ModuleHeaderCard<Actions: View>: View {
     var body: some View {
         Group {
             if showFeatureHeader {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font((density == .compact ? Font.headline : Font.title3).weight(.semibold))
-                            .lineLimit(1)
-                        if !subtitle.isEmpty {
-                            Text(subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 12) {
+                        headerText
+                        Spacer(minLength: 12)
+                        actions
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        headerText
+                        HStack {
+                            Spacer(minLength: 0)
+                            actions
                         }
                     }
-                    Spacer(minLength: 8)
-                    actions
-                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.035, padding: max(8, layoutMetrics.bottomStripVerticalPadding + 2))
             } else {
                 EmptyView()
+            }
+        }
+    }
+
+    private var headerText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font((density == .compact ? Font.headline : Font.title3).weight(.semibold))
+                .lineLimit(1)
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
     }
@@ -443,33 +458,49 @@ struct DRayBottomStatusStrip: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                HStack(spacing: 9) {
-                    Image(systemName: item.icon)
-                        .foregroundStyle(item.tint)
-                        .frame(width: 18)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.title)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(item.value)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .monospacedDigit()
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    statusItemView(item)
+                        .padding(.horizontal, layoutMetrics.cardSpacing)
+                    if index < items.count - 1 {
+                        Divider()
+                            .opacity(0.45)
                     }
-                    Spacer(minLength: 6)
-                }
-                .padding(.horizontal, layoutMetrics.cardSpacing)
-                if index < items.count - 1 {
-                    Divider()
-                        .opacity(0.45)
                 }
             }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)],
+                spacing: 8
+            ) {
+                ForEach(items) { item in
+                    statusItemView(item)
+                }
+            }
+            .padding(.horizontal, layoutMetrics.cardSpacing)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private func statusItemView(_ item: Item) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: item.icon)
+                .foregroundStyle(item.tint)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(item.value)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .monospacedDigit()
+            }
+            Spacer(minLength: 6)
+        }
     }
 }
 

@@ -48,6 +48,7 @@ final class SearchFeatureController: ObservableObject {
         let request = LiveSearchRequest(
             rootURL: resolvedSearchRootURL(),
             query: query,
+            mode: state.mode,
             useRegex: state.useRegex,
             pathContains: state.pathContains.lowercased(),
             ownerContains: state.ownerContains.lowercased(),

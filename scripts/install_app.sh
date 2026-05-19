@@ -69,7 +69,7 @@ if [[ -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRayDark.icns"
 fi
 
-# Closed-app default icon (helper keeps it synced to current system theme at runtime).
+# Closed-app default icon. Runtime switches only the running app Dock icon.
 if [[ "$ICON_THEME" == "dark" && -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
 elif [[ "$ICON_THEME" == "light" && -f "assets/DRayLight.icns" ]]; then

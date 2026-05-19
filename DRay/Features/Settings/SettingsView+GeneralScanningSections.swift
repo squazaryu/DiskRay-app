@@ -99,7 +99,7 @@ extension SettingsView {
 
                 settingDivider()
 
-                settingsRow(title: tr("Плотность интерфейса", "Interface density"), subtitle: tr("Adaptive ужимает карточки при небольшом окне.", "Adaptive compresses cards when the window is smaller.")) {
+                settingsRow(title: tr("Плотность интерфейса", "Interface density"), subtitle: tr("Adaptive сохраняет комфортную сетку и включает compact только для действительно малых окон.", "Adaptive keeps a comfortable grid and switches to compact only for genuinely small windows.")) {
                     Picker("Interface density", selection: $model.appInterfaceDensity) {
                         ForEach(AppInterfaceDensity.allCases) { density in
                             Text(interfaceDensityTitle(density)).tag(density)

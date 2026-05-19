@@ -5,17 +5,7 @@ extension PerformanceView {
         VStack(alignment: .leading, spacing: 12) {
             performanceMetricGrid
 
-            HStack(alignment: .top, spacing: 12) {
-                startupImpactOverviewCard
-                topResourceConsumersCard
-                operationalInsightCard
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                loadTrendCard
-                networkOverviewCard
-                quickActionsOverviewCard
-            }
+            performanceOverviewBoard
 
             if let delta = model.performanceQuickActionDelta {
                 quickActionDeltaPanel(delta)
@@ -23,46 +13,28 @@ extension PerformanceView {
         }
     }
 
+    private var performanceOverviewBoard: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 290), spacing: 12, alignment: .top)],
+            alignment: .leading,
+            spacing: 12
+        ) {
+            startupImpactOverviewCard
+            topResourceConsumersCard
+            operationalInsightCard
+            loadTrendCard
+            networkOverviewCard
+            quickActionsOverviewCard
+        }
+    }
+
     private var performanceMetricGrid: some View {
-        HStack(spacing: 12) {
-            DRayDashboardMetricTile(
-                title: "CPU",
-                value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
-                subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
-                icon: "cpu",
-                tint: .blue,
-                progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
-                sparkline: cpuTrend,
-                action: { workspaceTab = .systemLoad }
-            )
-            DRayDashboardMetricTile(
-                title: t("Память", "Memory"),
-                value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
-                subtitle: ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory),
-                icon: "memorychip",
-                tint: .purple,
-                progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
-                sparkline: memoryTrend,
-                action: { workspaceTab = .systemLoad }
-            )
-            DRayDashboardMetricTile(
-                title: t("Батарея", "Battery"),
-                value: monitor.snapshot.batteryLevelPercent.map { "\($0)%" } ?? "n/a",
-                subtitle: batteryHealthLabel,
-                icon: "battery.75percent",
-                tint: batteryHealthColor,
-                progress: monitor.snapshot.batteryLevelPercent.map { Double($0) / 100.0 },
-                action: { workspaceTab = .batteryEnergy }
-            )
-            DRayDashboardMetricTile(
-                title: t("Автозапуск", "Startup"),
-                value: severityLabel(for: startupBurdenValue),
-                subtitle: "\(startupEntries.count) \(t("элементов", "items"))",
-                icon: "power",
-                tint: severityColor(for: startupBurdenValue),
-                progress: min(1, startupBurdenValue / 100),
-                action: { workspaceTab = .startup }
-            )
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 220, maximum: 360), spacing: 12)],
+            alignment: .leading,
+            spacing: 12
+        ) {
+            performanceMetricTiles
         }
     }
 
@@ -85,7 +57,7 @@ extension PerformanceView {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -93,12 +65,12 @@ extension PerformanceView {
     private var topResourceConsumersCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             cardTitle(t("Главные потребители", "Top Resource Consumers"), icon: "app.badge", tint: .blue)
-            let ranked = Array(rankedLiveConsumers.prefix(5))
+            let ranked = Array(rankedLiveConsumers.prefix(4))
             if ranked.isEmpty {
                 Text(t("Собираем live-метрики процессов...", "Collecting live process telemetry..."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 148, alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
             } else {
                 VStack(spacing: 8) {
                     ForEach(Array(ranked.enumerated()), id: \.element.id) { index, consumer in
@@ -118,7 +90,7 @@ extension PerformanceView {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -133,12 +105,11 @@ extension PerformanceView {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(4)
-            Spacer(minLength: 0)
             Button(insightActionTitle) { workspaceTab = insightTarget }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 230, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -160,7 +131,7 @@ extension PerformanceView {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -178,7 +149,7 @@ extension PerformanceView {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -201,7 +172,7 @@ extension PerformanceView {
             }
             .disabled(model.performance.isScanRunning)
         }
-        .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
     }
@@ -261,6 +232,48 @@ extension PerformanceView {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var performanceMetricTiles: some View {
+        DRayDashboardMetricTile(
+            title: "CPU",
+            value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
+            subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
+            icon: "cpu",
+            tint: .blue,
+            progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
+            sparkline: cpuTrend,
+            action: { workspaceTab = .systemLoad }
+        )
+        DRayDashboardMetricTile(
+            title: t("Память", "Memory"),
+            value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
+            subtitle: ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory),
+            icon: "memorychip",
+            tint: .purple,
+            progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
+            sparkline: memoryTrend,
+            action: { workspaceTab = .systemLoad }
+        )
+        DRayDashboardMetricTile(
+            title: t("Батарея", "Battery"),
+            value: monitor.snapshot.batteryLevelPercent.map { "\($0)%" } ?? "n/a",
+            subtitle: batteryHealthLabel,
+            icon: "battery.75percent",
+            tint: batteryHealthColor,
+            progress: monitor.snapshot.batteryLevelPercent.map { Double($0) / 100.0 },
+            action: { workspaceTab = .batteryEnergy }
+        )
+        DRayDashboardMetricTile(
+            title: t("Автозапуск", "Startup"),
+            value: severityLabel(for: startupBurdenValue),
+            subtitle: "\(startupEntries.count) \(t("элементов", "items"))",
+            icon: "power",
+            tint: severityColor(for: startupBurdenValue),
+            progress: min(1, startupBurdenValue / 100),
+            action: { workspaceTab = .startup }
+        )
     }
 
     private var insightTint: Color {

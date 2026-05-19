@@ -19,22 +19,31 @@ struct SmartCareView: View {
             if model.smartCare.isScanRunning {
                 scanProgressBanner
             }
-
-            Group {
-                switch workspaceTab {
-                case .overview:
-                    ScrollView(.vertical, showsIndicators: true) {
-                        smartOverview
-                    }
-                case .categories:
-                    categoriesWorkspace
-                case .exclusions:
-                    ScrollView(.vertical, showsIndicators: true) {
-                        exclusionsPanel
-                    }
-                }
+            if model.smartCare.isCleanupRunning {
+                cleanupProgressBanner
             }
-            .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: workspaceTab == .categories ? 0 : 12)
+            if let report = model.smartCare.lastScanReport {
+                lastScanReportBanner(report)
+            }
+            if let report = model.smartCare.lastCleanupReport {
+                lastCleanupReportBanner(report)
+            }
+
+            switch workspaceTab {
+            case .overview:
+                ScrollView(.vertical, showsIndicators: true) {
+                    smartOverview
+                        .padding(.horizontal, 2)
+                }
+            case .categories:
+                categoriesWorkspace
+                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+            case .exclusions:
+                ScrollView(.vertical, showsIndicators: true) {
+                    exclusionsPanel
+                }
+                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(12)
@@ -92,6 +101,39 @@ struct SmartCareView: View {
     }
 
     private var smartCareHero: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 18) {
+                smartCareHeroIdentity
+
+                Spacer(minLength: 10)
+
+                DRayDonutChartView(
+                    segments: smartCategorySegments,
+                    centerTitle: smartPotentialSize,
+                    centerSubtitle: "potential",
+                    lineWidth: 16
+                )
+                .frame(width: 132, height: 132)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                smartCareHeroIdentity
+
+                DRayDonutChartView(
+                    segments: smartCategorySegments,
+                    centerTitle: smartPotentialSize,
+                    centerSubtitle: "potential",
+                    lineWidth: 14
+                )
+                .frame(width: 112, height: 112)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(14)
+        .glassSurface(cornerRadius: 22, strokeOpacity: 0.11, shadowOpacity: 0.08, padding: 0)
+    }
+
+    private var smartCareHeroIdentity: some View {
         HStack(alignment: .center, spacing: 18) {
             DRayLiquidStatusRing(
                 icon: model.smartCare.isScanRunning ? "magnifyingglass" : "heart",
@@ -105,84 +147,198 @@ struct SmartCareView: View {
                     .foregroundStyle(.blue)
                 Text(model.smartCare.isScanRunning ? "Scanning your Mac..." : smartCareStatusTitle)
                     .font(.system(size: 26, weight: .semibold))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.84)
                 Text(model.smartCare.isScanRunning ? "DRay is checking cleanup categories and safe recommendations." : smartCareStatusSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
 
-                HStack(spacing: 8) {
-                    GlassPillBadge(title: "Safe & reversible", tint: .green)
-                    GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
-                    GlassPillBadge(title: "\(selectedCategoryCount) selected", tint: selectedCategoryCount > 0 ? .blue : .secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        smartCareHeroBadges
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        smartCareHeroBadges
+                    }
                 }
             }
-
-            Spacer(minLength: 10)
-
-            DRayDonutChartView(
-                segments: smartCategorySegments,
-                centerTitle: smartPotentialSize,
-                centerSubtitle: "potential",
-                lineWidth: 16
-            )
-            .frame(width: 132, height: 132)
         }
-        .padding(14)
-        .glassSurface(cornerRadius: 22, strokeOpacity: 0.11, shadowOpacity: 0.08, padding: 0)
+    }
+
+    @ViewBuilder
+    private var smartCareHeroBadges: some View {
+        GlassPillBadge(title: "Safe & reversible", tint: .green)
+        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
+        GlassPillBadge(title: "\(selectedCategoryCount) selected", tint: selectedCategoryCount > 0 ? .blue : .secondary)
     }
 
     private var safeCleanupGrid: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Safe Cleanup Categories")
-                    .font(.headline)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                cleanupCategoriesCard
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                smartActionCenter
+                    .frame(width: 300, alignment: .topLeading)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                smartActionCenter
+                cleanupCategoriesCard
+            }
+        }
+    }
+
+    private var cleanupCategoriesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Safe Cleanup Categories")
+                .font(.headline)
+            if model.smartCare.categories.isEmpty {
+                smartScanOnboardingCard
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
                     ForEach(model.smartCare.categories.prefix(6)) { category in
                         smartCategoryCard(category)
                     }
-                    if model.smartCare.categories.isEmpty {
-                        ContentUnavailableView(
-                            "No scan results",
-                            systemImage: "sparkles",
-                            description: Text("Run Smart Care to find safe cleanup opportunities.")
-                        )
-                        .frame(minHeight: 150)
+                }
+            }
+        }
+        .padding(12)
+        .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var smartActionCenter: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Action Center")
+                .font(.headline)
+
+            primarySmartActionButton
+
+            actionCenterRow("Select recommended", systemImage: "checkmark.circle", enabled: !model.smartCare.categories.isEmpty) {
+                selectedItemPaths.removeAll()
+                model.selectRecommendedSmartCategories()
+            }
+            actionCenterRow("Review categories", systemImage: "list.bullet.rectangle", enabled: true) {
+                workspaceTab = .categories
+            }
+            actionCenterRow("Clean selection", systemImage: "trash", enabled: canCleanSelection) {
+                cleanSelection()
+            }
+
+            Text(actionCenterHint)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .padding(.top, 2)
+        }
+        .padding(12)
+        .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+    }
+
+    private var smartScanOnboardingCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.blue)
+                .frame(width: 44, height: 44)
+                .background(Color.blue.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("No scan yet")
+                    .font(.title3.weight(.semibold))
+                Text("Run Smart Scan first. DRay will analyze safe cleanup categories, select recommended items by profile, and keep cleanup as a separate action.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        GlassPillBadge(title: "Scan first", tint: .blue)
+                        GlassPillBadge(title: "Clean later", tint: .green)
+                        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        GlassPillBadge(title: "Scan first", tint: .blue)
+                        GlassPillBadge(title: "Clean later", tint: .green)
+                        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(12)
-            .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Action Center")
-                    .font(.headline)
-                actionCenterRow("Select recommended", systemImage: "checkmark.circle", enabled: !model.smartCare.categories.isEmpty) {
-                    selectedItemPaths.removeAll()
-                    model.selectRecommendedSmartCategories()
-                }
-                actionCenterRow("Review categories", systemImage: "list.bullet.rectangle", enabled: true) {
-                    workspaceTab = .categories
-                }
-                actionCenterRow("Clean selection", systemImage: "trash", enabled: selectedCategoryCount > 0 || !selectedItemPaths.isEmpty) {
-                    cleanSelection()
-                }
-                Button {
-                    selectedItemPaths.removeAll()
-                    model.cleanRecommendedSmartCategories()
-                } label: {
-                    Label("Run Smart Care", systemImage: "sparkles")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
-            }
-            .frame(width: 250, alignment: .topLeading)
-            .padding(12)
-            .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var primarySmartActionButton: some View {
+        Button {
+            if model.smartCare.categories.isEmpty {
+                selectedItemPaths.removeAll()
+                model.runSmartScan()
+            } else {
+                selectedItemPaths.removeAll()
+                model.cleanRecommendedSmartCategories()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if model.smartCare.isScanRunning || model.smartCare.isCleanupRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: model.smartCare.categories.isEmpty ? "magnifyingglass" : "sparkles")
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(primarySmartActionTitle)
+                        .font(.subheadline.weight(.semibold))
+                    Text(primarySmartActionSubtitle)
+                        .font(.caption2)
+                        .opacity(0.82)
+                }
+                Spacer(minLength: 8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!canRunPrimarySmartAction)
+    }
+
+    private var primarySmartActionTitle: String {
+        if model.smartCare.isScanRunning { return "Scanning..." }
+        if model.smartCare.isCleanupRunning { return "Cleaning..." }
+        if model.smartCare.categories.isEmpty { return "Run Smart Scan" }
+        return "Clean Recommended"
+    }
+
+    private var primarySmartActionSubtitle: String {
+        if model.smartCare.categories.isEmpty {
+            return "Find safe cleanup opportunities"
+        }
+        return "\(selectedCategoryCount) selected · \(smartPotentialSize) potential"
+    }
+
+    private var canRunPrimarySmartAction: Bool {
+        guard !model.smartCare.isScanRunning, !model.smartCare.isCleanupRunning, !model.isUnifiedScanRunning else {
+            return false
+        }
+        return true
+    }
+
+    private var canCleanSelection: Bool {
+        !model.smartCare.isScanRunning
+            && !model.smartCare.isCleanupRunning
+            && (selectedCategoryCount > 0 || !selectedItemPaths.isEmpty)
+    }
+
+    private var actionCenterHint: String {
+        if model.smartCare.categories.isEmpty {
+            return "Scan builds the plan. Cleanup buttons stay disabled until DRay has real results."
+        }
+        if selectedCategoryCount == 0 && selectedItemPaths.isEmpty {
+            return "Select recommended categories or choose individual items before cleaning."
+        }
+        return "Cleanup moves selected safe items to Trash and then refreshes the scan."
     }
 
     private func smartCategoryCard(_ category: SmartCategoryState) -> some View {
@@ -202,7 +358,8 @@ struct SmartCareView: View {
                 }
                 Text(category.result.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(alignment: .firstTextBaseline) {
                     Text(ByteCountFormatter.string(fromByteCount: category.result.totalBytes, countStyle: .file))
                         .font(.title3.weight(.semibold))
@@ -216,9 +373,10 @@ struct SmartCareView: View {
                 Text(category.result.recommendationReason)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
             .padding(10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -266,10 +424,137 @@ struct SmartCareView: View {
                 .progressViewStyle(.circular)
                 .controlSize(.small)
                 .frame(width: 14, height: 14)
-            Text("Analyzing cleanup categories...")
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Analyzing cleanup categories...")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                if let progress = model.smartCare.currentScanProgress {
+                    Text("\(progress.index)/\(progress.total) · \(progress.analyzerTitle)\(progress.skipped ? " (excluded)" : "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let startedAt = model.smartCare.currentScanStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("Elapsed: \(elapsedText(since: startedAt, now: context.date))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.thinMaterial)
+        )
+        .overlay(alignment: .bottomLeading) {
+            if let progress = model.smartCare.currentScanProgress {
+                DRayProgressBar(
+                    value: progress.total > 0 ? Double(progress.index) / Double(progress.total) : 0,
+                    tint: .blue,
+                    height: 3
+                )
+                .padding(.horizontal, 10)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    private var cleanupProgressBanner: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .frame(width: 14, height: 14)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cleaning selected items...")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                if let progress = model.smartCare.currentCleanupProgress {
+                    Text("\(progress.processed)/\(progress.total) · \(progress.currentItemName)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let startedAt = model.smartCare.currentCleanupStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("Elapsed: \(elapsedText(since: startedAt, now: context.date))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            if let progress = model.smartCare.currentCleanupProgress {
+                GlassPillBadge(title: "Moved \(progress.moved) · Failed \(progress.failed)", tint: progress.failed > 0 ? .orange : .green)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.thinMaterial)
+        )
+        .overlay(alignment: .bottomLeading) {
+            if let progress = model.smartCare.currentCleanupProgress {
+                DRayProgressBar(
+                    value: progress.total > 0 ? Double(progress.processed) / Double(progress.total) : 0,
+                    tint: progress.failed > 0 ? .orange : .green,
+                    height: 3
+                )
+                .padding(.horizontal, 10)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    private func lastScanReportBanner(_ report: SmartCareScanReport) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Smart Care updated · \(relativeTimeText(report.finishedAt))")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(
+                    "\(report.categories) categories · \(report.items) items · \(ByteCountFormatter.string(fromByteCount: report.totalBytes, countStyle: .file)) potential · Δ \(signedCount(report.deltaItems)) items, \(signedBytes(report.deltaBytes))"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            GlassPillBadge(title: durationText(report.durationMs), tint: .blue)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.thinMaterial)
+        )
+    }
+
+    private func lastCleanupReportBanner(_ report: SmartCareCleanupReport) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: report.failed == 0 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(report.failed == 0 ? .green : .orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cleanup finished · \(relativeTimeText(report.finishedAt))")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text("Processed \(report.total) · moved \(report.moved) · failed \(report.failed)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            GlassPillBadge(title: durationText(report.durationMs), tint: .blue)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
@@ -303,21 +588,13 @@ struct SmartCareView: View {
             title: "Smart Care",
             subtitle: headerSubtitle
         ) {
-            compactSmartActions
+            smartHeaderControls
         }
     }
 
-    private var compactSmartActions: some View {
+    private var smartHeaderControls: some View {
         HStack(spacing: 8) {
             profileMenu
-            Button("Run") {
-                selectedItemPaths.removeAll()
-                model.runSmartScan()
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
-
             Menu {
                 Button("Run Full Smart Scan") {
                     selectedItemPaths.removeAll()
@@ -329,7 +606,7 @@ struct SmartCareView: View {
                     selectedItemPaths.removeAll()
                     model.cleanRecommendedSmartCategories()
                 }
-                .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
+                .disabled(model.smartCare.isScanRunning || model.smartCare.isCleanupRunning || model.smartCare.categories.isEmpty)
 
                 Divider()
 
@@ -355,13 +632,13 @@ struct SmartCareView: View {
                     profileMenu
                 }
 
-                Button("Run") {
+                Button("Run Smart Scan") {
                     selectedItemPaths.removeAll()
                     model.runSmartScan()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(model.smartCare.isScanRunning || model.isUnifiedScanRunning)
+                .disabled(model.smartCare.isCleanupRunning || model.smartCare.isScanRunning || model.isUnifiedScanRunning)
 
                 Menu {
                     Button("Run Full Smart Scan") {
@@ -374,7 +651,7 @@ struct SmartCareView: View {
                         selectedItemPaths.removeAll()
                         model.cleanRecommendedSmartCategories()
                     }
-                    .disabled(model.smartCare.isScanRunning || model.smartCare.categories.isEmpty)
+                    .disabled(model.smartCare.isScanRunning || model.smartCare.isCleanupRunning || model.smartCare.categories.isEmpty)
 
                     Divider()
 
@@ -458,7 +735,7 @@ struct SmartCareView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            .disabled(selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
+            .disabled(model.smartCare.isCleanupRunning || selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -897,6 +1174,32 @@ struct SmartCareView: View {
     private func durationText(_ ms: Int) -> String {
         if ms < 1000 { return "\(ms) ms" }
         return String(format: "%.1f s", Double(ms) / 1000.0)
+    }
+
+    private func elapsedText(since start: Date, now: Date) -> String {
+        let interval = max(Int(now.timeIntervalSince(start)), 0)
+        let minutes = interval / 60
+        let seconds = interval % 60
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
+    }
+
+    private func signedBytes(_ value: Int64) -> String {
+        let sign = value > 0 ? "+" : ""
+        return "\(sign)\(ByteCountFormatter.string(fromByteCount: value, countStyle: .file))"
+    }
+
+    private func signedCount(_ value: Int) -> String {
+        let sign = value > 0 ? "+" : ""
+        return "\(sign)\(value)"
+    }
+
+    private func relativeTimeText(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func statusTile(title: String, value: String, tint: Color) -> some View {

@@ -219,7 +219,9 @@ final class SafeFileOperationService {
         on run argv
             set targetPath to item 1 of argv
             set destinationPath to item 2 of argv
-            do shell script "/bin/mkdir -p \"$(/usr/bin/dirname " & quoted form of destinationPath & ")\"; /bin/mv -f " & quoted form of targetPath & " " & quoted form of destinationPath with administrator privileges
+            set parentPath to do shell script "/usr/bin/dirname " & quoted form of destinationPath
+            do shell script "/bin/mkdir -p " & quoted form of parentPath with administrator privileges
+            do shell script "/bin/mv -f " & quoted form of targetPath & " " & quoted form of destinationPath with administrator privileges
             return "ok"
         end run
         """

@@ -8,6 +8,40 @@ extension PerformanceView {
         }
     }
 
+    func appendNetworkRatePoint(from snapshot: LiveSystemSnapshot) {
+        let point: NetworkRatePoint
+        switch networkDataRepresentation {
+        case .bits:
+            point = NetworkRatePoint(
+                measuredAt: snapshot.updatedAt,
+                incoming: snapshot.networkDownBytesPerSecond * 8.0,
+                outgoing: snapshot.networkUpBytesPerSecond * 8.0
+            )
+        case .bytes:
+            point = NetworkRatePoint(
+                measuredAt: snapshot.updatedAt,
+                incoming: snapshot.networkDownBytesPerSecond,
+                outgoing: snapshot.networkUpBytesPerSecond
+            )
+        case .packets:
+            point = NetworkRatePoint(
+                measuredAt: snapshot.updatedAt,
+                incoming: snapshot.networkDownPacketsPerSecond,
+                outgoing: snapshot.networkUpPacketsPerSecond
+            )
+        }
+
+        if let last = networkRateHistory.last,
+           Calendar.current.isDate(last.measuredAt, equalTo: point.measuredAt, toGranularity: .second) {
+            return
+        }
+
+        networkRateHistory.append(point)
+        if networkRateHistory.count > 72 {
+            networkRateHistory.removeFirst(networkRateHistory.count - 72)
+        }
+    }
+
     var rankedLiveConsumers: [LiveConsumerRow] {
         var byName: [String: LiveConsumerRow] = [:]
 

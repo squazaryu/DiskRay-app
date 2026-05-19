@@ -17,6 +17,6 @@ enum AppInterfaceDensity: String, CaseIterable, Identifiable {
 
     func resolved(for size: CGSize) -> AppInterfaceDensity {
         guard self == .adaptive else { return self }
-        return size.width < 1320 || size.height < 860 ? .compact : .comfortable
+        return size.width < 1120 || size.height < 700 ? .compact : .comfortable
     }
 }

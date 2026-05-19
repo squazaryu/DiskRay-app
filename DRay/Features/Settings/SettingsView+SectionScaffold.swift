@@ -36,25 +36,28 @@ extension SettingsView {
         .glassSurface(cornerRadius: 18, strokeOpacity: 0.10, shadowOpacity: 0.06, padding: 14)
     }
 
-    func settingsRow<Content: View>(title: String, subtitle: String?, @ViewBuilder control: () -> Content) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            control()
-                .frame(maxWidth: 360, alignment: .trailing)
-        }
+    func settingsRow<Content: View>(title: String, subtitle: String?, @ViewBuilder control: @escaping () -> Content) -> some View {
+        SettingsRowContainer(
+            label: { settingsRowLabel(title: title, subtitle: subtitle) },
+            control: { control() }
+        )
         .padding(.vertical, 1)
+    }
+
+    private func settingsRowLabel(title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     func compactToggle(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -205,5 +208,41 @@ extension SettingsView {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private struct DRaySettingsCompactLayoutKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var draySettingsIsCompactLayout: Bool {
+        get { self[DRaySettingsCompactLayoutKey.self] }
+        set { self[DRaySettingsCompactLayoutKey.self] = newValue }
+    }
+}
+
+private struct SettingsRowContainer<LabelContent: View, ControlContent: View>: View {
+    @Environment(\.draySettingsIsCompactLayout) private var isCompactLayout
+    @ViewBuilder let label: () -> LabelContent
+    @ViewBuilder let control: () -> ControlContent
+
+    var body: some View {
+        Group {
+            if isCompactLayout {
+                VStack(alignment: .leading, spacing: 8) {
+                    label()
+                    control()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                HStack(alignment: .center, spacing: 14) {
+                    label()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    control()
+                        .frame(maxWidth: 360, alignment: .trailing)
+                }
+            }
+        }
     }
 }

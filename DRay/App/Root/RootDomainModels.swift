@@ -195,9 +195,17 @@ struct UnifiedScanSnapshot: Codable {
 
 enum SearchExecutionMode: String, CaseIterable, Identifiable {
     case live
+    case deep
 
     var id: String { rawValue }
-    var title: String { "Live" }
+    var title: String {
+        switch self {
+        case .live:
+            return "Fast"
+        case .deep:
+            return "Deep"
+        }
+    }
 }
 
 enum SearchScopeMode: String, CaseIterable, Identifiable, Codable {

@@ -4,6 +4,11 @@ import AppKit
 struct PerformanceView: View {
     @StateObject var model: PerformanceViewModel
     @StateObject var monitor = LiveSystemMetricsMonitor()
+    @StateObject var networkConnectionsMonitor = NetworkConnectionsMonitor()
+    @StateObject var networkGeolocationMonitor = NetworkGeolocationMonitor()
+    @StateObject var networkLatencyMonitor = NetworkLatencyMonitor()
+    let networkPortScannerService = NetworkPortScannerService()
+    let wakeOnLANService = WakeOnLANService()
     @Environment(\.drayLayoutMetrics) var layoutMetrics
 
     @State var selectedPaths = Set<String>()
@@ -15,7 +20,24 @@ struct PerformanceView: View {
 
     @State var cpuTrend: [Double] = []
     @State var memoryTrend: [Double] = []
+    @State var networkRateHistory: [NetworkRatePoint] = []
+    @State var networkDataRepresentation: NetworkDataRepresentation = .bytes
     @State var networkHistory: [NetworkHistoryPoint] = []
+    @State var networkSubscreen: NetworkWorkspaceSubscreen = .overview
+    @State var selectedNetworkHostID: String?
+    @State var selectedNetworkServiceID: String?
+    @State var selectedNetworkProgramID: String?
+    @State var portScannerHost = "127.0.0.1"
+    @State var portScannerStartPort = "1"
+    @State var portScannerEndPort = "1024"
+    @State var portScannerOpenPorts: [Int] = []
+    @State var portScannerStatusMessage: String?
+    @State var isPortScannerRunning = false
+    @State var portScannerTask: Task<Void, Never>?
+    @State var wakeOnLANMACAddress = "00:1A:2B:3C:4D:5E"
+    @State var wakeOnLANBroadcastAddress = "255.255.255.255"
+    @State var wakeOnLANPort = "9"
+    @State var wakeOnLANStatusMessage: String?
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: PerformanceViewModel(root: rootModel))
@@ -72,6 +94,9 @@ struct PerformanceView: View {
         }
         .onAppear {
             monitor.start()
+            networkConnectionsMonitor.start()
+            networkGeolocationMonitor.start()
+            refreshNetworkToolsMonitoring()
             if model.performance.report == nil {
                 model.runPerformanceScan()
             }
@@ -81,14 +106,49 @@ struct PerformanceView: View {
         }
         .onDisappear {
             monitor.stop()
+            networkConnectionsMonitor.stop()
+            networkGeolocationMonitor.stop()
+            networkLatencyMonitor.stop()
+            portScannerTask?.cancel()
+            portScannerTask = nil
         }
         .onReceive(monitor.$snapshot) { snapshot in
             appendTrend(value: snapshot.cpuLoadPercent, to: &cpuTrend)
             appendTrend(value: snapshot.memoryPressurePercent, to: &memoryTrend)
+            appendNetworkRatePoint(from: snapshot)
+        }
+        .onReceive(networkConnectionsMonitor.$snapshot) { snapshot in
+            let hosts = snapshot.topHosts.map(\.host)
+            networkGeolocationMonitor.refreshEndpoints(hosts: hosts)
+
+            let hostIDs = Set(snapshot.topHosts.map(\.id))
+            if let selectedNetworkHostID, !hostIDs.contains(selectedNetworkHostID) {
+                self.selectedNetworkHostID = nil
+            }
+
+            let serviceIDs = Set(snapshot.topServices.map(\.id))
+            if let selectedNetworkServiceID, !serviceIDs.contains(selectedNetworkServiceID) {
+                self.selectedNetworkServiceID = nil
+            }
+
+            let programIDs = Set(snapshot.topPrograms.map(\.id))
+            if let selectedNetworkProgramID, !programIDs.contains(selectedNetworkProgramID) {
+                self.selectedNetworkProgramID = nil
+            }
         }
         .onChange(of: model.performance.networkSpeedTestResult?.measuredAt) {
             guard let result = model.performance.networkSpeedTestResult, result.isSuccess else { return }
             appendNetworkHistory(result)
+        }
+        .onChange(of: networkDataRepresentation) {
+            networkRateHistory.removeAll()
+            appendNetworkRatePoint(from: monitor.snapshot)
+        }
+        .onChange(of: workspaceTab) {
+            refreshNetworkToolsMonitoring()
+        }
+        .onChange(of: networkSubscreen) {
+            refreshNetworkToolsMonitoring()
         }
         .onChange(of: model.performance.report?.generatedAt) {
             let valid = Set(startupEntries.map { $0.url.path })

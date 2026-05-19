@@ -72,7 +72,7 @@ struct RootView: View {
         ) { result in
             guard case let .success(urls) = result, let url = urls.first else { return }
             model.selectFolder(url)
-            model.refreshPermissions()
+            model.refreshPermissionsAsync()
         }
         .alert(
             "Permissions Required",
@@ -97,10 +97,10 @@ struct RootView: View {
             Text(model.permissionBlockingMessage ?? "")
         }
         .onAppear {
-            model.refreshPermissions()
+            model.refreshPermissionsAsync()
         }
         .onChange(of: scenePhase) {
-            model.refreshPermissions()
+            model.refreshPermissionsAsync()
         }
     }
 }

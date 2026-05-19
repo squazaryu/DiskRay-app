@@ -17,7 +17,7 @@ struct UninstallPlanningUseCaseTests {
             AppRemnant(url: URL(fileURLWithPath: "/Library/LaunchDaemons/com.example.demo.helper.plist"), sizeInBytes: 300)
         ]
 
-        let preview = useCase.uninstallPreview(app: app, remnants: remnants)
+        let preview = useCase.uninstallPreview(app: app, remnants: remnants, mode: .standard)
 
         #expect(preview.count == 4)
         #expect(preview.first?.type == .appBundle)
@@ -156,5 +156,54 @@ struct UninstallPlanningUseCaseTests {
         #expect(report.startupReferenceCount == 1)
         #expect(report.startupReferences.first?.source == .backgroundItems)
         #expect(report.remaining.first?.reason.contains("Fix: Retry with administrator authorization.") == true)
+    }
+
+    @Test
+    func verifyReportKeepsLaunchDaemonFailuresActionable() {
+        let useCase = UninstallPlanningUseCase()
+        let app = InstalledApp(
+            name: "Demo",
+            bundleID: "com.example.demo",
+            appURL: URL(fileURLWithPath: "/Applications/Demo.app")
+        )
+        let daemonURL = URL(fileURLWithPath: "/Library/LaunchDaemons/com.example.demo.helper.plist")
+        let preview = [
+            UninstallPreviewItem(
+                url: daemonURL,
+                type: .remnant,
+                sizeInBytes: 512,
+                risk: .high,
+                reason: "System-level helper or daemon"
+            )
+        ]
+        let validation = UninstallValidationReport(
+            appName: app.name,
+            createdAt: Date(),
+            results: [
+                UninstallActionResult(
+                    url: daemonURL,
+                    type: .remnant,
+                    status: .failed,
+                    trashedPath: nil,
+                    details: "Operation not permitted",
+                    failureCategory: .launchDaemon,
+                    remediationHint: "Unload launchd job and retry."
+                )
+            ]
+        )
+
+        let report = useCase.buildVerifyReport(
+            app: app,
+            previewItems: preview,
+            validation: validation,
+            remaining: [AppRemnant(url: daemonURL, sizeInBytes: 512)],
+            isProtectedPath: { _ in false },
+            isAppRunning: false
+        )
+
+        let reason = report.remaining.first?.reason ?? ""
+        #expect(reason.contains("LaunchDaemon failed to remove"))
+        #expect(reason.contains("unload it with launchctl"))
+        #expect(reason.contains("Unload launchd job and retry."))
     }
 }

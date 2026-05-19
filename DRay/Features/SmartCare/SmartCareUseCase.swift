@@ -3,9 +3,14 @@ import Foundation
 protocol SmartCareServicing: Sendable {
     func runSmartScan(
         excludedPrefixes: [String],
-        excludedAnalyzerKeys: [String]
+        excludedAnalyzerKeys: [String],
+        onProgress: (@Sendable (SmartScanProgress) async -> Void)?
     ) async -> SmartScanResult
-    func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult
+    func clean(
+        items: [CleanupItem],
+        minSizeBytes: Int64,
+        onProgress: (@Sendable (SmartCleanupProgress) async -> Void)?
+    ) async -> CleanupExecutionResult
 }
 
 struct SmartCareUseCase {
@@ -13,16 +18,22 @@ struct SmartCareUseCase {
 
     func runScan(
         excludedPrefixes: [String],
-        excludedAnalyzerKeys: [String]
+        excludedAnalyzerKeys: [String],
+        onProgress: (@Sendable (SmartScanProgress) async -> Void)? = nil
     ) async -> SmartScanResult {
         await service.runSmartScan(
             excludedPrefixes: excludedPrefixes,
-            excludedAnalyzerKeys: excludedAnalyzerKeys
+            excludedAnalyzerKeys: excludedAnalyzerKeys,
+            onProgress: onProgress
         )
     }
 
-    func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult {
-        await service.clean(items: items, minSizeBytes: minSizeBytes)
+    func clean(
+        items: [CleanupItem],
+        minSizeBytes: Int64,
+        onProgress: (@Sendable (SmartCleanupProgress) async -> Void)? = nil
+    ) async -> CleanupExecutionResult {
+        await service.clean(items: items, minSizeBytes: minSizeBytes, onProgress: onProgress)
     }
 
     func applyRecommendations(

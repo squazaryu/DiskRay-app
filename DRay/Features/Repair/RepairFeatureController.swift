@@ -28,7 +28,7 @@ final class RepairFeatureController: ObservableObject {
         state.isLoading = true
         Task { [weak self] in
             guard let self else { return }
-            let artifacts = await uninstallerUseCase.findRemnants(for: app)
+            let artifacts = await uninstallerUseCase.findRemnants(for: app, mode: .standard)
             await MainActor.run {
                 state.artifacts = artifacts
                 state.report = nil

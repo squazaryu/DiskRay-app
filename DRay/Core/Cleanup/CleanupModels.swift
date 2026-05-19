@@ -85,7 +85,23 @@ struct CleanupAnalyzerTelemetry: Identifiable, Hashable, Sendable {
     let skipped: Bool
 }
 
+struct SmartScanProgress: Sendable {
+    let analyzerKey: String
+    let analyzerTitle: String
+    let index: Int
+    let total: Int
+    let skipped: Bool
+}
+
 struct CleanupExecutionResult: Sendable {
     let moved: Int
     let failed: Int
+}
+
+struct SmartCleanupProgress: Sendable {
+    let processed: Int
+    let total: Int
+    let moved: Int
+    let failed: Int
+    let currentItemName: String
 }

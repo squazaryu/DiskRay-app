@@ -145,7 +145,7 @@ struct SearchPresetUseCase {
             depthMax: preset.depthMax,
             modifiedWithinDays: preset.modifiedWithinDays ?? 0,
             nodeType: preset.nodeType,
-            searchMode: .live,
+            searchMode: preset.searchMode,
             scopeMode: preset.scopeMode,
             customScopePath: preset.scopePath ?? "/",
             excludeTrash: preset.excludeTrash,

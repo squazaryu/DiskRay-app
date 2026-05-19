@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Darwin
 
 enum PermissionReadiness {
     case ready
@@ -14,6 +15,7 @@ final class AppPermissionService: ObservableObject {
     @Published private(set) var hasFolderPermission = false
     @Published private(set) var hasFullDiskAccess = false
     @Published var permissionHint: String?
+    private var permissionRefreshGeneration: UInt64 = 0
 
     private let hasCompletedOnboardingKey = "dray.permissions.onboarding.completed"
     init() {
@@ -27,20 +29,32 @@ final class AppPermissionService: ObservableObject {
     }
 
     func refreshPermissionStatus(for url: URL?) {
-        refreshFolderAccess(for: url)
-        refreshFullDiskAccess()
+        hasFolderPermission = Self.evaluateFolderAccess(for: url)
+        hasFullDiskAccess = Self.evaluateFullDiskAccess()
+    }
+
+    func refreshPermissionStatusAsync(for url: URL?) {
+        permissionRefreshGeneration &+= 1
+        let generation = permissionRefreshGeneration
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let folderPermission = Self.evaluateFolderAccess(for: url)
+            let fullDiskAccess = Self.evaluateFullDiskAccess()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard generation == self.permissionRefreshGeneration else { return }
+                self.hasFolderPermission = folderPermission
+                self.hasFullDiskAccess = fullDiskAccess
+            }
+        }
     }
 
     func refreshFolderAccess(for url: URL?) {
-        guard let url else {
-            hasFolderPermission = false
-            return
-        }
-        hasFolderPermission = canReadDirectory(url)
+        hasFolderPermission = Self.evaluateFolderAccess(for: url)
     }
 
     func refreshFullDiskAccess() {
-        hasFullDiskAccess = canReadProtectedLocation()
+        hasFullDiskAccess = Self.evaluateFullDiskAccess()
     }
 
     var readiness: PermissionReadiness {
@@ -135,7 +149,8 @@ final class AppPermissionService: ObservableObject {
         permissionHint = "Permissions were reset. Re-grant Full Disk Access for DRay and relaunch the app."
     }
 
-    private func canReadDirectory(_ url: URL) -> Bool {
+    private nonisolated static func evaluateFolderAccess(for url: URL?) -> Bool {
+        guard let url else { return false }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             return false
@@ -146,20 +161,25 @@ final class AppPermissionService: ObservableObject {
             if started { url.stopAccessingSecurityScopedResource() }
         }
 
-        do {
-            _ = try FileManager.default.contentsOfDirectory(atPath: url.path)
+        if FileManager.default.isReadableFile(atPath: url.path) {
             return true
-        } catch {
-            return false
         }
+
+        // Lightweight directory access probe (avoid full directory listing on large paths).
+        if let dir = opendir(url.path) {
+            closedir(dir)
+            return true
+        }
+
+        return false
     }
 
-    private func canReadProtectedLocation() -> Bool {
+    private nonisolated static func evaluateFullDiskAccess() -> Bool {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let candidates: [URL] = [
             home.appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db"),
-            home.appendingPathComponent("Library/Mail"),
-            home.appendingPathComponent("Library/Safari")
+            home.appendingPathComponent("Library/Safari/History.db"),
+            home.appendingPathComponent("Library/Safari/Bookmarks.plist")
         ]
 
         for candidate in candidates {
@@ -170,7 +190,7 @@ final class AppPermissionService: ObservableObject {
         return false
     }
 
-    private func canReadPath(_ url: URL) -> Bool {
+    private nonisolated static func canReadPath(_ url: URL) -> Bool {
         let fm = FileManager.default
         let path = url.path
         guard fm.fileExists(atPath: path) else { return false }
@@ -184,16 +204,10 @@ final class AppPermissionService: ObservableObject {
             return true
         }
 
+        let handle = try? FileHandle(forReadingFrom: url)
         do {
-            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
-            if values.isDirectory == true {
-                _ = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-                return true
-            } else {
-                let handle = try FileHandle(forReadingFrom: url)
-                try handle.close()
-                return true
-            }
+            try handle?.close()
+            return handle != nil
         } catch {
             return false
         }

@@ -215,6 +215,7 @@ struct DRayApp: App {
     @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var appDelegate
     private let launchContext: AppLaunchContext
     @StateObject private var model: RootViewModel
+    @StateObject private var systemThemeMonitor = SystemThemeMonitor()
     @State private var didApplyLaunchAction = false
 
     init() {
@@ -270,7 +271,8 @@ struct DRayApp: App {
         WindowGroup("DRay") {
             ThemedRootContainer(
                 model: model,
-                preferredColorScheme: preferredColorScheme
+                preferredColorScheme: preferredColorScheme,
+                systemThemeToken: systemThemeMonitor.token
             ) {
                 AppLogger.telemetry.info("Root view appeared")
                 applyLaunchActionIfNeeded()
@@ -415,30 +417,121 @@ private enum MainWindowFrameStore {
 private struct ThemedRootContainer: View {
     @ObservedObject var model: RootViewModel
     let preferredColorScheme: ColorScheme?
+    let systemThemeToken: Int
     let onInitialAppear: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var didAppear = false
 
     var body: some View {
         RootView(model: model)
+            .id(viewIdentityToken)
             .preferredColorScheme(preferredColorScheme)
             .tint(model.appAccentColor.color)
             .environment(\.drayAccentColor, model.appAccentColor.color)
             .onAppear {
-                AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
+                AppAppearanceController.shared.apply(model.appAppearance)
+                AppIconThemeController.shared.apply(for: effectiveIconColorScheme, appearance: model.appAppearance)
                 guard !didAppear else { return }
                 didAppear = true
                 onInitialAppear()
             }
             .onChange(of: colorScheme) {
-                AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
+                AppIconThemeController.shared.apply(for: effectiveIconColorScheme, appearance: model.appAppearance)
+            }
+            .onChange(of: systemThemeToken) {
+                guard model.appAppearance == .system else { return }
+                AppIconThemeController.shared.apply(for: effectiveIconColorScheme, appearance: model.appAppearance)
             }
             .onChange(of: model.appAppearance) {
-                // App appearance update can race with ColorScheme propagation.
                 DispatchQueue.main.async {
-                    AppIconThemeController.shared.apply(for: colorScheme, appearance: model.appAppearance)
+                    AppAppearanceController.shared.apply(model.appAppearance)
+                    AppIconThemeController.shared.apply(for: effectiveIconColorScheme, appearance: model.appAppearance)
                 }
             }
+    }
+
+    private var effectiveIconColorScheme: ColorScheme {
+        switch model.appAppearance {
+        case .system:
+            return AppIconThemeController.shared.systemColorScheme
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+
+    private var viewIdentityToken: String {
+        let appearance = model.appAppearance.rawValue
+        if model.appAppearance == .system {
+            return "\(appearance)-\(systemThemeToken)"
+        }
+        return appearance
+    }
+}
+
+@MainActor
+private final class SystemThemeMonitor: ObservableObject {
+    @Published private(set) var token: Int = 0
+
+    private var themeObserver: NSObjectProtocol?
+    private var appActivationObserver: NSObjectProtocol?
+    private var lastIsDark: Bool = false
+
+    init() {
+        lastIsDark = Self.readSystemThemeIsDark()
+        themeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshIfChanged()
+            }
+        }
+        appActivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshIfChanged()
+            }
+        }
+    }
+
+    private func refreshIfChanged() {
+        let currentIsDark = Self.readSystemThemeIsDark()
+        guard currentIsDark != lastIsDark else { return }
+        lastIsDark = currentIsDark
+        token &+= 1
+    }
+
+    private static func readSystemThemeIsDark() -> Bool {
+        if let style = UserDefaults.standard
+            .persistentDomain(forName: UserDefaults.globalDomain)?["AppleInterfaceStyle"] as? String {
+            return style.caseInsensitiveCompare("dark") == .orderedSame
+        }
+        if let match = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) {
+            return match == .darkAqua
+        }
+        return false
+    }
+}
+
+@MainActor
+private final class AppAppearanceController {
+    static let shared = AppAppearanceController()
+
+    func apply(_ appearance: AppAppearance) {
+        switch appearance {
+        case .system:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 }
 
@@ -446,12 +539,28 @@ private struct ThemedRootContainer: View {
 private final class AppIconThemeController {
     static let shared = AppIconThemeController()
 
-    private var lastAppliedIconName: String?
-    private var lastAppliedBundleIconName: String?
+    private var lastAppliedRuntimeIconName: String?
+    private var lastColorScheme: ColorScheme = .light
+    private var lastAppearance: AppAppearance = .system
+    private var themeObserver: NSObjectProtocol?
 
-    private init() {}
+    private init() {
+        themeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                let scheme = self.lastAppearance == .system ? self.systemColorScheme : self.lastColorScheme
+                self.apply(for: scheme, appearance: self.lastAppearance)
+            }
+        }
+    }
 
     func apply(for colorScheme: ColorScheme, appearance: AppAppearance) {
+        lastColorScheme = colorScheme
+        lastAppearance = appearance
         let useDarkIcon = resolveDarkIconPreference(colorScheme: colorScheme, appearance: appearance)
         let preferredNames = useDarkIcon
             ? ["DRayDark", "DRay", "DRayLight"]
@@ -459,12 +568,11 @@ private final class AppIconThemeController {
 
         for name in preferredNames {
             guard let image = icon(named: name) else { continue }
-            if lastAppliedIconName != name {
+            if lastAppliedRuntimeIconName != name {
                 NSApp.applicationIconImage = image
-                NSApp.dockTile.display()
-                lastAppliedIconName = name
+                lastAppliedRuntimeIconName = name
             }
-            applyBundleIcon(image: image, name: name)
+            NSApp.dockTile.display()
             return
         }
     }
@@ -476,14 +584,6 @@ private final class AppIconThemeController {
         return NSImage(contentsOf: url)
     }
 
-    private func applyBundleIcon(image: NSImage, name: String) {
-        guard lastAppliedBundleIconName != name else { return }
-        let appPath = Bundle.main.bundlePath
-        guard !appPath.isEmpty else { return }
-        guard NSWorkspace.shared.setIcon(image, forFile: appPath, options: []) else { return }
-        lastAppliedBundleIconName = name
-    }
-
     private func resolveDarkIconPreference(colorScheme: ColorScheme, appearance: AppAppearance) -> Bool {
         switch appearance {
         case .light:
@@ -493,6 +593,10 @@ private final class AppIconThemeController {
         case .system:
             return currentSystemThemeIsDark ?? (colorScheme == .dark)
         }
+    }
+
+    var systemColorScheme: ColorScheme {
+        currentSystemThemeIsDark == true ? .dark : .light
     }
 
     private var currentSystemThemeIsDark: Bool? {

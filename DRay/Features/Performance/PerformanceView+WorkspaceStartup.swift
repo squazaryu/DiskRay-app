@@ -35,7 +35,11 @@ extension PerformanceView {
                 .disabled(selectedPaths.isEmpty)
             }
 
-            HStack(spacing: layoutMetrics.cardSpacing) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 190, maximum: 320), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
                 DRayCompactInfoTile(
                     title: t("Записи", "Entries"),
                     value: "\(startupEntries.count)",
@@ -127,8 +131,7 @@ extension PerformanceView {
                     }
                     .disabled(startupEntries.isEmpty)
                 }
-                .frame(width: 330, alignment: .topLeading)
-                .frame(minHeight: 164, alignment: .topLeading)
+                .frame(minWidth: 280, idealWidth: 310, maxWidth: 330, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }

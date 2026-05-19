@@ -15,6 +15,8 @@ actor AppUninstallerService: UninstallerServicing {
         var result: [InstalledApp] = []
         var uniquePaths = Set<String>()
 
+        let currentAppBundlePath = Bundle.main.bundleURL.standardizedFileURL.path
+
         for root in roots {
             guard let urls = try? FileManager.default.contentsOfDirectory(
                 at: root,
@@ -23,6 +25,9 @@ actor AppUninstallerService: UninstallerServicing {
             ) else { continue }
 
             for appURL in urls where appURL.pathExtension == "app" {
+                if appURL.standardizedFileURL.path == currentAppBundlePath {
+                    continue
+                }
                 guard uniquePaths.insert(appURL.path).inserted else { continue }
                 let bundle = Bundle(url: appURL)
                 let bundleID = bundle?.bundleIdentifier ?? fallbackBundleIdentifier(for: appURL)
@@ -37,7 +42,7 @@ actor AppUninstallerService: UninstallerServicing {
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func findRemnants(for app: InstalledApp) -> [AppRemnant] {
+    func findRemnants(for app: InstalledApp, mode: UninstallMode) -> [AppRemnant] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let userRoots = [
             home.appendingPathComponent("Library/Application Support"),
@@ -61,27 +66,45 @@ actor AppUninstallerService: UninstallerServicing {
         ]
 
         let roots = userRoots + systemRoots
-        let tokens = searchTokens(for: app)
+        let strictBundleID = strictBundleID(for: app.bundleID)
         var unique = Set<String>()
         var remnants: [AppRemnant] = []
+        let maxDepth = mode == .clean ? 5 : 3
 
-        for root in roots where FileManager.default.fileExists(atPath: root.path) {
-            let urls = matchedURLs(in: root, tokens: tokens, maxDepth: 3)
-            for url in urls {
-                guard unique.insert(url.path).inserted else { continue }
-                let size = directorySize(at: url)
-                remnants.append(AppRemnant(url: url, sizeInBytes: size))
+        // Scheduled/app-bound scan should only work on strong app identity.
+        // Avoid fuzzy name-based matching to prevent false positives.
+        if let strictBundleID {
+            for root in roots where FileManager.default.fileExists(atPath: root.path) {
+                let urls = matchedURLs(in: root, tokens: [strictBundleID], maxDepth: maxDepth)
+                for url in urls {
+                    guard unique.insert(url.path).inserted else { continue }
+                    let size = directorySize(at: url)
+                    remnants.append(AppRemnant(url: url, sizeInBytes: size))
+                }
+            }
+        }
+
+        if mode == .clean || strictBundleID != nil {
+            for explicit in explicitRemnantURLs(for: app) {
+                let normalized = explicit.standardizedFileURL.path
+                guard FileManager.default.fileExists(atPath: normalized) else { continue }
+                guard unique.insert(normalized).inserted else { continue }
+                let url = URL(fileURLWithPath: normalized)
+                remnants.append(AppRemnant(url: url, sizeInBytes: directorySize(at: url)))
             }
         }
 
         // Explicit coverage for login items (best-effort, sandbox/permissions can still limit access).
         let loginItemsPlist = home.appendingPathComponent("Library/Preferences/com.apple.loginitems.plist")
-        if FileManager.default.fileExists(atPath: loginItemsPlist.path),
+        if let strictBundleID,
+           fileContainsAnyToken(loginItemsPlist, tokens: [strictBundleID]),
            unique.insert(loginItemsPlist.path).inserted {
             remnants.append(AppRemnant(url: loginItemsPlist, sizeInBytes: directorySize(at: loginItemsPlist)))
         }
 
-        return remnants.sorted { $0.sizeInBytes > $1.sizeInBytes }
+        return remnants
+            .filter { isAppBoundPath($0.url.path, bundleID: strictBundleID) }
+            .sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
     func findStartupReferences(for app: InstalledApp) -> [UninstallStartupReference] {
@@ -218,9 +241,25 @@ actor AppUninstallerService: UninstallerServicing {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
         terminateIfRunning(bundleID: app.bundleID)
+        let currentAppBundlePath = Bundle.main.bundleURL.standardizedFileURL.path
 
         for (target, type) in targets {
             let path = target.path
+
+            if target.standardizedFileURL.path == currentAppBundlePath {
+                results.append(
+                    UninstallActionResult(
+                        url: target,
+                        type: type,
+                        status: .failed,
+                        trashedPath: nil,
+                        details: "Self-uninstall is blocked for safety.",
+                        failureCategory: .protectedBySystem,
+                        remediationHint: "DRay cannot remove itself from the Uninstaller module."
+                    )
+                )
+                continue
+            }
 
             if SystemPathProtection.isProtected(path) {
                 results.append(
@@ -331,9 +370,38 @@ actor AppUninstallerService: UninstallerServicing {
     }
 
     private func searchTokens(for app: InstalledApp) -> [String] {
-        let sanitizedName = app.name.lowercased().replacingOccurrences(of: " ", with: "")
-        return [app.bundleID.lowercased(), app.name.lowercased(), sanitizedName]
-            .filter { !$0.isEmpty }
+        let normalizedBundleID = app.bundleID
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedName = app.name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let sanitizedName = normalizedName
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
+
+        var tokens: [String] = []
+        if !normalizedBundleID.isEmpty,
+           !normalizedBundleID.hasPrefix("unknown."),
+           !normalizedBundleID.hasPrefix("local.") {
+            tokens.append(normalizedBundleID)
+        }
+        if normalizedName.count >= 4 {
+            tokens.append(normalizedName)
+        }
+        if sanitizedName.count >= 4, sanitizedName != normalizedName {
+            tokens.append(sanitizedName)
+        }
+        return Array(Set(tokens))
+    }
+
+    private func strictBundleID(for bundleID: String) -> String? {
+        let normalized = bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return nil }
+        guard !normalized.hasPrefix("unknown."), !normalized.hasPrefix("local.") else { return nil }
+        guard normalized.contains(".") else { return nil }
+        return normalized
     }
 
     private func deepSweepRoots() -> [URL] {
@@ -445,6 +513,7 @@ actor AppUninstallerService: UninstallerServicing {
     }
 
     private func matchedURLs(in root: URL, tokens: [String], maxDepth: Int) -> [URL] {
+        guard !tokens.isEmpty else { return [] }
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -460,13 +529,54 @@ actor AppUninstallerService: UninstallerServicing {
                 enumerator.skipDescendants()
                 continue
             }
-            let target = url.lastPathComponent.lowercased()
-            let path = url.path.lowercased()
-            if tokens.contains(where: { target.contains($0) || path.contains($0) }) {
+            if tokens.contains(where: { tokenMatchesPath($0, url: url) }) {
                 result.append(url)
             }
         }
         return result
+    }
+
+    private func tokenMatchesPath(_ token: String, url: URL) -> Bool {
+        let path = url.path.lowercased()
+        let leaf = url.lastPathComponent.lowercased()
+
+        if token.contains(".") {
+            if path.contains("/\(token)") || path.contains(".\(token)") || path.contains("\(token).") {
+                return true
+            }
+            return false
+        }
+
+        guard token.count >= 4 else { return false }
+        if leaf == token {
+            return true
+        }
+        let boundaryTokens = ["/\(token)/", "/\(token).", ".\(token).", "-\(token)-", "_\(token)_", ".\(token)_", "_\(token)."]
+        if boundaryTokens.contains(where: { path.contains($0) }) {
+            return true
+        }
+        if path.hasSuffix("/\(token)") || path.hasSuffix(".\(token)") || path.hasSuffix("_\(token)") || path.hasSuffix("-\(token)") {
+            return true
+        }
+        return false
+    }
+
+    private func isAppBoundPath(_ path: String, bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        let lower = path.lowercased()
+        let exactPatterns = [
+            "/\(bundleID)/",
+            "/\(bundleID).",
+            ".\(bundleID).",
+            "/\(bundleID)-",
+            "/\(bundleID)_"
+        ]
+        if exactPatterns.contains(where: { lower.contains($0) }) {
+            return true
+        }
+        return lower.hasSuffix("/\(bundleID)")
+            || lower.hasSuffix(".\(bundleID)")
+            || lower.hasSuffix("/\(bundleID).plist")
     }
 
     private func depth(of relativePath: String) -> Int {
@@ -483,6 +593,34 @@ actor AppUninstallerService: UninstallerServicing {
             return "local.unknown.\(UUID().uuidString.lowercased())"
         }
         return "local.\(sanitized)"
+    }
+
+    private func explicitRemnantURLs(for app: InstalledApp) -> [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let bundleID = app.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let appName = app.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var urls: [URL] = []
+
+        if !bundleID.isEmpty {
+            urls.append(home.appendingPathComponent("Library/Containers/\(bundleID)"))
+            urls.append(home.appendingPathComponent("Library/Group Containers/\(bundleID)"))
+            urls.append(home.appendingPathComponent("Library/Application Scripts/\(bundleID)"))
+            urls.append(home.appendingPathComponent("Library/WebKit/\(bundleID)"))
+            urls.append(home.appendingPathComponent("Library/HTTPStorages/\(bundleID)"))
+            urls.append(home.appendingPathComponent("Library/HTTPStorages/\(bundleID).binarycookies"))
+            urls.append(home.appendingPathComponent("Library/Preferences/\(bundleID).plist"))
+            urls.append(URL(fileURLWithPath: "/Library/Preferences/\(bundleID).plist"))
+            urls.append(URL(fileURLWithPath: "/Library/LaunchAgents/\(bundleID).plist"))
+            urls.append(URL(fileURLWithPath: "/Library/LaunchDaemons/\(bundleID).plist"))
+            urls.append(URL(fileURLWithPath: "/Library/PrivilegedHelperTools/\(bundleID)"))
+        }
+
+        if !appName.isEmpty {
+            urls.append(home.appendingPathComponent("Library/Saved Application State/\(appName).savedState"))
+            urls.append(URL(fileURLWithPath: "/Library/StartupItems/\(appName)"))
+        }
+
+        return urls
     }
 
     private func directorySize(at url: URL) -> Int64 {
@@ -574,7 +712,9 @@ actor AppUninstallerService: UninstallerServicing {
         on run argv
             set targetPath to item 1 of argv
             set destinationPath to item 2 of argv
-            do shell script "/bin/mkdir -p \"$(/usr/bin/dirname " & quoted form of destinationPath & ")\"; /bin/mv -f " & quoted form of targetPath & " " & quoted form of destinationPath with administrator privileges
+            set parentPath to do shell script "/usr/bin/dirname " & quoted form of destinationPath
+            do shell script "/bin/mkdir -p " & quoted form of parentPath with administrator privileges
+            do shell script "/bin/mv -f " & quoted form of targetPath & " " & quoted form of destinationPath with administrator privileges
             return "ok"
         end run
         """
@@ -641,10 +781,26 @@ actor AppUninstallerService: UninstallerServicing {
         initialError: Error?,
         appBundleID: String
     ) -> (category: UninstallFailureCategory, remediation: String) {
+        let lowerPath = target.path.lowercased()
+
         if SystemPathProtection.isProtected(target.path) {
             return (
                 .protectedBySystem,
                 "Path is protected by SIP/TCC. Exclude it from uninstall or remove manually from recovery environment."
+            )
+        }
+
+        if lowerPath.contains("/library/launchdaemons/") {
+            return (
+                .launchDaemon,
+                "LaunchDaemon requires admin removal and may be loaded by launchd. Reveal it, unload with launchctl if needed, then retry cleanup with administrator authorization."
+            )
+        }
+
+        if lowerPath.contains("/library/privilegedhelpertools/") {
+            return (
+                .privilegedHelper,
+                "Privileged helper requires admin removal and may be referenced by a LaunchDaemon. Reveal both helper and daemon plist, unload the daemon, then retry cleanup."
             )
         }
 

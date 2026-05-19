@@ -2,7 +2,7 @@ import Foundation
 
 protocol UninstallerServicing: Sendable {
     func installedApps() async -> [InstalledApp]
-    func findRemnants(for app: InstalledApp) async -> [AppRemnant]
+    func findRemnants(for app: InstalledApp, mode: UninstallMode) async -> [AppRemnant]
     func findStartupReferences(for app: InstalledApp) async -> [UninstallStartupReference]
     func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate]
     func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport
@@ -33,8 +33,8 @@ struct UninstallerUseCase {
         await service.installedApps()
     }
 
-    func findRemnants(for app: InstalledApp) async -> [AppRemnant] {
-        await service.findRemnants(for: app)
+    func findRemnants(for app: InstalledApp, mode: UninstallMode) async -> [AppRemnant] {
+        await service.findRemnants(for: app, mode: mode)
     }
 
     func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate] {
@@ -48,11 +48,12 @@ struct UninstallerUseCase {
     func uninstallAndVerify(
         app: InstalledApp,
         previewItems: [UninstallPreviewItem],
+        mode: UninstallMode,
         isProtectedPath: (String) -> Bool,
         isAppRunning: Bool
     ) async -> UninstallExecutionResult {
         let validation = await service.uninstall(app: app, previewItems: previewItems)
-        let remaining = await service.findRemnants(for: app)
+        let remaining = await service.findRemnants(for: app, mode: mode)
         let startupReferences = await service.findStartupReferences(for: app)
         let verifyReport = planner.buildVerifyReport(
             app: app,
@@ -74,10 +75,11 @@ struct UninstallerUseCase {
         app: InstalledApp,
         previewItems: [UninstallPreviewItem],
         validation: UninstallValidationReport?,
+        mode: UninstallMode,
         isProtectedPath: (String) -> Bool,
         isAppRunning: Bool
     ) async -> UninstallVerifyPassResult {
-        let remaining = await service.findRemnants(for: app)
+        let remaining = await service.findRemnants(for: app, mode: mode)
         let startupReferences = await service.findStartupReferences(for: app)
         let verifyReport = planner.buildVerifyReport(
             app: app,
@@ -98,8 +100,8 @@ struct UninstallerUseCase {
         planner.repairRisk(for: remnant)
     }
 
-    func uninstallPreview(app: InstalledApp, remnants: [AppRemnant]) -> [UninstallPreviewItem] {
-        planner.uninstallPreview(app: app, remnants: remnants)
+    func uninstallPreview(app: InstalledApp, remnants: [AppRemnant], mode: UninstallMode) -> [UninstallPreviewItem] {
+        planner.uninstallPreview(app: app, remnants: remnants, mode: mode)
     }
 
     func buildVerifyReport(

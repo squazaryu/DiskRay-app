@@ -15,6 +15,11 @@ struct AppRemnant: Identifiable, Hashable, Sendable {
     var name: String { url.lastPathComponent }
 }
 
+enum UninstallMode: String, Codable, Sendable {
+    case standard
+    case clean
+}
+
 enum UninstallItemType: String, Codable, Sendable {
     case appBundle
     case remnant
@@ -33,6 +38,8 @@ enum UninstallFailureCategory: String, Codable, Sendable {
     case itemLocked
     case readOnlyVolume
     case runningProcessLock
+    case launchDaemon
+    case privilegedHelper
     case protectedBySystem
     case unknown
 }

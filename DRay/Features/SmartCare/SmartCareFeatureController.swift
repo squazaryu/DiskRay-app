@@ -43,10 +43,11 @@ final class SmartCareFeatureController: ObservableObject {
         state.minCleanSizeMB = max(0, value)
     }
 
-    func runScanSnapshot() async -> SmartScanResult {
+    func runScanSnapshot(onProgress: (@Sendable (SmartScanProgress) async -> Void)? = nil) async -> SmartScanResult {
         await smartCareUseCase.runScan(
             excludedPrefixes: state.exclusions,
-            excludedAnalyzerKeys: state.excludedAnalyzerKeys
+            excludedAnalyzerKeys: state.excludedAnalyzerKeys,
+            onProgress: onProgress
         )
     }
 
@@ -54,15 +55,37 @@ final class SmartCareFeatureController: ObservableObject {
         guard !state.isScanRunning else { return }
         guard context?.allowProtectedModule("Smart Scan") ?? true else { return }
 
+        let previousBytes = state.categories.reduce(Int64(0)) { $0 + $1.result.totalBytes }
+        let previousItems = state.categories.reduce(0) { $0 + $1.result.items.count }
+        let startedAt = Date()
+
         state.isScanRunning = true
+        state.currentScanStartedAt = startedAt
+        state.currentScanProgress = nil
         context?.log(category: "smartcare", message: "Smart scan started")
 
         Task { [weak self] in
             guard let self else { return }
-            let result = await runScanSnapshot()
+            let result = await runScanSnapshot { [weak self] progress in
+                guard let self else { return }
+                await MainActor.run {
+                    self.state.currentScanProgress = progress
+                }
+            }
             await MainActor.run {
                 applySmartScanResult(result)
                 state.isScanRunning = false
+                state.currentScanStartedAt = nil
+                state.currentScanProgress = nil
+                state.lastScanReport = SmartCareScanReport(
+                    finishedAt: Date(),
+                    durationMs: max(Int(Date().timeIntervalSince(startedAt) * 1000), 0),
+                    categories: result.categories.count,
+                    items: result.totalItems,
+                    totalBytes: result.totalBytes,
+                    deltaBytes: result.totalBytes - previousBytes,
+                    deltaItems: result.totalItems - previousItems
+                )
                 context?.log(
                     category: "smartcare",
                     message: "Smart scan done: categories \(result.categories.count), bytes \(result.totalBytes)"
@@ -166,19 +189,42 @@ final class SmartCareFeatureController: ObservableObject {
         actionTitle: String
     ) {
         guard !items.isEmpty else { return }
+        guard !state.isCleanupRunning else { return }
         guard context?.allowModify(
             urls: items.map(\.url),
             actionName: "Smart Clean",
             requiresFullDisk: false
         ) ?? true else { return }
 
+        let cleanupStartedAt = Date()
+        state.isCleanupRunning = true
+        state.currentCleanupStartedAt = cleanupStartedAt
+        state.currentCleanupProgress = nil
         context?.log(category: "smartcare", message: "\(actionTitle) started: items \(items.count)")
         Task { [weak self] in
             guard let self else { return }
-            let cleanupResult = await smartCareUseCase.clean(items: items, minSizeBytes: minSizeBytes)
+            let cleanupResult = await smartCareUseCase.clean(
+                items: items,
+                minSizeBytes: minSizeBytes
+            ) { [weak self] progress in
+                guard let self else { return }
+                await MainActor.run {
+                    self.state.currentCleanupProgress = progress
+                }
+            }
             let refreshed = await runScanSnapshot()
             await MainActor.run {
                 applySmartScanResult(refreshed)
+                state.isCleanupRunning = false
+                state.currentCleanupStartedAt = nil
+                state.currentCleanupProgress = nil
+                state.lastCleanupReport = SmartCareCleanupReport(
+                    finishedAt: Date(),
+                    durationMs: max(Int(Date().timeIntervalSince(cleanupStartedAt) * 1000), 0),
+                    total: max(cleanupResult.moved + cleanupResult.failed, 0),
+                    moved: cleanupResult.moved,
+                    failed: cleanupResult.failed
+                )
                 context?.log(
                     category: "smartcare",
                     message: "\(actionTitle) moved \(cleanupResult.moved), failed \(cleanupResult.failed)"

@@ -57,7 +57,7 @@ struct RootPermissionOnboardingCard: View {
                 .buttonStyle(.bordered)
 
                 Button("Refresh Status") {
-                    model.refreshPermissions()
+                    model.refreshPermissionsAsync()
                 }
                 .buttonStyle(.bordered)
 

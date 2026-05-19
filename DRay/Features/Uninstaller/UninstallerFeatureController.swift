@@ -58,7 +58,7 @@ final class UninstallerFeatureController: ObservableObject {
                     appName: candidate.appName,
                     bundleID: candidate.bundleID
                 )
-                let remnants = await uninstallerUseCase.findRemnants(for: app)
+                let remnants = await uninstallerUseCase.findRemnants(for: app, mode: .standard)
                 guard !remnants.isEmpty else { continue }
 
                 let issues = remnants.map { remnant in
@@ -140,9 +140,10 @@ final class UninstallerFeatureController: ObservableObject {
 
     func loadRemnants(for app: InstalledApp) {
         state.isLoading = true
+        let mode = state.uninstallMode
         Task { [weak self] in
             guard let self else { return }
-            let remnants = await uninstallerUseCase.findRemnants(for: app)
+            let remnants = await uninstallerUseCase.findRemnants(for: app, mode: mode)
             await MainActor.run {
                 state.remnants = remnants
                 state.uninstallReport = nil
@@ -152,8 +153,16 @@ final class UninstallerFeatureController: ObservableObject {
         }
     }
 
+    func setUninstallMode(_ mode: UninstallMode) {
+        state.uninstallMode = mode
+    }
+
+    func setExperimentalElevatedDeletionEnabled(_ enabled: Bool) {
+        state.experimentalElevatedDeletionEnabled = enabled
+    }
+
     func uninstallPreview(for app: InstalledApp) -> [UninstallPreviewItem] {
-        uninstallerUseCase.uninstallPreview(app: app, remnants: state.remnants)
+        uninstallerUseCase.uninstallPreview(app: app, remnants: state.remnants, mode: state.uninstallMode)
     }
 
     func uninstall(
@@ -176,6 +185,7 @@ final class UninstallerFeatureController: ObservableObject {
             let result = await uninstallerUseCase.uninstallAndVerify(
                 app: app,
                 previewItems: items,
+                mode: state.uninstallMode,
                 isProtectedPath: { path in
                     safeFileOperations.isProtectedPath(path)
                 },
@@ -221,6 +231,7 @@ final class UninstallerFeatureController: ObservableObject {
                 app: app,
                 previewItems: preview,
                 validation: validation,
+                mode: state.uninstallMode,
                 isProtectedPath: { path in
                     safeFileOperations.isProtectedPath(path)
                 },
@@ -311,15 +322,14 @@ final class UninstallerFeatureController: ObservableObject {
         let outcome = safeFileOperations.moveToTrash(
             nodes: existingNodes,
             actionName: actionName,
-            canModify: { [weak self] urls, action in
-                self?.context?.allowModify(
-                    urls: urls,
-                    actionName: action,
-                    requiresFullDisk: true
-                ) ?? true
+            allowElevatedDeletion: state.experimentalElevatedDeletionEnabled,
+            canModify: { _, _ in
+                // Do not block with preflight permission gate in Remaining/Clean flows.
+                // We attempt deletion and rely on real filesystem/macOS error for report.
+                true
             },
             permissionHint: {
-                "Full Disk Access may be required to remove some remaining artifacts."
+                "macOS denied deletion authorization for this path. It may require ownership/ACL fix or admin authorization; SIP/TCC protected paths remain blocked."
             }
         )
 
@@ -337,6 +347,34 @@ final class UninstallerFeatureController: ObservableObject {
             )
         }
 
+        let failureReasonsByPath = Dictionary(
+            uniqueKeysWithValues: outcome.failures.map {
+                (URL(fileURLWithPath: $0.path).standardizedFileURL.path, $0.reason)
+            }
+        )
+        if !failureReasonsByPath.isEmpty {
+            state.remainingRecords = state.remainingRecords.map { record in
+                let updatedIssues = record.issues.map { issue in
+                    let normalizedIssuePath = URL(fileURLWithPath: issue.path).standardizedFileURL.path
+                    guard let reason = failureReasonsByPath[normalizedIssuePath] else { return issue }
+                    return UninstallRemainingIssueRecord(
+                        id: issue.id,
+                        path: issue.path,
+                        sizeInBytes: issue.sizeInBytes,
+                        reason: reason,
+                        risk: issue.risk
+                    )
+                }
+                return UninstallRemainingRecord(
+                    id: record.id,
+                    appName: record.appName,
+                    bundleID: record.bundleID,
+                    updatedAt: Date(),
+                    issues: updatedIssues
+                )
+            }
+        }
+
         let resolvedPaths = Set(outcome.moved.map(\.originalPath))
             .union(missingPaths)
         if !resolvedPaths.isEmpty {
@@ -349,7 +387,15 @@ final class UninstallerFeatureController: ObservableObject {
         let result = TrashOperationResult(
             moved: outcome.moved.count,
             skippedProtected: outcome.skippedProtected,
-            failed: outcome.failures.map(\.path)
+            failed: outcome.failures.map(\.path),
+            elevatedMoved: outcome.elevatedMoved.count,
+            failureReasons: Dictionary(
+                uniqueKeysWithValues: outcome.failures.map { ($0.path, $0.reason) }
+            ),
+            permissionFailures: outcome.failures
+                .filter(\.isPermission)
+                .map(\.path),
+            experimentalElevatedDeletionEnabled: state.experimentalElevatedDeletionEnabled
         )
 
         context?.log(
@@ -401,12 +447,16 @@ final class UninstallerFeatureController: ObservableObject {
         for record in records {
             let normalizedName = record.appName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if let bundleID = record.bundleID?.lowercased(), !bundleID.isEmpty {
+                if bundleID.hasPrefix("unknown."), normalizedName.count < 4 {
+                    continue
+                }
                 guard seenByBundle.insert(bundleID).inserted else { continue }
                 seenByName.insert(normalizedName)
                 candidates.append(
                     RemainingScanCandidate(appName: record.appName, bundleID: record.bundleID)
                 )
             } else {
+                guard normalizedName.count >= 4 else { continue }
                 guard seenByName.insert(normalizedName).inserted else { continue }
                 candidates.append(
                     RemainingScanCandidate(appName: record.appName, bundleID: nil)
@@ -417,6 +467,7 @@ final class UninstallerFeatureController: ObservableObject {
         for session in sessions {
             let normalizedName = session.appName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !normalizedName.isEmpty else { continue }
+            guard normalizedName.count >= 4 else { continue }
             guard seenByName.insert(normalizedName).inserted else { continue }
             candidates.append(
                 RemainingScanCandidate(appName: session.appName, bundleID: nil)
@@ -428,6 +479,9 @@ final class UninstallerFeatureController: ObservableObject {
             let normalizedBundle = removedCandidate.bundleID?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
             if let normalizedBundle, !normalizedBundle.isEmpty {
+                if normalizedBundle.hasPrefix("unknown."), normalizedName.count < 4 {
+                    continue
+                }
                 guard seenByBundle.insert(normalizedBundle).inserted else { continue }
                 seenByName.insert(normalizedName)
                 candidates.append(
@@ -437,6 +491,7 @@ final class UninstallerFeatureController: ObservableObject {
                     )
                 )
             } else {
+                guard normalizedName.count >= 4 else { continue }
                 guard seenByName.insert(normalizedName).inserted else { continue }
                 candidates.append(
                     RemainingScanCandidate(

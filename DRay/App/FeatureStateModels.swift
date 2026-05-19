@@ -39,11 +39,36 @@ struct SearchFeatureState {
 struct SmartCareFeatureState {
     var categories: [SmartCategoryState] = []
     var isScanRunning = false
+    var currentScanStartedAt: Date?
+    var currentScanProgress: SmartScanProgress?
+    var lastScanReport: SmartCareScanReport?
+    var isCleanupRunning = false
+    var currentCleanupStartedAt: Date?
+    var currentCleanupProgress: SmartCleanupProgress?
+    var lastCleanupReport: SmartCareCleanupReport?
     var exclusions: [String] = []
     var excludedAnalyzerKeys: [String] = []
     var analyzerTelemetry: [CleanupAnalyzerTelemetry] = []
     var minCleanSizeMB: Double = 1
     var profile: SmartCleanProfile = .balanced
+}
+
+struct SmartCareScanReport {
+    let finishedAt: Date
+    let durationMs: Int
+    let categories: Int
+    let items: Int
+    let totalBytes: Int64
+    let deltaBytes: Int64
+    let deltaItems: Int
+}
+
+struct SmartCareCleanupReport {
+    let finishedAt: Date
+    let durationMs: Int
+    let total: Int
+    let moved: Int
+    let failed: Int
 }
 
 struct DuplicatesFeatureState {
@@ -97,6 +122,8 @@ struct RecoveryFeatureState {
 }
 
 struct UninstallerFeatureState {
+    var uninstallMode: UninstallMode = .standard
+    var experimentalElevatedDeletionEnabled = false
     var installedApps: [InstalledApp] = []
     var remnants: [AppRemnant] = []
     var isLoading = false

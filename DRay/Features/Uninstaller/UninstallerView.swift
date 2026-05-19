@@ -11,6 +11,7 @@ struct UninstallerView: View {
     @State private var workspaceTab: UninstallerWorkspaceTab = .applications
     @State private var remainingActionMessage: String?
     @State private var pendingRemainingOperation: RemainingOperation?
+    @State private var remainingFilter: RemainingFilter = .all
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: UninstallerViewModel(root: rootModel))
@@ -53,12 +54,76 @@ struct UninstallerView: View {
     }
 
     private var remainingIssueCount: Int {
-        remainingRecords.reduce(0) { $0 + $1.remainingCount }
+        filteredRemainingRecords.reduce(0) { $0 + $1.remainingCount }
     }
 
     private var remainingTotalSizeText: String {
-        let total = remainingRecords.reduce(Int64(0)) { $0 + $1.totalSizeInBytes }
+        let total = filteredRemainingRecords.reduce(Int64(0)) { $0 + $1.totalSizeInBytes }
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+    }
+
+    private var allRemainingIssueCount: Int {
+        remainingRecords.reduce(0) { $0 + $1.remainingCount }
+    }
+
+    private var remainingNextStepMessage: String? {
+        let issues = filteredRemainingRecords.flatMap(\.issues)
+        guard !issues.isEmpty else { return nil }
+        if issues.contains(where: { RemainingFilter.daemon.matches(issue: $0) }) {
+            return "Daemon/helper leftovers need a deliberate flow: reveal the item, unload related launchd job if active, then retry Clean Remaining with administrator authorization."
+        }
+        if issues.contains(where: { RemainingFilter.permissions.matches(issue: $0) }) {
+            return "Permission failures usually need Full Disk Access, ownership/ACL review, or administrator authorization before retrying."
+        }
+        if issues.contains(where: { RemainingFilter.protected.matches(issue: $0) }) {
+            return "SIP/TCC protected paths should normally stay excluded unless you intentionally handle them outside DRay."
+        }
+        return "Use Reveal/Copy Path from validation details if the item still fails, then retry after removing the blocking owner, ACL, or running helper."
+    }
+
+    private var filteredRemainingRecords: [UninstallRemainingRecord] {
+        guard remainingFilter != .all else { return remainingRecords }
+        return remainingRecords.compactMap { record in
+            let issues = record.issues.filter { remainingFilter.matches(issue: $0) }
+            guard !issues.isEmpty else { return nil }
+            return UninstallRemainingRecord(
+                id: record.id,
+                appName: record.appName,
+                bundleID: record.bundleID,
+                updatedAt: record.updatedAt,
+                issues: issues
+            )
+        }
+    }
+
+    private var remainingReasonSummary: [(title: String, count: Int, tint: Color)] {
+        let allIssues = remainingRecords.flatMap(\.issues)
+        let daemon = allIssues.filter { RemainingFilter.daemon.matches(issue: $0) }.count
+        let protected = allIssues.filter { RemainingFilter.protected.matches(issue: $0) }.count
+        let permissions = allIssues.filter { RemainingFilter.permissions.matches(issue: $0) }.count
+        let other = allIssues.filter { RemainingFilter.other.matches(issue: $0) }.count
+        return [
+            (title: "Daemons", count: daemon, tint: .red),
+            (title: "SIP/TCC", count: protected, tint: .orange),
+            (title: "Permissions", count: permissions, tint: .red),
+            (title: "Other", count: other, tint: .secondary)
+        ]
+    }
+
+    private var uninstallMode: UninstallMode {
+        uninstallerState.uninstallMode
+    }
+
+    private var uninstallModeBinding: Binding<UninstallMode> {
+        Binding(
+            get: { uninstallMode },
+            set: { newValue in
+                model.setUninstallMode(newValue)
+                if let selectedApp {
+                    model.loadRemnants(for: selectedApp)
+                }
+            }
+        )
     }
 
     private var remnantTotalSizeText: String {
@@ -172,6 +237,7 @@ struct UninstallerView: View {
             if let selectedApp {
                 UninstallPreviewSheet(
                     app: selectedApp,
+                    mode: uninstallMode,
                     previewItems: model.uninstallPreview(for: selectedApp),
                     onConfirm: { selectedItems in
                         let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: selectedApp.bundleID).isEmpty
@@ -179,8 +245,14 @@ struct UninstallerView: View {
                             app: selectedApp,
                             selectedItems: selectedItems,
                             isAppRunning: isRunning
-                        ) { _ in
+                        ) { result in
                             model.loadInstalledApps()
+                            if result.verifyReport.remainingCount > 0 || result.verifyReport.startupReferenceCount > 0 {
+                                workspaceTab = .remaining
+                                remainingActionMessage = "Clean Uninstall finished with unresolved items: \(result.verifyReport.remainingCount) remaining, \(result.verifyReport.startupReferenceCount) startup references. Review Remaining for cleanup and next steps."
+                            } else {
+                                remainingActionMessage = "Clean Uninstall finished: no leftovers detected by verify pass."
+                            }
                         }
                         showUninstallPreview = false
                     }
@@ -204,6 +276,12 @@ struct UninstallerView: View {
                 if workspaceTab == .applications {
                     GlassPillBadge(title: "\(filteredApps.count) apps", tint: .blue)
                     GlassPillBadge(title: "\(remnants.count) remnants", tint: .orange)
+                    Picker("", selection: uninstallModeBinding) {
+                        Text("Standard").tag(UninstallMode.standard)
+                        Text("Clean Uninstall").tag(UninstallMode.clean)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 250)
 
                     Button("Rescan Apps") {
                         model.loadInstalledApps()
@@ -245,7 +323,10 @@ struct UninstallerView: View {
 
                     Button("Clean All Remaining", role: .destructive) {
                         let result = model.cleanAllRemainingRecords()
-                        remainingActionMessage = "Moved \(result.moved) · Skipped \(result.skippedProtected.count) · Failed \(result.failed.count)"
+                        remainingActionMessage = formattedRemainingCleanupMessage(
+                            result,
+                            appName: nil
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(remainingIssueCount == 0)
@@ -337,6 +418,12 @@ struct UninstallerView: View {
                             .lineLimit(1)
                     }
                     Spacer()
+                    Picker("", selection: uninstallModeBinding) {
+                        Text("Standard").tag(UninstallMode.standard)
+                        Text("Clean").tag(UninstallMode.clean)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
                     Button("Uninstall", role: .destructive) {
                         showUninstallPreview = true
                     }
@@ -567,14 +654,46 @@ struct UninstallerView: View {
     private var remainingWorkspace: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                GlassPillBadge(title: "\(remainingRecords.count) apps", tint: .blue)
-                GlassPillBadge(title: "\(remainingIssueCount) items", tint: .orange)
+                GlassPillBadge(title: "\(filteredRemainingRecords.count) apps", tint: .blue)
+                GlassPillBadge(title: "\(remainingIssueCount) unresolved", tint: .orange)
                 GlassPillBadge(title: remainingTotalSizeText, tint: .indigo)
+                Spacer(minLength: 8)
+            }
+
+            HStack(spacing: 8) {
+                Text("Could not remove")
+                    .font(.headline)
+                Picker("", selection: $remainingFilter) {
+                    Text("All").tag(RemainingFilter.all)
+                    Text("Daemons").tag(RemainingFilter.daemon)
+                    Text("SIP/TCC").tag(RemainingFilter.protected)
+                    Text("Permissions").tag(RemainingFilter.permissions)
+                    Text("Other").tag(RemainingFilter.other)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 460)
+                Spacer(minLength: 8)
+                Text("Total unresolved: \(allRemainingIssueCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(remainingReasonSummary, id: \.title) { bucket in
+                    GlassPillBadge(title: "\(bucket.title): \(bucket.count)", tint: bucket.tint)
+                }
                 Spacer(minLength: 8)
             }
 
             if let remainingActionMessage {
                 Text(remainingActionMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+            }
+
+            if let nextStep = remainingNextStepMessage {
+                Label(nextStep, systemImage: "arrow.triangle.2.circlepath")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 2)
@@ -590,17 +709,17 @@ struct UninstallerView: View {
                 .padding(.horizontal, 2)
             }
 
-            if remainingRecords.isEmpty {
+            if filteredRemainingRecords.isEmpty {
                 ContentUnavailableView(
-                    "No remaining artifacts",
+                    "No unresolved artifacts",
                     systemImage: "checkmark.seal",
-                    description: Text("After uninstall, unresolved tails appear here. Use Deep Sweep to detect orphaned leftovers from manually deleted apps.")
+                    description: Text("Everything matched by the current filter is resolved. Use Deep Sweep for orphaned leftovers from manually deleted apps.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(remainingRecords) { record in
+                        ForEach(filteredRemainingRecords) { record in
                             remainingRecordCard(record)
                         }
                     }
@@ -646,7 +765,10 @@ struct UninstallerView: View {
             HStack(spacing: 8) {
                 Button("Clean Remaining", role: .destructive) {
                     let result = model.cleanRemainingRecord(record)
-                    remainingActionMessage = "\(record.appName): moved \(result.moved) · skipped \(result.skippedProtected.count) · failed \(result.failed.count)"
+                    remainingActionMessage = formattedRemainingCleanupMessage(
+                        result,
+                        appName: record.appName
+                    )
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(record.issues.isEmpty)
@@ -663,7 +785,8 @@ struct UninstallerView: View {
     }
 
     private func remainingIssueRow(_ issue: UninstallRemainingIssueRecord) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        let classification = remainingClassification(for: issue)
+        return HStack(alignment: .top, spacing: 8) {
             Text(riskTitle(issue.risk))
                 .font(.caption2.bold())
                 .padding(.horizontal, 7)
@@ -683,17 +806,82 @@ struct UninstallerView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                Text(classification.nextStep)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(classification.tint)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 8)
 
-            Text(ByteCountFormatter.string(fromByteCount: issue.sizeInBytes, countStyle: .file))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(classification.title)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(classification.tint.opacity(0.14), in: Capsule())
+                    .foregroundStyle(classification.tint)
+                Text(ByteCountFormatter.string(fromByteCount: issue.sizeInBytes, countStyle: .file))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func formattedRemainingCleanupMessage(
+        _ result: TrashOperationResult,
+        appName: String?
+    ) -> String {
+        let prefix = appName.map { "\($0): " } ?? ""
+        var base = "\(prefix)moved \(result.moved) · skipped \(result.skippedProtected.count) · failed \(result.failed.count)"
+        if result.elevatedMoved > 0 {
+            base += " · admin \(result.elevatedMoved)"
+        }
+        if let firstFailedPath = result.failed.first,
+           let reason = result.failureReasons[firstFailedPath],
+           !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let syntheticIssue = UninstallRemainingIssueRecord(
+                path: firstFailedPath,
+                sizeInBytes: 0,
+                reason: reason,
+                risk: .medium
+            )
+            base += "\nReason: \(reason)"
+            base += "\nNext: \(remainingClassification(for: syntheticIssue).nextStep)"
+        }
+        return base
+    }
+
+    private func remainingClassification(for issue: UninstallRemainingIssueRecord) -> RemainingIssueClassification {
+        if RemainingFilter.daemon.matches(issue: issue) {
+            return RemainingIssueClassification(
+                title: "Daemon",
+                tint: .red,
+                nextStep: "Reveal plist/helper, unload related launchd job if active, then retry with administrator authorization."
+            )
+        }
+        if RemainingFilter.protected.matches(issue: issue) {
+            return RemainingIssueClassification(
+                title: "SIP/TCC",
+                tint: .orange,
+                nextStep: "Protected by macOS. Keep excluded unless you intentionally remove it outside DRay."
+            )
+        }
+        if RemainingFilter.permissions.matches(issue: issue) {
+            return RemainingIssueClassification(
+                title: "Permissions",
+                tint: .red,
+                nextStep: "Grant Full Disk Access, check ownership/ACL, then retry Clean Remaining."
+            )
+        }
+        return RemainingIssueClassification(
+            title: "Other",
+            tint: .secondary,
+            nextStep: "Reveal the path, check whether a helper recreated it, then retry cleanup."
+        )
     }
 
     private func summaryMetric(title: String, value: String) -> some View {
@@ -1129,10 +1317,64 @@ struct UninstallerView: View {
         case .itemLocked: return "Locked/Immutable"
         case .readOnlyVolume: return "Read-only Volume"
         case .runningProcessLock: return "Running Process Lock"
+        case .launchDaemon: return "LaunchDaemon"
+        case .privilegedHelper: return "Privileged Helper"
         case .protectedBySystem: return "SIP/TCC Protected"
         case .unknown: return "Unknown"
         }
     }
+}
+
+private enum RemainingFilter: Hashable {
+    case all
+    case daemon
+    case protected
+    case permissions
+    case other
+
+    func matches(issue: UninstallRemainingIssueRecord) -> Bool {
+        matches(reason: issue.reason, path: issue.path)
+    }
+
+    func matches(reason: String) -> Bool {
+        matches(reason: reason, path: "")
+    }
+
+    private func matches(reason: String, path: String) -> Bool {
+        let lower = reason.lowercased()
+        let lowerPath = path.lowercased()
+        let isDaemon = lower.contains("launchdaemon")
+            || lower.contains("daemon")
+            || lower.contains("privileged helper")
+            || lowerPath.contains("/library/launchdaemons/")
+            || lowerPath.contains("/library/privilegedhelpertools/")
+        let isProtected = lower.contains("sip")
+            || lower.contains("tcc")
+            || lower.contains("system-protected")
+            || lower.contains("protected")
+        let isPermission = lower.contains("permission")
+            || lower.contains("access denied")
+            || lower.contains("not permitted")
+            || lower.contains("authorization")
+        switch self {
+        case .all:
+            return true
+        case .daemon:
+            return isDaemon
+        case .protected:
+            return isProtected && !isDaemon
+        case .permissions:
+            return isPermission && !isDaemon && !isProtected
+        case .other:
+            return !isDaemon && !isProtected && !isPermission
+        }
+    }
+}
+
+private struct RemainingIssueClassification {
+    let title: String
+    let tint: Color
+    let nextStep: String
 }
 
 private enum UninstallerWorkspaceTab: Hashable {
@@ -1181,6 +1423,7 @@ private final class AppIconCache: ObservableObject {
 
 private struct UninstallPreviewSheet: View {
     let app: InstalledApp
+    let mode: UninstallMode
     let previewItems: [UninstallPreviewItem]
     let onConfirm: ([UninstallPreviewItem]) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -1195,6 +1438,11 @@ private struct UninstallPreviewSheet: View {
                 .foregroundStyle(.secondary)
             Text("Selected \(selectedItems.count) of \(previewItems.count) item(s)")
                 .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(mode == .clean
+                ? "Clean Uninstall mode: includes extended artifacts and startup helpers."
+                : "Standard mode: removes main bundle and discovered remnants.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack {

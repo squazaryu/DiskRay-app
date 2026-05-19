@@ -271,7 +271,7 @@ private actor UninstallerControllerServiceStub: UninstallerServicing {
         apps
     }
 
-    func findRemnants(for app: InstalledApp) async -> [AppRemnant] {
+    func findRemnants(for app: InstalledApp, mode: UninstallMode) async -> [AppRemnant] {
         remnants
     }
 

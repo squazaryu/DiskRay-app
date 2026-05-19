@@ -17,14 +17,28 @@ actor SmartScanService: SmartCareServicing {
         self.analyzers = analyzers
     }
 
-    func runSmartScan(excludedPrefixes: [String], excludedAnalyzerKeys: [String] = []) async -> SmartScanResult {
+    func runSmartScan(
+        excludedPrefixes: [String],
+        excludedAnalyzerKeys: [String] = [],
+        onProgress: (@Sendable (SmartScanProgress) async -> Void)? = nil
+    ) async -> SmartScanResult {
         let excluded = Set(excludedAnalyzerKeys)
         var categories: [CleanupCategoryResult] = []
         var telemetry: [CleanupAnalyzerTelemetry] = []
         categories.reserveCapacity(analyzers.count)
         telemetry.reserveCapacity(analyzers.count)
 
-        for analyzer in analyzers {
+        for (index, analyzer) in analyzers.enumerated() {
+            let progress = SmartScanProgress(
+                analyzerKey: analyzer.key,
+                analyzerTitle: analyzer.title,
+                index: index + 1,
+                total: analyzers.count,
+                skipped: excluded.contains(analyzer.key)
+            )
+            if let onProgress {
+                await onProgress(progress)
+            }
             if excluded.contains(analyzer.key) {
                 telemetry.append(
                     CleanupAnalyzerTelemetry(
@@ -60,15 +74,31 @@ actor SmartScanService: SmartCareServicing {
         )
     }
 
-    func clean(items: [CleanupItem], minSizeBytes: Int64) async -> CleanupExecutionResult {
+    func clean(
+        items: [CleanupItem],
+        minSizeBytes: Int64,
+        onProgress: (@Sendable (SmartCleanupProgress) async -> Void)? = nil
+    ) async -> CleanupExecutionResult {
         var moved = 0
         var failed = 0
+        let candidates = items.filter { $0.sizeInBytes >= minSizeBytes }
+        let total = candidates.count
 
-        for item in items {
-            if item.sizeInBytes < minSizeBytes { continue }
+        for (index, item) in candidates.enumerated() {
             let path = item.url.path
             if protectedPathPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
                 failed += 1
+                if let onProgress {
+                    await onProgress(
+                        SmartCleanupProgress(
+                            processed: index + 1,
+                            total: total,
+                            moved: moved,
+                            failed: failed,
+                            currentItemName: item.name
+                        )
+                    )
+                }
                 continue
             }
             do {
@@ -77,6 +107,17 @@ actor SmartScanService: SmartCareServicing {
                 moved += 1
             } catch {
                 failed += 1
+            }
+            if let onProgress {
+                await onProgress(
+                    SmartCleanupProgress(
+                        processed: index + 1,
+                        total: total,
+                        moved: moved,
+                        failed: failed,
+                        currentItemName: item.name
+                    )
+                )
             }
         }
 

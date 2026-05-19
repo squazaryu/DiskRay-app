@@ -43,7 +43,11 @@ extension PerformanceView {
                 .disabled(model.performance.activeLoadReliefAdjustments == 0)
             }
 
-            HStack(spacing: layoutMetrics.cardSpacing) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 190, maximum: 320), spacing: layoutMetrics.cardSpacing)],
+                alignment: .leading,
+                spacing: layoutMetrics.cardSpacing
+            ) {
                 DRayCompactInfoTile(
                     title: "CPU",
                     value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
@@ -143,8 +147,7 @@ extension PerformanceView {
                     }
                     .disabled(model.performance.activeLoadReliefAdjustments == 0)
                 }
-                .frame(width: 330, alignment: .topLeading)
-                .frame(minHeight: 190, alignment: .topLeading)
+                .frame(minWidth: 280, idealWidth: 310, maxWidth: 330, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
             }

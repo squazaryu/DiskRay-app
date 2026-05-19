@@ -59,6 +59,7 @@ struct UninstallerUseCaseTests {
         let result = await useCase.uninstallAndVerify(
             app: app,
             previewItems: previewItems,
+            mode: .standard,
             isProtectedPath: { _ in false },
             isAppRunning: false
         )
@@ -112,6 +113,7 @@ struct UninstallerUseCaseTests {
             app: app,
             previewItems: previewItems,
             validation: validation,
+            mode: .standard,
             isProtectedPath: { _ in true },
             isAppRunning: true
         )
@@ -139,7 +141,7 @@ private actor UninstallerServiceStub: UninstallerServicing {
         []
     }
 
-    func findRemnants(for app: InstalledApp) async -> [AppRemnant] {
+    func findRemnants(for app: InstalledApp, mode: UninstallMode) async -> [AppRemnant] {
         recordedCalls.append("findRemnants")
         return remnants
     }

@@ -29,6 +29,29 @@ struct NetworkHistoryPoint: Identifiable {
     let responsivenessMs: Double
 }
 
+enum NetworkDataRepresentation: String, CaseIterable, Identifiable {
+    case bits
+    case bytes
+    case packets
+
+    var id: String { rawValue }
+}
+
+enum NetworkWorkspaceSubscreen: String, CaseIterable, Identifiable {
+    case overview
+    case liveMap
+    case tools
+
+    var id: String { rawValue }
+}
+
+struct NetworkRatePoint: Identifiable {
+    let id = UUID()
+    let measuredAt: Date
+    let incoming: Double
+    let outgoing: Double
+}
+
 enum StartupImpact {
     case low
     case review
