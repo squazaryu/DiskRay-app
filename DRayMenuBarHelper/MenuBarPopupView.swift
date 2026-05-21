@@ -178,7 +178,7 @@ struct MenuBarPopupView: View {
                 value: diskUsedValue,
                 subtitle: diskUsePercentText.replacingOccurrences(of: " · ", with: ""),
                 icon: "internaldrive",
-                tint: .blue,
+                tint: calmStorageTint,
                 progress: diskUsedRatio,
                 actionTitle: "Free Up"
             ) {
@@ -190,7 +190,7 @@ struct MenuBarPopupView: View {
                 value: memoryValue,
                 subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
                 icon: "memorychip",
-                tint: .purple,
+                tint: calmMemoryTint,
                 progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
                 sparkline: memoryTrend,
                 actionTitle: "Inspect"
@@ -203,7 +203,7 @@ struct MenuBarPopupView: View {
                 value: batteryValueText,
                 subtitle: batteryStateText,
                 icon: "battery.75percent",
-                tint: .green,
+                tint: calmBatteryTint,
                 progress: monitor.snapshot.batteryLevelPercent.map { Double($0) / 100.0 },
                 actionTitle: "Details"
             ) {
@@ -215,7 +215,7 @@ struct MenuBarPopupView: View {
                 value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
                 subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
                 icon: "waveform.path.ecg",
-                tint: .orange,
+                tint: calmCPUTint,
                 progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
                 sparkline: cpuTrend,
                 actionTitle: "Diagnose"
@@ -251,7 +251,7 @@ struct MenuBarPopupView: View {
                             detail: "MEM \(Int(consumer.memoryMB))MB · EI \(String(format: "%.1f", consumer.batteryImpactScore))",
                             value: "\(Int(consumer.cpuPercent))%",
                             progress: min(1, consumer.cpuPercent / maxTopCPU),
-                            tint: .accentColor
+                            tint: calmDiagnosticTint
                         )
                     }
                 }
@@ -325,6 +325,7 @@ struct MenuBarPopupView: View {
                 }
                 .font(popupButtonFont)
                 .buttonStyle(.bordered)
+                .tint(.secondary)
                 .controlSize(.small)
 
                 Button("Open DRay") {
@@ -332,13 +333,15 @@ struct MenuBarPopupView: View {
                 }
                 .font(popupButtonFont)
                 .buttonStyle(.bordered)
+                .tint(.secondary)
                 .controlSize(.small)
 
-                Button("Quit Completely", role: .destructive) {
+                Button("Quit Completely") {
                     model.quitCompletely()
                 }
                 .font(popupButtonFont)
                 .buttonStyle(.bordered)
+                .tint(quietDangerTint)
                 .controlSize(.small)
 
                 Spacer(minLength: 4)
@@ -361,6 +364,7 @@ struct MenuBarPopupView: View {
                 }
                 .controlSize(.small)
                 .buttonStyle(.bordered)
+                .tint(.secondary)
             }
         }
         .padding(9)
@@ -383,17 +387,17 @@ struct MenuBarPopupView: View {
                 telemetryPill(
                     title: "Uptime",
                     value: formattedUptime(monitor.snapshot.uptimeSeconds),
-                    tint: .blue
+                    tint: calmTelemetryTint
                 )
                 telemetryPill(
                     title: "Down",
                     value: formattedTransferRate(monitor.snapshot.networkDownBytesPerSecond),
-                    tint: .indigo
+                    tint: calmTelemetryTint
                 )
                 telemetryPill(
                     title: "Up",
                     value: formattedTransferRate(monitor.snapshot.networkUpBytesPerSecond),
-                    tint: .mint
+                    tint: calmTelemetryTint
                 )
             }
         }
@@ -406,6 +410,34 @@ struct MenuBarPopupView: View {
         .system(size: 12, weight: .semibold)
     }
 
+    private var calmStorageTint: Color {
+        Color(red: 0.38, green: 0.46, blue: 0.50)
+    }
+
+    private var calmMemoryTint: Color {
+        Color(red: 0.45, green: 0.42, blue: 0.50)
+    }
+
+    private var calmBatteryTint: Color {
+        Color(red: 0.34, green: 0.50, blue: 0.40)
+    }
+
+    private var calmCPUTint: Color {
+        Color(red: 0.58, green: 0.42, blue: 0.30)
+    }
+
+    private var calmDiagnosticTint: Color {
+        Color(red: 0.48, green: 0.52, blue: 0.54)
+    }
+
+    private var calmTelemetryTint: Color {
+        Color.secondary
+    }
+
+    private var quietDangerTint: Color {
+        Color(red: 0.58, green: 0.30, blue: 0.28)
+    }
+
     private var shellBackground: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -414,46 +446,28 @@ struct MenuBarPopupView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.14 : 0.34),
-                            Color.white.opacity(colorScheme == .dark ? 0.025 : 0.075),
-                            Color.black.opacity(colorScheme == .dark ? 0.10 : 0.035)
+                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24),
+                            Color.white.opacity(colorScheme == .dark ? 0.018 : 0.055),
+                            Color.black.opacity(colorScheme == .dark ? 0.075 : 0.025)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-            RadialGradient(
-                colors: [
-                    Color.accentColor.opacity(colorScheme == .dark ? 0.040 : 0.030),
-                    .clear
-                ],
-                center: .topLeading,
-                startRadius: 20,
-                endRadius: 260
-            )
-            RadialGradient(
-                colors: [
-                    Color.indigo.opacity(colorScheme == .dark ? 0.030 : 0.020),
-                    .clear
-                ],
-                center: .bottomTrailing,
-                startRadius: 20,
-                endRadius: 280
-            )
         }
     }
 
     private func cardBackground(accent: Color, cornerRadius: CGFloat = 10) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.regularMaterial)
+            .fill(.thinMaterial)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                accent.opacity(colorScheme == .dark ? 0.060 : 0.038),
-                                Color.white.opacity(colorScheme == .dark ? 0.035 : 0.140),
-                                Color.white.opacity(colorScheme == .dark ? 0.010 : 0.040),
+                                Color.white.opacity(colorScheme == .dark ? 0.025 : 0.095),
+                                accent.opacity(colorScheme == .dark ? 0.018 : 0.012),
+                                Color.white.opacity(colorScheme == .dark ? 0.006 : 0.025),
                                 Color.clear
                             ],
                             startPoint: .topLeading,
@@ -463,17 +477,16 @@ struct MenuBarPopupView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.080 : 0.060), lineWidth: 0.7)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.070 : 0.050), lineWidth: 0.7)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(colorScheme == .dark ? Color.black.opacity(0.12) : Color.white.opacity(0.16), lineWidth: 0.4)
+                    .stroke(colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.10), lineWidth: 0.35)
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.08 : 0.028), radius: 5, y: 2)
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.primary.opacity(0.055)
+        colorScheme == .dark ? Color.white.opacity(0.085) : Color.primary.opacity(0.050)
     }
 
     private func telemetryPill(title: String, value: String, tint: Color) -> some View {
@@ -484,7 +497,7 @@ struct MenuBarPopupView: View {
             Text(value)
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(tint)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
         }

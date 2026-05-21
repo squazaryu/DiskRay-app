@@ -325,6 +325,31 @@ Visual delta:
 - Reduced menu bar health ring, metric icon badge, sparkline, progress bar, and row-accent saturation.
 - Kept Storage, Memory, Battery, CPU, Top Consumers, Recommendation, Quick Actions, Telemetry, Open DRay, More, and Quit Completely available.
 
+## Menu Bar Visual Refactor
+Changed:
+- Removed the remaining cyan/indigo radial wash from the popover shell and reduced border/shadow strength.
+- Changed menu bar cards from glossy regular-material surfaces to quieter thin-material cards with lower accent overlays.
+- Replaced bright metric tints with calmer storage, memory, battery, CPU, diagnostic, telemetry, and danger tones.
+- Flattened metric badges, progress bars, sparklines, compact rows, and nested surfaces.
+- Reworked Top Consumers from stacked glossy mini cards into compact diagnostic rows with a small vertical load marker and muted values.
+- Made Open DRay, More, metric actions, and regular utility actions neutral secondary controls.
+- Changed Quit Completely from a loud destructive role button into a calm danger-tinted secondary action.
+
+Preserved:
+- Mac Health, Smart Scan, Storage, Memory, Battery, CPU, Top Consumers, Recommendation, Quick Actions, Telemetry, Open DRay, More, and Quit Completely.
+- Existing compact popover width and layout structure.
+- Menu bar helper runtime behavior and visibility logic.
+
+Visual delta:
+- The popover now reads as a compact utility panel instead of a blue mini-dashboard.
+- Smart Scan remains the only dominant primary CTA; other actions are visible but quieter.
+- Telemetry is now a quiet footer/status area instead of competing with diagnostic cards.
+
+Manual notes:
+- normal state: checked via temporary QA bundle popover screenshot in the prior QA pass; this pass reduces shell/card/row saturation further.
+- scan-running state: not fully interactively captured in this pass; scan control and progress surfaces were preserved in code.
+- dark popover: not fully interactively captured in this pass; dark-mode opacities were reduced together with light-mode opacities.
+
 ## Changed Files
 - `DRay/App/GlassTheme.swift`
 - `DRay/App/DRayInfographics.swift`
