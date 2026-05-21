@@ -108,3 +108,146 @@ Scope: Force Remove / Uninstaller transparency, shared path safety, bounded comm
 - AppUninstallerService still uses direct `osascript` for admin authorization because changing that flow to async command execution would touch the macOS authorization prompt behavior. It is injectable and covered by fake operations in tests; migrating it to `SystemCommandRunner` can be done as a narrow follow-up.
 - Existing Swift Testing deprecation warnings remain because `Package.swift` still depends on `swift-testing`; not changed in this task.
 - No P2 items from the original scoped list remain open.
+
+---
+
+# DRay 2.2.0 UI Refactor
+
+Date: 2026-05-21
+Branch: 2.2.0-ui-refactor
+Scope: Calm Liquid Glass visual refactor for main app and menu bar helper without reducing functionality.
+Brief: /Users/tumowuh/Downloads/DRay_Calm_Liquid_Glass_Redesign_Prompt.md
+
+## Goal
+Calm Liquid Glass redesign without reducing functionality, diagnostics, removal power, or operational clarity.
+
+## Constraints
+- Do not remove Force Remove.
+- Do not weaken App Store app deletion.
+- Do not remove Search filters.
+- Do not remove Network tools.
+- Do not remove Full Disk Access diagnostics.
+- Do not hide risk/status/removal details.
+- Do not hide high-risk controls.
+- Do not remove Remaining cleanup details.
+- Do not rewrite business logic unless required to support presentation state.
+- Avoid unnecessary file splitting.
+- Do not add external dependencies.
+- Do not change app version.
+- Do not create release/tag.
+- Do not push branch unless explicitly requested.
+- Keep codex-pets out of this branch.
+
+## Phases
+- [x] Baseline build/test
+- [x] Visual helper audit
+- [x] Design tokens / calm surface system
+- [ ] Shared components pass
+- [ ] Overview redesign
+- [ ] Smart Care redesign
+- [ ] Search redesign
+- [ ] Uninstaller / Remaining redesign
+- [ ] Performance redesign
+- [ ] Network redesign
+- [ ] Settings redesign
+- [ ] Menu bar helper redesign
+- [ ] Light/dark/compact manual review
+- [ ] Final build/test
+
+## Visual Guardrails
+- Nested cards are mostly flat or near-flat.
+- Heavy blur is limited to major surfaces.
+- Primary buttons are not overused.
+- Secondary actions are visually quieter.
+- Semantic colors remain for errors, warnings, destructive actions, high-risk states, success states, and scan/cleanup progress.
+- Text contrast must remain readable in light and dark mode.
+- Search filters remain quickly accessible.
+- Network tools remain visible and usable.
+- Uninstaller removal methods, risk, failure reasons, and remediation hints remain explicit.
+- Menu bar popover should be calmer and compact, not taller or more decorative without layout need.
+
+## Visual Audit Notes
+- `DRay/App/GlassTheme.swift` is the current shared visual layer: `glassSurface`, `ModuleHeaderCard`, sidebar rows, progress bars, metric tiles, bottom strip, pills, and action rows.
+- `DRay/App/DRayInfographics.swift` owns shared icon badges, sparkline, donut chart, dashboard tiles, ranked rows, and activity rows.
+- Main modules depend heavily on shared helpers: Overview, Smart Care, Search, Uninstaller/Remaining, Performance, Settings, Privacy, Clutter, Repair, Recovery, and Space Lens.
+- Menu bar UI is separate target code in `DRayMenuBarHelper/MenuBarPopupView.swift`, `MenuBarPopupCards.swift`, `MenuBarPopupOverlays.swift`, `MenuBarStatusIcon.swift`, and `BatteryDetailsSheetView.swift`; it cannot reuse DRay target types directly.
+- Heaviest visual noise before changes: saturated app background accents, high shadow radii in `glassSurface`, nested `.regularMaterial` surfaces, bright circular icon badges, blue/cyan status rings, and prominent color on secondary actions.
+
+## Design System Changes
+- Added `DRaySurfaceLevel` for calm surface hierarchy.
+- Added `DRaySemanticTone` and `DRayQuietIconBadge` for softer semantic badges.
+- Added `DRayCalmGlassModifier` and `.calmGlass(...)` while preserving existing `glassSurface(...)` API.
+- Calmed app background, `glassSurface` fills, borders, shadows, module header surface, sidebar selected state, progress bars, status ring, pills, compact tiles, and minimal button style.
+- Added `DRayPrimaryButtonStyle`, `DRaySecondaryButtonStyle`, and `DRayDangerButtonStyle` for module-level adoption.
+- Calmed shared infographics: icon badges, sparklines, and donut chart segments.
+
+## Main App Modules Updated
+- Pending.
+
+## Menu Bar Changes
+- Pending.
+
+## Manual Visual QA
+
+### Light mode
+- [ ] Main app checked
+- [ ] Menu bar checked
+
+### Dark mode
+- [ ] Main app checked
+- [ ] Menu bar checked
+
+### Compact layout
+- [ ] Overview
+- [ ] Smart Care
+- [ ] Search
+- [ ] Uninstaller
+- [ ] Performance
+- [ ] Network
+- [ ] Settings
+- [ ] Menu bar
+
+## Visual Guardrails QA
+- [ ] Nested cards are mostly flat or near-flat.
+- [ ] Heavy blur is limited to major surfaces.
+- [ ] Primary buttons are not overused.
+- [ ] Secondary actions are visually quieter.
+- [ ] Semantic colors still communicate state clearly.
+- [ ] Text contrast remains readable in light mode.
+- [ ] Text contrast remains readable in dark mode.
+- [ ] Overview is calmer but still informative.
+- [ ] Smart Care remains actionable.
+- [ ] Search filters remain quickly accessible.
+- [ ] Uninstaller removal methods and risks remain visible.
+- [ ] Remaining cleanup reasons and remediation hints remain visible.
+- [ ] Performance metrics remain readable.
+- [ ] Network tools remain fully usable.
+- [ ] Settings permissions and high-risk controls remain explicit.
+- [ ] Menu bar popover is calmer and not visually louder than the main app.
+- [ ] Menu bar popover did not become unnecessarily taller.
+- [ ] Smart Scan is the only main primary CTA in the menu bar.
+- [ ] Quick actions remain visible.
+- [ ] Top Consumers remain readable.
+- [ ] Telemetry is quiet and readable.
+- [ ] Quit Completely remains available.
+
+## Functionality Preservation QA
+- [ ] Force Remove still visible/available where expected.
+- [ ] App Store app deletion behavior unchanged.
+- [ ] Search filters intact.
+- [ ] Regex validation intact.
+- [ ] Network tools intact.
+- [ ] Full Disk Access diagnostics intact.
+- [ ] High-risk setting intact.
+- [ ] Remaining cleanup details intact.
+- [ ] Removal method reporting intact.
+- [ ] LaunchDaemon / PrivilegedHelper guidance intact.
+
+## Validation
+- Baseline `swift build`: passed.
+- Baseline `swift test`: passed, 115 tests.
+- Final `swift build`: pending.
+- Final `swift test`: pending.
+
+## Backlog / Risks
+- Pending.

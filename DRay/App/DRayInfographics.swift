@@ -14,7 +14,7 @@ struct DRaySparklineView: View {
                     sparklineFillPath(values: normalized, in: proxy.size)
                         .fill(
                             LinearGradient(
-                                colors: [tint.opacity(0.22), tint.opacity(0.03)],
+                                colors: [tint.opacity(0.12), tint.opacity(0.015)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -24,7 +24,7 @@ struct DRaySparklineView: View {
                 sparklinePath(values: normalized, in: proxy.size)
                     .stroke(
                         LinearGradient(
-                            colors: [tint.opacity(0.95), tint.opacity(0.55)],
+                            colors: [tint.opacity(0.72), tint.opacity(0.38)],
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
@@ -223,11 +223,13 @@ struct DRayIconBadge: View {
             .foregroundStyle(tint)
             .frame(width: size, height: size)
             .background(
-                Circle()
-                    .fill(tint.opacity(0.14))
-                    .overlay(Circle().stroke(tint.opacity(0.18), lineWidth: 0.7))
+                RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
+                    .fill(tint.opacity(0.075))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
+                            .stroke(tint.opacity(0.15), lineWidth: 0.7)
+                    )
             )
-            .shadow(color: tint.opacity(0.12), radius: 6, y: 3)
     }
 }
 
@@ -253,13 +255,12 @@ struct DRayDonutChartView: View {
                 DRayDonutArc(startAngle: item.start, endAngle: item.end)
                     .stroke(
                         LinearGradient(
-                            colors: [item.segment.color.opacity(0.95), item.segment.color.opacity(0.48)],
+                            colors: [item.segment.color.opacity(0.74), item.segment.color.opacity(0.34)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
-                    .shadow(color: item.segment.color.opacity(0.14), radius: 7, y: 3)
             }
 
             VStack(spacing: 2) {

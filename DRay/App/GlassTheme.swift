@@ -1,32 +1,81 @@
 import SwiftUI
 
+enum DRaySurfaceLevel {
+    case window
+    case panelShell
+    case moduleHeader
+    case section
+    case card
+    case nestedCard
+    case selected
+    case critical
+}
+
+enum DRaySemanticTone {
+    case neutral
+    case accent
+    case success
+    case warning
+    case danger
+    case info
+    case purple
+
+    var foreground: Color {
+        switch self {
+        case .neutral: return .secondary
+        case .accent: return .accentColor
+        case .success: return .green
+        case .warning: return .orange
+        case .danger: return .red
+        case .info: return .blue
+        case .purple: return .purple
+        }
+    }
+
+    var softFill: Color {
+        switch self {
+        case .neutral: return Color.primary.opacity(0.045)
+        case .accent: return Color.accentColor.opacity(0.075)
+        case .success: return Color.green.opacity(0.075)
+        case .warning: return Color.orange.opacity(0.085)
+        case .danger: return Color.red.opacity(0.085)
+        case .info: return Color.blue.opacity(0.065)
+        case .purple: return Color.purple.opacity(0.065)
+        }
+    }
+
+    var softBorder: Color {
+        foreground.opacity(0.18)
+    }
+}
+
 enum PremiumTheme {
     static func appBackground(_ scheme: ColorScheme) -> [Color] {
         scheme == .dark
-        ? [Color(red: 0.03, green: 0.05, blue: 0.09), Color(red: 0.06, green: 0.10, blue: 0.16)]
-        : [Color(red: 0.94, green: 0.96, blue: 1.00), Color(red: 0.88, green: 0.92, blue: 0.97)]
+        ? [Color(red: 0.035, green: 0.045, blue: 0.060), Color(red: 0.060, green: 0.075, blue: 0.095)]
+        : [Color(red: 0.965, green: 0.975, blue: 0.990), Color(red: 0.925, green: 0.945, blue: 0.970)]
     }
 
     static func sidebarBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
         scheme == .dark
-        ? AnyShapeStyle(Color.white.opacity(0.025))
-        : AnyShapeStyle(Color.white.opacity(0.30))
+        ? AnyShapeStyle(Color.white.opacity(0.020))
+        : AnyShapeStyle(Color.white.opacity(0.22))
     }
 
     static func contentBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
         scheme == .dark
-        ? AnyShapeStyle(Color.white.opacity(0.045))
-        : AnyShapeStyle(.regularMaterial)
+        ? AnyShapeStyle(Color.white.opacity(0.036))
+        : AnyShapeStyle(.thinMaterial)
     }
 
     static func cardBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
         scheme == .dark
-        ? AnyShapeStyle(Color.white.opacity(0.05))
-        : AnyShapeStyle(Color.white.opacity(0.40))
+        ? AnyShapeStyle(Color.white.opacity(0.038))
+        : AnyShapeStyle(Color.white.opacity(0.30))
     }
 
     static func border(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.white.opacity(0.11) : Color.black.opacity(0.10)
+        scheme == .dark ? Color.white.opacity(0.085) : Color.black.opacity(0.075)
     }
 
     static func accent(_ scheme: ColorScheme) -> Color {
@@ -57,15 +106,15 @@ struct GlassShellBackground: View {
 
             LinearGradient(
                 colors: colorScheme == .dark
-                ? [Color(red: 0.08, green: 0.12, blue: 0.20).opacity(0.55), .clear]
-                : [Color.white.opacity(0.75), Color(red: 0.82, green: 0.90, blue: 1.0).opacity(0.20)],
+                ? [Color(red: 0.08, green: 0.10, blue: 0.14).opacity(0.32), .clear]
+                : [Color.white.opacity(0.62), Color(red: 0.86, green: 0.91, blue: 0.97).opacity(0.14)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [drayAccentColor.opacity(colorScheme == .dark ? 0.26 : 0.18), .clear],
+                colors: [drayAccentColor.opacity(colorScheme == .dark ? 0.12 : 0.075), .clear],
                 center: .topLeading,
                 startRadius: 40,
                 endRadius: 560
@@ -73,7 +122,7 @@ struct GlassShellBackground: View {
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.14 : 0.11), .clear],
+                colors: [PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.06 : 0.045), .clear],
                 center: .bottomTrailing,
                 startRadius: 20,
                 endRadius: 520
@@ -82,7 +131,7 @@ struct GlassShellBackground: View {
 
             if colorScheme == .light {
                 RadialGradient(
-                    colors: [Color.cyan.opacity(0.10), .clear],
+                    colors: [Color.cyan.opacity(0.035), .clear],
                     center: .bottomLeading,
                     startRadius: 30,
                     endRadius: 440
@@ -114,52 +163,39 @@ struct GlassSurfaceModifier: ViewModifier {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(borderColor.opacity(strokeOpacity), lineWidth: 0.7)
+                            .stroke(borderColor.opacity(min(strokeOpacity, 0.11)), lineWidth: 0.7)
                             .allowsHitTesting(false)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.40), lineWidth: 0.6)
-                            .blur(radius: 0.3)
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.055 : 0.24), lineWidth: 0.5)
                             .allowsHitTesting(false)
                     )
-                    .shadow(color: .black.opacity(colorScheme == .dark ? shadowOpacity : shadowOpacity * 0.7), radius: colorScheme == .dark ? 24 : 16, y: 10)
-                    .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.06), radius: 8, x: -1, y: -1)
+                    .shadow(color: .black.opacity(calmedShadowOpacity), radius: shadowRadius, y: shadowY)
             )
     }
 
     private var baseFillStyle: AnyShapeStyle {
-        if colorScheme == .dark {
-            return AnyShapeStyle(Color.white.opacity(0.04))
+        if shadowOpacity <= 0.04 || cornerRadius <= 12 {
+            return AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.050 : 0.026))
         }
-        return AnyShapeStyle(.regularMaterial)
+        if shadowOpacity >= 0.08 || cornerRadius >= 20 {
+            return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.052) : Color.white.opacity(0.34))
+        }
+        return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.042) : Color.white.opacity(0.28))
     }
 
     private var surfaceOverlay: some View {
         LinearGradient(
             colors: [
-                Color.white.opacity(colorScheme == .dark ? 0.14 : 0.55),
-                Color.white.opacity(colorScheme == .dark ? 0.01 : 0.08),
-                Color.black.opacity(colorScheme == .dark ? 0.30 : 0.06)
+                Color.white.opacity(colorScheme == .dark ? 0.075 : 0.24),
+                Color.white.opacity(colorScheme == .dark ? 0.010 : 0.045),
+                Color.black.opacity(colorScheme == .dark ? 0.10 : 0.025)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay(
-            RadialGradient(
-                colors: [
-                    (colorScheme == .dark ? Color.cyan : Color.blue).opacity(colorScheme == .dark ? 0.09 : 0.08),
-                    drayAccentColor.opacity(colorScheme == .dark ? 0.08 : 0.07),
-                    .clear
-                ],
-                center: .topLeading,
-                startRadius: 30,
-                endRadius: 340
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .allowsHitTesting(false)
-        )
         .allowsHitTesting(false)
     }
 
@@ -169,6 +205,117 @@ struct GlassSurfaceModifier: ViewModifier {
 
     private var effectivePadding: CGFloat {
         padding <= 0 ? 0 : max(4, padding * layoutMetrics.surfacePaddingScale)
+    }
+
+    private var calmedShadowOpacity: Double {
+        min(shadowOpacity, colorScheme == .dark ? 0.09 : 0.045)
+    }
+
+    private var shadowRadius: CGFloat {
+        shadowOpacity <= 0.04 ? 3 : (shadowOpacity >= 0.08 ? 10 : 6)
+    }
+
+    private var shadowY: CGFloat {
+        shadowOpacity <= 0.04 ? 1 : (shadowOpacity >= 0.08 ? 5 : 3)
+    }
+}
+
+struct DRayCalmGlassModifier: ViewModifier {
+    let level: DRaySurfaceLevel
+    var cornerRadius: CGFloat = 18
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(background)
+            .overlay(border)
+            .shadow(color: shadowColor, radius: shadowRadius, y: shadowY)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        switch level {
+        case .window:
+            Color.clear
+        case .panelShell:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.050) : Color.white.opacity(0.34))
+        case .moduleHeader:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.045) : Color.white.opacity(0.30))
+        case .section:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.040) : Color.white.opacity(0.26))
+        case .card:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.22))
+        case .nestedCard:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.050 : 0.030))
+        case .selected:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.105 : 0.070))
+        case .critical:
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.red.opacity(colorScheme == .dark ? 0.105 : 0.075))
+        }
+    }
+
+    private var border: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(borderColor, lineWidth: 0.8)
+            .allowsHitTesting(false)
+    }
+
+    private var borderColor: Color {
+        switch level {
+        case .window:
+            return .clear
+        case .moduleHeader:
+            return Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24)
+        case .panelShell, .section:
+            return Color.primary.opacity(0.085)
+        case .card:
+            return Color.primary.opacity(0.065)
+        case .nestedCard:
+            return Color.primary.opacity(0.050)
+        case .selected:
+            return Color.accentColor.opacity(0.22)
+        case .critical:
+            return Color.red.opacity(0.24)
+        }
+    }
+
+    private var shadowColor: Color {
+        switch level {
+        case .panelShell, .moduleHeader:
+            return Color.black.opacity(colorScheme == .dark ? 0.10 : 0.045)
+        case .section:
+            return Color.black.opacity(colorScheme == .dark ? 0.075 : 0.032)
+        case .card:
+            return Color.black.opacity(colorScheme == .dark ? 0.050 : 0.022)
+        case .nestedCard, .selected, .critical, .window:
+            return .clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        switch level {
+        case .panelShell, .moduleHeader: return 12
+        case .section: return 8
+        case .card: return 4
+        default: return 0
+        }
+    }
+
+    private var shadowY: CGFloat {
+        switch level {
+        case .panelShell, .moduleHeader: return 5
+        case .section: return 3
+        case .card: return 2
+        default: return 0
+        }
     }
 }
 
@@ -185,6 +332,10 @@ extension View {
             shadowOpacity: shadowOpacity,
             padding: padding
         ))
+    }
+
+    func calmGlass(_ level: DRaySurfaceLevel, cornerRadius: CGFloat = 18) -> some View {
+        modifier(DRayCalmGlassModifier(level: level, cornerRadius: cornerRadius))
     }
 }
 
@@ -300,7 +451,8 @@ struct ModuleHeaderCard<Actions: View>: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.035, padding: max(8, layoutMetrics.bottomStripVerticalPadding + 2))
+                .padding(max(8, layoutMetrics.bottomStripVerticalPadding + 2))
+                .calmGlass(.moduleHeader, cornerRadius: 18)
             } else {
                 EmptyView()
             }
@@ -386,11 +538,11 @@ struct DRayProgressBar: View {
             let clamped = min(1, max(0, value))
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.secondary.opacity(0.14))
+                    .fill(Color.secondary.opacity(0.12))
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [tint.opacity(0.95), tint.opacity(0.55)],
+                            colors: [tint.opacity(0.70), tint.opacity(0.34)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -512,12 +664,12 @@ struct DRayLiquidStatusRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.24), lineWidth: 18)
+                .stroke(Color.primary.opacity(0.065), lineWidth: 18)
             Circle()
                 .trim(from: 0.08, to: 0.88)
                 .stroke(
                     LinearGradient(
-                        colors: [tint.opacity(0.95), Color.cyan.opacity(0.78), tint.opacity(0.35)],
+                        colors: [tint.opacity(0.72), tint.opacity(0.42), tint.opacity(0.22)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -525,9 +677,8 @@ struct DRayLiquidStatusRing: View {
                 )
                 .rotationEffect(.degrees(-120))
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(Color.primary.opacity(0.035))
                 .padding(22)
-                .shadow(color: tint.opacity(0.20), radius: 18)
             Image(systemName: icon)
                 .font(.system(size: size * 0.28, weight: .semibold))
                 .foregroundStyle(tint)
@@ -564,22 +715,21 @@ struct PremiumSidebarItem: View {
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isSelected
-                          ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [
-                                    drayAccentColor.opacity(colorScheme == .dark ? 0.32 : 0.22),
-                                    PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.22 : 0.14)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                          )
+                          ? AnyShapeStyle(drayAccentColor.opacity(colorScheme == .dark ? 0.13 : 0.075))
                           : PremiumTheme.sidebarBackground(colorScheme))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(PremiumTheme.border(colorScheme).opacity(isSelected ? 0.4 : 0.18), lineWidth: 0.8)
+                            .stroke(PremiumTheme.border(colorScheme).opacity(isSelected ? 0.28 : 0.12), lineWidth: 0.8)
                     )
             )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(drayAccentColor.opacity(colorScheme == .dark ? 0.75 : 0.65))
+                        .frame(width: 3)
+                        .padding(.vertical, 7)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -618,10 +768,10 @@ struct GlassPillBadge: View {
             .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(tint.opacity(0.14), in: Capsule())
+            .background(tint.opacity(0.085), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(tint.opacity(0.28), lineWidth: 0.8)
+                    .stroke(tint.opacity(0.18), lineWidth: 0.8)
             )
     }
 }
@@ -664,11 +814,33 @@ struct DRayCompactInfoTile: View {
         }
         .frame(maxWidth: .infinity, minHeight: layoutMetrics.dashboardTileMinHeight < 110 ? 72 : 84, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(0.16), lineWidth: 0.7)
+                .stroke(tint.opacity(0.12), lineWidth: 0.7)
         )
+    }
+}
+
+struct DRayQuietIconBadge: View {
+    let systemName: String
+    var tone: DRaySemanticTone = .neutral
+    var size: CGFloat = 28
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                .fill(tone.softFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                        .strokeBorder(tone.softBorder, lineWidth: 0.8)
+                )
+
+            Image(systemName: systemName)
+                .font(.system(size: size * 0.45, weight: .semibold))
+                .foregroundStyle(tone.foreground)
+        }
+        .frame(width: size, height: size)
     }
 }
 
@@ -704,6 +876,10 @@ struct DRayActionRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint.opacity(0.10), lineWidth: 0.7)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -720,19 +896,11 @@ struct MinimalGlassButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(isActive
-                          ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: colorScheme == .dark
-                                ? [Color.cyan.opacity(0.30), Color.blue.opacity(0.22)]
-                                : [Color.white.opacity(0.92), Color.blue.opacity(0.20)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                          )
-                          : AnyShapeStyle(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.10)))
+                          ? AnyShapeStyle(Color.accentColor.opacity(colorScheme == .dark ? 0.13 : 0.08))
+                          : AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.030 : 0.040)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(strokeColor.opacity(isActive ? 0.26 : 0.08), lineWidth: 0.7)
+                            .stroke(strokeColor.opacity(isActive ? 0.22 : 0.07), lineWidth: 0.7)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -741,6 +909,57 @@ struct MinimalGlassButtonStyle: ButtonStyle {
     }
 
     private var strokeColor: Color {
-        colorScheme == .dark ? Color.white : Color.blue
+        colorScheme == .dark ? Color.white : Color.accentColor
+    }
+}
+
+struct DRayPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(configuration.isPressed ? 0.70 : 0.88))
+            )
+            .foregroundStyle(.white)
+            .opacity(configuration.isPressed ? 0.90 : 1)
+    }
+}
+
+struct DRaySecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(configuration.isPressed ? 0.080 : 0.045))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.070), lineWidth: 0.8)
+            )
+            .foregroundStyle(.primary)
+    }
+}
+
+struct DRayDangerButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.red.opacity(configuration.isPressed ? 0.16 : 0.10))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.red.opacity(0.24), lineWidth: 0.8)
+            )
+            .foregroundStyle(.red)
     }
 }
