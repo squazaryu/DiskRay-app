@@ -931,8 +931,16 @@ struct SearchView: View {
             .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
             )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.70))
+                        .frame(width: 3)
+                        .padding(.vertical, 7)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture {
                 toggleSelection(match)

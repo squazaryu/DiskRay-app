@@ -61,6 +61,8 @@ extension PerformanceView {
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(maxWidth: 720)
+        .padding(6)
+        .calmGlass(.nestedCard, cornerRadius: 14)
     }
 
     @ViewBuilder
@@ -336,7 +338,7 @@ extension PerformanceView {
                 outgoingTint: .green
             )
             .frame(height: 240)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 14)
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -450,7 +452,6 @@ extension PerformanceView {
                                         )
                                 }
                                 .padding(4)
-                                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                                 .contentShape(Circle())
                             }
                             .buttonStyle(.plain)
@@ -462,8 +463,8 @@ extension PerformanceView {
                         ForEach(geolocatedHostRows.prefix(12)) { row in
                             MapPolyline(coordinates: [local, row.coordinate])
                                 .stroke(
-                                    endpointTint(for: row.host).opacity(row.host == selectedNetworkHostID ? 0.92 : 0.58),
-                                    lineWidth: row.host == selectedNetworkHostID ? 3.2 : 1.8
+                                    endpointTint(for: row.host).opacity(row.host == selectedNetworkHostID ? 0.64 : 0.28),
+                                    lineWidth: row.host == selectedNetworkHostID ? 2.2 : 1.1
                                 )
                         }
                     }
@@ -485,7 +486,7 @@ extension PerformanceView {
                 }
                 .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
                 .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .calmGlass(.nestedCard, cornerRadius: 14)
             }
 
             ViewThatFits(in: .horizontal) {
@@ -603,8 +604,16 @@ extension PerformanceView {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(row.host == selectedNetworkHostID ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.04))
+                                    .fill(row.host == selectedNetworkHostID ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.035))
                             )
+                            .overlay(alignment: .leading) {
+                                if row.host == selectedNetworkHostID {
+                                    Capsule()
+                                        .fill(Color.accentColor.opacity(0.70))
+                                        .frame(width: 3)
+                                        .padding(.vertical, 6)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -690,7 +699,7 @@ extension PerformanceView {
                             Spacer()
                             Text("\(row.connectionCount)")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.secondary)
                                 .monospacedDigit()
                         }
                         .padding(.horizontal, 8)
@@ -698,8 +707,16 @@ extension PerformanceView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(row.id == selectedNetworkProgramID ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.04))
+                                .fill(row.id == selectedNetworkProgramID ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.035))
                         )
+                        .overlay(alignment: .leading) {
+                            if row.id == selectedNetworkProgramID {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.70))
+                                    .frame(width: 3)
+                                    .padding(.vertical, 6)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -900,7 +917,7 @@ extension PerformanceView {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .calmGlass(.nestedCard, cornerRadius: 10)
                     }
                 }
             }
@@ -1137,7 +1154,7 @@ extension PerformanceView {
             if let speed = latestNetworkResult, speed.isSuccess {
                 networkSpeedSummary(result: speed)
                     .padding(8)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .calmGlass(.nestedCard, cornerRadius: 12)
             } else {
                 Text(t("Успешных тестов скорости пока нет.", "No successful speed test yet."))
                     .font(.caption)
@@ -1432,7 +1449,7 @@ extension PerformanceView {
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 7)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .calmGlass(.nestedCard, cornerRadius: 10)
             }
         }
         .padding(layoutMetrics.cardSpacing)
@@ -1660,7 +1677,7 @@ extension PerformanceView {
                 if let connectionCount {
                     Text("\(connectionCount)")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
             }
@@ -1669,8 +1686,16 @@ extension PerformanceView {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.04))
+                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.035))
             )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.70))
+                        .frame(width: 3)
+                        .padding(.vertical, 6)
+                }
+            }
         }
         .buttonStyle(.plain)
     }

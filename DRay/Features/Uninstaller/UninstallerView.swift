@@ -1523,7 +1523,7 @@ private struct UninstallPreviewSheet: View {
                 Button("Cancel") { dismiss() }
                 Spacer()
                 Button("Move to Trash", role: .destructive) { onConfirm(selectedItems) }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayDangerButtonStyle())
                     .disabled(selectedItems.isEmpty)
             }
         }

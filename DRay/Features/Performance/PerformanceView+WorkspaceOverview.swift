@@ -202,7 +202,7 @@ extension PerformanceView {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func legendDot(_ title: String, tint: Color) -> some View {
@@ -229,7 +229,7 @@ extension PerformanceView {
                     .foregroundStyle(.secondary)
             }
             .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 11)
         }
         .buttonStyle(.plain)
     }
@@ -413,6 +413,6 @@ extension PerformanceView {
             Spacer(minLength: 8)
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 }

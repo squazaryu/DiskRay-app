@@ -143,13 +143,13 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - [x] Visual helper audit
 - [x] Design tokens / calm surface system
 - [x] Shared components pass
-- [ ] Overview redesign
-- [ ] Smart Care redesign
-- [ ] Search redesign
-- [ ] Uninstaller / Remaining redesign
-- [ ] Performance redesign
-- [ ] Network redesign
-- [ ] Settings redesign
+- [x] Overview redesign
+- [x] Smart Care redesign
+- [x] Search redesign
+- [x] Uninstaller / Remaining redesign
+- [x] Performance redesign
+- [x] Network redesign
+- [x] Settings redesign
 - [ ] Menu bar helper redesign
 - [ ] Light/dark/compact manual review
 - [ ] Final build/test
@@ -182,10 +182,13 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Calmed shared infographics: icon badges, sparklines, and donut chart segments.
 
 ## Main App Modules Updated
-- Shared pass updated Overview, Smart Care, Search, Uninstaller/Remaining, Performance helper components, and Settings scaffold surfaces to use calmer nested/card surfaces.
-- Search selected rows now use subtle accent tint plus a left accent bar instead of a saturated block.
-- Uninstaller app selection now uses subtle accent tint plus a left accent bar; Remaining destructive cleanup actions use calm danger styling instead of blue prominent blocks.
-- Performance chips/bars and Settings section icons were softened while keeping semantic status colors.
+- Overview uses the calmer shared hero, metric, action-row, sparkline, progress, and nested-card styling while keeping health calculation, recommendations, and bottom telemetry intact.
+- Smart Care keeps the scan/clean flow, category cards, progress banners, risk labels, exclusions, analyzer telemetry, and primary CTA while nested cards/actions now use near-flat calm surfaces.
+- Search keeps scope controls, filters, presets, regex validation, table/tree/grid results, selection menus, and bulk actions; selected rows now use subtle accent tint plus a left accent bar instead of saturated blocks.
+- Uninstaller/Remaining keeps removal methods, risk labels, failure reasons, Force Remove/high-risk flows, Remaining cleanup, daemon/helper guidance, and reports; selected app/remaining actions now use calm selected states and danger styling for destructive cleanup.
+- Performance keeps live metrics, diagnostics, battery, startup, relief actions, and charts; helper cards/chips/bars are calmer and nested rows are flatter.
+- Network keeps traffic charts, live map, public IP, latency, port scanner, WOL, speed test history, focus filters, and persisted preferences; map lines/selection states and technical cards are less saturated.
+- Settings keeps permissions, Full Disk Access diagnostics, high-risk settings, appearance, scanning defaults, diagnostics, and recovery controls; section icons and nested rows are calmer.
 
 ## Menu Bar Changes
 - Pending.
