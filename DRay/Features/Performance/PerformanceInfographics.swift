@@ -33,7 +33,7 @@ struct DiagnosticBurdenBar: View {
                     Capsule()
                         .fill(Color.primary.opacity(0.08))
                     Capsule()
-                        .fill(tint.opacity(0.62))
+                        .fill(tint.opacity(0.46))
                         .frame(width: max(8, geo.size.width * (clampedValue / 100)))
                 }
             }
@@ -78,7 +78,7 @@ struct RankedShareBar: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(Color.primary.opacity(0.08))
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(accent.opacity(0.60))
+                        .fill(accent.opacity(0.44))
                         .frame(width: max(6, geo.size.width * (clampedPercentage / 100)))
                 }
             }
@@ -103,7 +103,7 @@ struct MiniSparkline: View {
                     path.addLine(to: point)
                 }
             }
-            .stroke(tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+            .stroke(tint.opacity(0.58), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
         }
     }
 
@@ -131,7 +131,7 @@ struct StatusChip: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(tint.opacity(0.085), in: Capsule())
-            .foregroundStyle(tint)
+            .background(tint.opacity(0.055), in: Capsule())
+            .foregroundStyle(tint.opacity(0.78))
     }
 }

@@ -173,6 +173,51 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Menu bar UI is separate target code in `DRayMenuBarHelper/MenuBarPopupView.swift`, `MenuBarPopupCards.swift`, `MenuBarPopupOverlays.swift`, `MenuBarStatusIcon.swift`, and `BatteryDetailsSheetView.swift`; it cannot reuse DRay target types directly.
 - Heaviest visual noise before changes: saturated app background accents, high shadow radii in `glassSurface`, nested `.regularMaterial` surfaces, bright circular icon badges, blue/cyan status rings, and prominent color on secondary actions.
 
+## Visual Audit Agent Findings
+- Current visual issues:
+  - Saturated blue/cyan still defined the product feel through default accents, selected states, primary controls, rings, progress bars, and menu bar tints.
+  - Glass remained too layered: shell gradients, radial washes, surface overlays, highlight strokes, borders, and shadows were stacking across most screens.
+  - Color semantics were overused as decoration: many cards had colored icons, pills, bars, sparklines, or donut segments even when the color did not communicate risk/status.
+  - Secondary buttons still read too loud because default `.bordered` / `.borderedProminent` controls appeared in dense toolbars and action centers.
+  - Network and menu bar still looked like glossy dashboards rather than calm professional utility surfaces.
+- Components that still look too loud:
+  - `GlassSurfaceModifier`, `GlassShellBackground`, `DRayLiquidStatusRing`, `DRayProgressBar`, `DRayIconBadge`, `DRayDashboardMetricTile`, `DRayCompactInfoTile`, `GlassPillBadge`, `StatusChip`, `DRaySparklineView`, `DRayDonutChartView`.
+  - Menu bar local surfaces: `MenuBarPopupView.shellBackground`, `MenuBarPopupView.cardBackground`, `MenuBarMetricTileCard`, `MenuBarMiniRing`, `MenuBarCompactRowSurface`.
+- Screens requiring real redesign:
+  - Overview: dominant ring, metric cards, progress bars, top consumers, and activity cards still read dashboard-first.
+  - Smart Care: hero ring, donut, badges, segmented tabs, and full-width primary action competed for attention.
+  - Search: focused input, prominent Search button, bright mode segment, colored status tiles, and empty-state panel looked like a blue control panel.
+  - Uninstaller / Remaining: structure was workable, but toolbar/action hierarchy, blue tabs, multiple pills, and destructive actions were visually loud.
+  - Performance: too many equal-weight cards/charts and a bright diagnostics CTA.
+  - Network: map/chart/control-card stack remained too neon; endpoints, polylines, traffic chart, and speed-test CTA needed muting.
+  - Settings: improved but still too card-heavy and colorful for a System Settings-like surface.
+  - Menu Bar: shell, hero, metrics, consumers, recommendation, quick actions, and telemetry competed inside a blue/glossy panel.
+- What must visibly change in this pass:
+  - Reduce blue/cyan saturation globally; reserve stronger color for one primary action and real semantic state.
+  - Flatten nested glass by reducing material layering, glossy overlays, highlight strokes, and shadows.
+  - Enforce one primary CTA per section; make secondary actions neutral.
+  - Quiet large rings/donuts, charts, badges, and selected states.
+  - Make Network map/list tooling calmer and less neon.
+  - Make menu bar popover a compact utility panel with muted metrics and quiet footer telemetry.
+
+## Design System Agent Plan
+- Existing visual foundation found in:
+  - `DRay/App/GlassTheme.swift`: `DRaySurfaceLevel`, `DRayCalmGlassModifier`, `.calmGlass(...)`, `DRaySemanticTone`, `DRayQuietIconBadge`, primary/secondary/danger button styles, `glassSurface`, `ModuleHeaderCard`, sidebar rows, metric tiles, pills, and action rows.
+  - `DRay/App/DRayInfographics.swift`: `DRayIconBadge`, dashboard tiles, ranked rows, sparklines, donut charts.
+  - `DRayMenuBarHelper/MenuBarPopupView.swift` and `DRayMenuBarHelper/MenuBarPopupCards.swift`: separate helper visual system that must be reduced locally.
+- Shared helpers to change:
+  - Make `DRayCalmGlassModifier` / surface levels the real visual source of truth and reduce `glassSurface` defaults.
+  - Reduce `GlassShellBackground` radial blue/cyan/indigo washes.
+  - Quiet `DRayIconBadge`, `DRayQuietIconBadge`, `GlassPillBadge`, progress bars, rings, sparklines, and donuts.
+  - Move settings section cards to calm section surfaces instead of parameterized heavy glass.
+  - Reduce menu bar shell/card/row surfaces in the helper target.
+- New/updated tokens:
+  - Keep `DRaySurfaceLevel`, but tune `panelShell`, `moduleHeader`, `section`, `card`, and `nestedCard` so nested surfaces are mostly flat.
+  - Keep `DRaySemanticTone`, but use tones as semantic signals instead of decorative variety.
+  - Keep button hierarchy: primary for one main action, neutral secondary, calm danger.
+- Components affected globally:
+  - `ModuleHeaderCard`, `DRayMetricTile`, `DRayBottomStatusStrip`, `DRayCompactInfoTile`, `DRayActionRow`, `GlassPillBadge`, `DRayIconBadge`, `DRayDashboardMetricTile`, `DRayProgressBar`, `DRaySparklineView`, `DRayDonutChartView`, settings section cards, performance `StatusChip`, and menu bar cards/rows.
+
 ## Design System Changes
 - Added `DRaySurfaceLevel` for calm surface hierarchy.
 - Added `DRaySemanticTone` and `DRayQuietIconBadge` for softer semantic badges.

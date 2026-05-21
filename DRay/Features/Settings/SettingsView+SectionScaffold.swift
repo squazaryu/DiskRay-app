@@ -13,12 +13,12 @@ extension SettingsView {
                 if let icon {
                     Image(systemName: icon)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(tint)
+                        .foregroundStyle(tint.opacity(0.74))
                         .frame(width: 24, height: 24)
-                        .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(Color.primary.opacity(0.036), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .stroke(tint.opacity(0.14), lineWidth: 0.7)
+                                .stroke(Color.primary.opacity(0.060), lineWidth: 0.7)
                         )
                 }
 
@@ -37,7 +37,8 @@ extension SettingsView {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.10, shadowOpacity: 0.06, padding: 14)
+        .padding(14)
+        .calmGlass(.section, cornerRadius: 18)
     }
 
     func settingsRow<Content: View>(title: String, subtitle: String?, @ViewBuilder control: @escaping () -> Content) -> some View {

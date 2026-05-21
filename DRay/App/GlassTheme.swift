@@ -52,8 +52,8 @@ enum DRaySemanticTone {
 enum PremiumTheme {
     static func appBackground(_ scheme: ColorScheme) -> [Color] {
         scheme == .dark
-        ? [Color(red: 0.035, green: 0.045, blue: 0.060), Color(red: 0.060, green: 0.075, blue: 0.095)]
-        : [Color(red: 0.965, green: 0.975, blue: 0.990), Color(red: 0.925, green: 0.945, blue: 0.970)]
+        ? [Color(red: 0.034, green: 0.038, blue: 0.046), Color(red: 0.052, green: 0.058, blue: 0.070)]
+        : [Color(red: 0.972, green: 0.976, blue: 0.982), Color(red: 0.940, green: 0.950, blue: 0.962)]
     }
 
     static func sidebarBackground(_ scheme: ColorScheme) -> AnyShapeStyle {
@@ -79,11 +79,11 @@ enum PremiumTheme {
     }
 
     static func accent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.cyan : Color.blue
+        scheme == .dark ? Color(red: 0.45, green: 0.63, blue: 0.82) : Color(red: 0.23, green: 0.42, blue: 0.66)
     }
 
     static func secondaryAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.indigo.opacity(0.8) : Color.indigo.opacity(0.7)
+        scheme == .dark ? Color(red: 0.42, green: 0.45, blue: 0.54) : Color(red: 0.48, green: 0.52, blue: 0.60)
     }
 
     static let success = Color.green
@@ -106,15 +106,15 @@ struct GlassShellBackground: View {
 
             LinearGradient(
                 colors: colorScheme == .dark
-                ? [Color(red: 0.08, green: 0.10, blue: 0.14).opacity(0.32), .clear]
-                : [Color.white.opacity(0.62), Color(red: 0.86, green: 0.91, blue: 0.97).opacity(0.14)],
+                ? [Color.white.opacity(0.035), .clear]
+                : [Color.white.opacity(0.48), Color(red: 0.88, green: 0.91, blue: 0.94).opacity(0.08)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [drayAccentColor.opacity(colorScheme == .dark ? 0.12 : 0.075), .clear],
+                colors: [drayAccentColor.opacity(colorScheme == .dark ? 0.045 : 0.030), .clear],
                 center: .topLeading,
                 startRadius: 40,
                 endRadius: 560
@@ -122,22 +122,12 @@ struct GlassShellBackground: View {
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.06 : 0.045), .clear],
+                colors: [PremiumTheme.secondaryAccent(colorScheme).opacity(colorScheme == .dark ? 0.030 : 0.022), .clear],
                 center: .bottomTrailing,
                 startRadius: 20,
                 endRadius: 520
             )
             .ignoresSafeArea()
-
-            if colorScheme == .light {
-                RadialGradient(
-                    colors: [Color.cyan.opacity(0.035), .clear],
-                    center: .bottomLeading,
-                    startRadius: 30,
-                    endRadius: 440
-                )
-                .ignoresSafeArea()
-            }
         }
     }
 
@@ -163,12 +153,12 @@ struct GlassSurfaceModifier: ViewModifier {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(borderColor.opacity(min(strokeOpacity, 0.11)), lineWidth: 0.7)
+                            .stroke(borderColor.opacity(min(strokeOpacity, 0.075)), lineWidth: 0.6)
                             .allowsHitTesting(false)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.055 : 0.24), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.030 : 0.12), lineWidth: 0.45)
                             .allowsHitTesting(false)
                     )
                     .shadow(color: .black.opacity(calmedShadowOpacity), radius: shadowRadius, y: shadowY)
@@ -177,20 +167,20 @@ struct GlassSurfaceModifier: ViewModifier {
 
     private var baseFillStyle: AnyShapeStyle {
         if shadowOpacity <= 0.04 || cornerRadius <= 12 {
-            return AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.050 : 0.026))
+            return AnyShapeStyle(Color.primary.opacity(colorScheme == .dark ? 0.038 : 0.020))
         }
         if shadowOpacity >= 0.08 || cornerRadius >= 20 {
-            return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.052) : Color.white.opacity(0.34))
+            return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.040) : Color.white.opacity(0.26))
         }
-        return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.042) : Color.white.opacity(0.28))
+        return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.034) : Color.white.opacity(0.22))
     }
 
     private var surfaceOverlay: some View {
         LinearGradient(
             colors: [
-                Color.white.opacity(colorScheme == .dark ? 0.075 : 0.24),
-                Color.white.opacity(colorScheme == .dark ? 0.010 : 0.045),
-                Color.black.opacity(colorScheme == .dark ? 0.10 : 0.025)
+                Color.white.opacity(colorScheme == .dark ? 0.030 : 0.095),
+                Color.white.opacity(colorScheme == .dark ? 0.006 : 0.020),
+                Color.black.opacity(colorScheme == .dark ? 0.045 : 0.010)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -208,15 +198,15 @@ struct GlassSurfaceModifier: ViewModifier {
     }
 
     private var calmedShadowOpacity: Double {
-        min(shadowOpacity, colorScheme == .dark ? 0.09 : 0.045)
+        min(shadowOpacity, colorScheme == .dark ? 0.055 : 0.026)
     }
 
     private var shadowRadius: CGFloat {
-        shadowOpacity <= 0.04 ? 3 : (shadowOpacity >= 0.08 ? 10 : 6)
+        shadowOpacity <= 0.04 ? 2 : (shadowOpacity >= 0.08 ? 7 : 4)
     }
 
     private var shadowY: CGFloat {
-        shadowOpacity <= 0.04 ? 1 : (shadowOpacity >= 0.08 ? 5 : 3)
+        shadowOpacity <= 0.04 ? 1 : (shadowOpacity >= 0.08 ? 3 : 2)
     }
 }
 
@@ -240,25 +230,25 @@ struct DRayCalmGlassModifier: ViewModifier {
             Color.clear
         case .panelShell:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.050) : Color.white.opacity(0.34))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.040) : Color.white.opacity(0.27))
         case .moduleHeader:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.045) : Color.white.opacity(0.30))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.038) : Color.white.opacity(0.24))
         case .section:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.040) : Color.white.opacity(0.26))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.032) : Color.white.opacity(0.20))
         case .card:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.22))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.028) : Color.white.opacity(0.16))
         case .nestedCard:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.050 : 0.030))
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.038 : 0.022))
         case .selected:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.105 : 0.070))
+                .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.080 : 0.052))
         case .critical:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.red.opacity(colorScheme == .dark ? 0.105 : 0.075))
+                .fill(Color.red.opacity(colorScheme == .dark ? 0.090 : 0.060))
         }
     }
 
@@ -273,28 +263,28 @@ struct DRayCalmGlassModifier: ViewModifier {
         case .window:
             return .clear
         case .moduleHeader:
-            return Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24)
+            return Color.white.opacity(colorScheme == .dark ? 0.075 : 0.17)
         case .panelShell, .section:
-            return Color.primary.opacity(0.085)
-        case .card:
             return Color.primary.opacity(0.065)
+        case .card:
+            return Color.primary.opacity(0.052)
         case .nestedCard:
-            return Color.primary.opacity(0.050)
+            return Color.primary.opacity(0.040)
         case .selected:
-            return Color.accentColor.opacity(0.22)
+            return Color.accentColor.opacity(0.18)
         case .critical:
-            return Color.red.opacity(0.24)
+            return Color.red.opacity(0.20)
         }
     }
 
     private var shadowColor: Color {
         switch level {
         case .panelShell, .moduleHeader:
-            return Color.black.opacity(colorScheme == .dark ? 0.10 : 0.045)
+            return Color.black.opacity(colorScheme == .dark ? 0.070 : 0.028)
         case .section:
-            return Color.black.opacity(colorScheme == .dark ? 0.075 : 0.032)
+            return Color.black.opacity(colorScheme == .dark ? 0.050 : 0.020)
         case .card:
-            return Color.black.opacity(colorScheme == .dark ? 0.050 : 0.022)
+            return Color.black.opacity(colorScheme == .dark ? 0.030 : 0.012)
         case .nestedCard, .selected, .critical, .window:
             return .clear
         }
@@ -302,18 +292,18 @@ struct DRayCalmGlassModifier: ViewModifier {
 
     private var shadowRadius: CGFloat {
         switch level {
-        case .panelShell, .moduleHeader: return 12
-        case .section: return 8
-        case .card: return 4
+        case .panelShell, .moduleHeader: return 8
+        case .section: return 5
+        case .card: return 2
         default: return 0
         }
     }
 
     private var shadowY: CGFloat {
         switch level {
-        case .panelShell, .moduleHeader: return 5
-        case .section: return 3
-        case .card: return 2
+        case .panelShell, .moduleHeader: return 3
+        case .section: return 2
+        case .card: return 1
         default: return 0
         }
     }
@@ -322,8 +312,8 @@ struct DRayCalmGlassModifier: ViewModifier {
 extension View {
     func glassSurface(
         cornerRadius: CGFloat = 18,
-        strokeOpacity: Double = 0.14,
-        shadowOpacity: Double = 0.15,
+        strokeOpacity: Double = 0.08,
+        shadowOpacity: Double = 0.06,
         padding: CGFloat = 12
     ) -> some View {
         modifier(GlassSurfaceModifier(
@@ -540,13 +530,7 @@ struct DRayProgressBar: View {
                 Capsule()
                     .fill(Color.secondary.opacity(0.12))
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(0.70), tint.opacity(0.34)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(tint.opacity(0.46))
                     .frame(width: max(height, proxy.size.width * clamped))
             }
         }
@@ -569,9 +553,10 @@ struct DRayMetricTile: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(tint.opacity(0.78))
                     .frame(width: 24, height: 24)
-                    .background(tint.opacity(colorScheme == .dark ? 0.18 : 0.13), in: Circle())
+                    .background(Color.primary.opacity(colorScheme == .dark ? 0.046 : 0.030), in: Circle())
+                    .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -593,7 +578,7 @@ struct DRayMetricTile: View {
         }
         .frame(maxWidth: .infinity, minHeight: layoutMetrics.metricTileMinHeight, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+        .calmGlass(.card, cornerRadius: 14)
     }
 }
 
@@ -634,7 +619,7 @@ struct DRayBottomStatusStrip: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+        .calmGlass(.section, cornerRadius: 14)
     }
 
     private func statusItemView(_ item: Item) -> some View {
@@ -664,24 +649,20 @@ struct DRayLiquidStatusRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.065), lineWidth: 18)
+                .stroke(Color.primary.opacity(0.055), lineWidth: 14)
             Circle()
                 .trim(from: 0.08, to: 0.88)
                 .stroke(
-                    LinearGradient(
-                        colors: [tint.opacity(0.72), tint.opacity(0.42), tint.opacity(0.22)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    tint.opacity(0.48),
+                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-120))
             Circle()
-                .fill(Color.primary.opacity(0.035))
+                .fill(Color.primary.opacity(0.026))
                 .padding(22)
             Image(systemName: icon)
                 .font(.system(size: size * 0.28, weight: .semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(tint.opacity(0.76))
         }
         .frame(width: size, height: size)
     }
@@ -715,17 +696,17 @@ struct PremiumSidebarItem: View {
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isSelected
-                          ? AnyShapeStyle(drayAccentColor.opacity(colorScheme == .dark ? 0.13 : 0.075))
+                          ? AnyShapeStyle(drayAccentColor.opacity(colorScheme == .dark ? 0.095 : 0.055))
                           : PremiumTheme.sidebarBackground(colorScheme))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(PremiumTheme.border(colorScheme).opacity(isSelected ? 0.28 : 0.12), lineWidth: 0.8)
+                            .stroke(PremiumTheme.border(colorScheme).opacity(isSelected ? 0.22 : 0.10), lineWidth: 0.7)
                     )
             )
             .overlay(alignment: .leading) {
                 if isSelected {
                     Capsule()
-                        .fill(drayAccentColor.opacity(colorScheme == .dark ? 0.75 : 0.65))
+                        .fill(drayAccentColor.opacity(colorScheme == .dark ? 0.62 : 0.52))
                         .frame(width: 3)
                         .padding(.vertical, 7)
                 }
@@ -768,10 +749,11 @@ struct GlassPillBadge: View {
             .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(tint.opacity(0.085), in: Capsule())
+            .background(tint.opacity(0.055), in: Capsule())
+            .foregroundStyle(tint.opacity(0.78))
             .overlay(
                 Capsule()
-                    .stroke(tint.opacity(0.18), lineWidth: 0.8)
+                    .stroke(tint.opacity(0.14), lineWidth: 0.7)
             )
     }
 }
@@ -817,7 +799,7 @@ struct DRayCompactInfoTile: View {
         .calmGlass(.nestedCard, cornerRadius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(0.12), lineWidth: 0.7)
+                .stroke(Color.primary.opacity(0.045), lineWidth: 0.7)
         )
     }
 }
@@ -875,10 +857,10 @@ struct DRayActionRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(tint.opacity(0.10), lineWidth: 0.7)
+                    .stroke(Color.primary.opacity(0.050), lineWidth: 0.7)
             )
         }
         .buttonStyle(.plain)

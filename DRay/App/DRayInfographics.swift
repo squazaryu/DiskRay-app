@@ -14,7 +14,7 @@ struct DRaySparklineView: View {
                     sparklineFillPath(values: normalized, in: proxy.size)
                         .fill(
                             LinearGradient(
-                                colors: [tint.opacity(0.12), tint.opacity(0.015)],
+                                colors: [tint.opacity(0.055), tint.opacity(0.008)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -24,7 +24,7 @@ struct DRaySparklineView: View {
                 sparklinePath(values: normalized, in: proxy.size)
                     .stroke(
                         LinearGradient(
-                            colors: [tint.opacity(0.72), tint.opacity(0.38)],
+                            colors: [tint.opacity(0.50), tint.opacity(0.28)],
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
@@ -137,7 +137,7 @@ struct DRayDashboardMetricTile: View {
         }
         .frame(maxWidth: .infinity, minHeight: layoutMetrics.dashboardTileMinHeight, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.09, shadowOpacity: 0.06, padding: 0)
+        .calmGlass(.card, cornerRadius: 18)
     }
 }
 
@@ -157,7 +157,8 @@ struct DRayRankedBarRow: View {
                 .monospacedDigit()
                 .foregroundStyle(tint)
                 .frame(width: 22, height: 22)
-                .background(tint.opacity(0.13), in: Circle())
+                .background(Color.primary.opacity(0.040), in: Circle())
+                .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
 
             DRayIconBadge(icon: icon, tint: tint, size: 26)
 
@@ -220,14 +221,14 @@ struct DRayIconBadge: View {
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(tint)
+            .foregroundStyle(tint.opacity(0.74))
             .frame(width: size, height: size)
             .background(
                 RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
-                    .fill(tint.opacity(0.075))
+                    .fill(Color.primary.opacity(0.038))
                     .overlay(
                         RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
-                            .stroke(tint.opacity(0.15), lineWidth: 0.7)
+                            .stroke(Color.primary.opacity(0.060), lineWidth: 0.7)
                     )
             )
     }
@@ -249,13 +250,13 @@ struct DRayDonutChartView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(.secondary.opacity(0.12), lineWidth: lineWidth)
+                .stroke(.secondary.opacity(0.10), lineWidth: lineWidth)
 
             ForEach(segmentAngles) { item in
                 DRayDonutArc(startAngle: item.start, endAngle: item.end)
                     .stroke(
                         LinearGradient(
-                            colors: [item.segment.color.opacity(0.74), item.segment.color.opacity(0.34)],
+                            colors: [item.segment.color.opacity(0.50), item.segment.color.opacity(0.22)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
