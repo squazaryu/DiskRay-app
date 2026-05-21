@@ -368,6 +368,27 @@ Manual notes:
 - `DRayMenuBarHelper/MenuBarPopupView.swift`
 - `task.md`
 
+## Visual QA Agent Report
+
+### Pass/fail
+- Main app visual delta: PASS
+- Menu bar visual delta: PASS
+- Calm Liquid Glass direction: PASS
+- Functionality preserved: PASS
+
+### Evidence
+- Screens reviewed:
+  - `/tmp/dray-ui-refactor-qa/screens/relaunch-light.png`: temporary QA app bundle, light appearance, English labels, full-size Overview after current shared/module/menu commits.
+  - `/tmp/dray-ui-refactor-qa/screens/main-light-overview.png`: temporary QA app bundle, first light Overview capture before coordinate-driven navigation attempts.
+  - Source/diff review for Overview, Smart Care, Search, Uninstaller/Remaining, Performance, Network, Settings, and Menu Bar surfaces after the final menu bar commit.
+- Remaining visual issues:
+  - Setup Required permission banner still uses a bright system-blue primary button because it is a permission onboarding CTA; this can be softened later without changing access flow.
+  - Some semantic charts still retain colored progress lines for readability; they are less saturated, but not monochrome.
+  - Automated screenshot navigation across all modules was unreliable in this desktop session because the QA bundle and installed `/Applications/DRay.app` were both running and macOS Accessibility coordinate clicks sometimes targeted the wrong Space/window.
+- Must-fix before merge:
+  - None found in build/test or the checked Overview/Menu Bar source pass.
+  - Recommended before merge: one interactive human pass through Smart Care, Search, Uninstaller, Performance Network tab, Settings, and the menu bar dark/scan-running states.
+
 ## Manual Visual QA
 
 Manual visual QA was executed with a temporary `/tmp/DRayQA.app` bundle built from this branch. The bundle was not installed into `/Applications`, no release package/tag/version bump was created, and production DRay defaults changed during QA were restored to their original values.
