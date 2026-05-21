@@ -56,54 +56,58 @@ struct SettingsView: View {
         }
     }
 
+    private enum SettingsCardSlot: Hashable {
+        case general
+        case appearance
+        case permissions
+        case scanningCleanup
+        case recoverySafety
+        case diagnostics
+    }
+
     private var settingsBoard: some View {
         Group {
             if boardColumnCount >= 3 {
                 HStack(alignment: .top, spacing: 12) {
-                    settingsColumn {
-                        permissionsCard
-                        recoverySafetyCard
-                    }
-                    settingsColumn {
-                        scanningCleanupCard
-                        diagnosticsCard
-                    }
-                    settingsColumn {
-                        generalGroup
-                        appearanceGroup
-                    }
+                    settingsColumn([.permissions, .recoverySafety])
+                    settingsColumn([.scanningCleanup, .diagnostics])
+                    settingsColumn([.general, .appearance])
                 }
             } else if boardColumnCount == 2 {
                 HStack(alignment: .top, spacing: 12) {
-                    settingsColumn {
-                        permissionsCard
-                        scanningCleanupCard
-                        diagnosticsCard
-                    }
-                    settingsColumn {
-                        generalGroup
-                        appearanceGroup
-                        recoverySafetyCard
-                    }
+                    settingsColumn([.permissions, .scanningCleanup, .diagnostics])
+                    settingsColumn([.general, .appearance, .recoverySafety])
                 }
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    generalGroup
-                    appearanceGroup
-                    permissionsCard
-                    scanningCleanupCard
-                    recoverySafetyCard
-                    diagnosticsCard
-                }
+                settingsColumn([.general, .appearance, .permissions, .scanningCleanup, .recoverySafety, .diagnostics])
             }
         }
     }
 
-    private func settingsColumn<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func settingsColumn(_ slots: [SettingsCardSlot]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            content()
+            ForEach(slots, id: \.self) { slot in
+                settingsCard(slot)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func settingsCard(_ slot: SettingsCardSlot) -> AnyView {
+        switch slot {
+        case .general:
+            return AnyView(generalGroup)
+        case .appearance:
+            return AnyView(appearanceGroup)
+        case .permissions:
+            return AnyView(permissionsCard)
+        case .scanningCleanup:
+            return AnyView(scanningCleanupCard)
+        case .recoverySafety:
+            return AnyView(recoverySafetyCard)
+        case .diagnostics:
+            return AnyView(diagnosticsCard)
+        }
     }
 
     private var boardWidthProbe: some View {
@@ -119,6 +123,7 @@ struct SettingsView: View {
     }
 
     private var boardColumnCount: Int {
+        guard boardWidth > 0 else { return 2 }
         if boardWidth >= 1_320 { return 3 }
         if boardWidth >= 840 { return 2 }
         return 1

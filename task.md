@@ -208,6 +208,7 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - `DRay/Features/Performance/PerformanceView+WorkspaceComponents.swift`
 - `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
 - `DRay/Features/Performance/PerformanceView+WorkspaceOverview.swift`
+- `DRay/Features/Settings/SettingsView.swift`
 - `DRay/Features/Settings/SettingsView+PermissionsSection.swift`
 - `DRay/Features/Settings/SettingsView+SectionScaffold.swift`
 - `DRayMenuBarHelper/MenuBarPopupCards.swift`
@@ -216,14 +217,23 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 
 ## Manual Visual QA
 
-Manual visual QA was not executed in this terminal pass. The code was build/test validated; light/dark/compact screenshots and menu bar interaction checks remain required before merging.
+Manual visual QA was executed with a temporary `/tmp/DRayQA.app` bundle built from this branch. The bundle was not installed into `/Applications`, no release package/tag/version bump was created, and production DRay defaults changed during QA were restored to their original values.
+
+Screenshots captured:
+- `/tmp/dray-uiqa2/contact-light-ru.png`: Overview, Smart Care, Search, Uninstaller, Performance, Space Lens in light/Russian pass.
+- `/tmp/dray-uiqa2/contact-dark-en.png`: Overview, Smart Care, Search, Uninstaller, Performance, Settings, Space Lens in dark/English pass.
+- `/tmp/dray-uiqa2/settings-fixed2-light.png`: Settings after the adaptive board crash fix.
+- `/tmp/dray-uiqa-final/menubar-open.png`: Menu bar helper normal popover state.
+
+Finding fixed during QA:
+- Settings crashed during launch/layout in the adaptive board. The root cause was unstable generic `@ViewBuilder` column composition across adaptive branches. Reworked Settings board rendering to use explicit card slots and a guarded width fallback; Settings now renders in the QA bundle.
 
 ### Light mode
-- [ ] Main app checked
-- [ ] Menu bar checked
+- [x] Main app checked
+- [x] Menu bar checked
 
 ### Dark mode
-- [ ] Main app checked
+- [x] Main app checked
 - [ ] Menu bar checked
 
 ### Compact layout
@@ -233,32 +243,32 @@ Manual visual QA was not executed in this terminal pass. The code was build/test
 - [ ] Uninstaller
 - [ ] Performance
 - [ ] Network
-- [ ] Settings
+- [x] Settings
 - [ ] Menu bar
 
 ## Visual Guardrails QA
-- [ ] Nested cards are mostly flat or near-flat.
-- [ ] Heavy blur is limited to major surfaces.
-- [ ] Primary buttons are not overused.
-- [ ] Secondary actions are visually quieter.
-- [ ] Semantic colors still communicate state clearly.
-- [ ] Text contrast remains readable in light mode.
-- [ ] Text contrast remains readable in dark mode.
-- [ ] Overview is calmer but still informative.
-- [ ] Smart Care remains actionable.
-- [ ] Search filters remain quickly accessible.
-- [ ] Uninstaller removal methods and risks remain visible.
-- [ ] Remaining cleanup reasons and remediation hints remain visible.
-- [ ] Performance metrics remain readable.
-- [ ] Network tools remain fully usable.
-- [ ] Settings permissions and high-risk controls remain explicit.
-- [ ] Menu bar popover is calmer and not visually louder than the main app.
-- [ ] Menu bar popover did not become unnecessarily taller.
-- [ ] Smart Scan is the only main primary CTA in the menu bar.
-- [ ] Quick actions remain visible.
-- [ ] Top Consumers remain readable.
-- [ ] Telemetry is quiet and readable.
-- [ ] Quit Completely remains available.
+- [x] Nested cards are mostly flat or near-flat in checked screens.
+- [x] Heavy blur is limited to major surfaces in checked screens.
+- [x] Primary buttons are not overused in checked screens.
+- [x] Secondary actions are visually quieter in checked screens.
+- [x] Semantic colors still communicate state clearly.
+- [x] Text contrast remains readable in light mode.
+- [x] Text contrast remains readable in dark mode.
+- [x] Overview is calmer but still informative.
+- [x] Smart Care remains actionable.
+- [x] Search filters remain quickly accessible.
+- [x] Uninstaller removal methods and risks remain visible.
+- [x] Remaining cleanup reasons and remediation hints remain visible.
+- [x] Performance metrics remain readable.
+- [x] Network tools remain fully usable at code/build level; Space Lens was visually checked.
+- [x] Settings permissions and high-risk controls remain explicit.
+- [x] Menu bar popover is calmer and not visually louder than the main app.
+- [x] Menu bar popover did not become unnecessarily taller; width remains the existing 430 point layout.
+- [x] Smart Scan is the only main primary CTA in the menu bar.
+- [x] Quick actions remain visible.
+- [x] Top Consumers remain readable.
+- [x] Telemetry is quiet and readable.
+- [x] Quit Completely remains available.
 
 ## Functionality Preservation QA
 - [x] Force Remove still visible/available where expected at code level; no removal pipeline behavior was changed in this UI refactor.
@@ -285,8 +295,10 @@ Manual visual QA was not executed in this terminal pass. The code was build/test
 - After menu bar pass `swift test`: passed, 115 tests.
 - Final `swift build`: passed.
 - Final `swift test`: passed, 115 tests.
+- Manual QA fix `swift build`: passed.
+- Manual QA fix `swift test`: passed, 115 tests.
 
 ## Backlog / Risks
-- Manual visual QA remains: light/dark mode, compact/full-size windows, Russian text fit, and menu bar normal/scan-running states.
+- Manual QA still not fully exhaustive: dark menu bar popover, scan-running menu bar state, and full compact sweep for every module remain best done in an interactive pass before merge.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.
