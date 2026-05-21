@@ -232,7 +232,7 @@ struct PerformanceView: View {
             Button(t("Запустить диагностику", "Run Diagnostics")) {
                 model.runPerformanceScan()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayPrimaryButtonStyle())
             .controlSize(.small)
             .disabled(model.performance.isScanRunning)
 
@@ -241,13 +241,13 @@ struct PerformanceView: View {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
 
             Button(t("Показать crash log", "Reveal Crash Log")) {
                 model.revealCrashTelemetry()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
 
             if model.performance.isScanRunning {
@@ -258,7 +258,7 @@ struct PerformanceView: View {
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
-                .background(.regularMaterial, in: Capsule())
+                .background(Color.primary.opacity(0.045), in: Capsule())
             }
         }
     }
@@ -275,7 +275,7 @@ struct PerformanceView: View {
         .labelsHidden()
         .frame(maxWidth: 620)
         .padding(6)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.03, padding: 0)
+        .calmGlass(.section, cornerRadius: 16)
     }
 
     @ViewBuilder

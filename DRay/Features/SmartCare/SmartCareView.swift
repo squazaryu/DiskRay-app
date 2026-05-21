@@ -37,12 +37,13 @@ struct SmartCareView: View {
                 }
             case .categories:
                 categoriesWorkspace
-                    .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 0)
+                    .calmGlass(.section, cornerRadius: 16)
             case .exclusions:
                 ScrollView(.vertical, showsIndicators: true) {
                     exclusionsPanel
                 }
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.12, shadowOpacity: 0.05, padding: 12)
+                .padding(12)
+                .calmGlass(.section, cornerRadius: 16)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -95,7 +96,7 @@ struct SmartCareView: View {
                     }
                 }
                 .padding(12)
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+                .calmGlass(.card, cornerRadius: 16)
             }
         }
     }
@@ -130,7 +131,7 @@ struct SmartCareView: View {
             }
         }
         .padding(14)
-        .glassSurface(cornerRadius: 22, strokeOpacity: 0.11, shadowOpacity: 0.08, padding: 0)
+        .calmGlass(.section, cornerRadius: 22)
     }
 
     private var smartCareHeroIdentity: some View {
@@ -144,7 +145,7 @@ struct SmartCareView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(model.smartCare.isScanRunning ? "SMART CARE SCAN" : "SMART CARE")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.secondary)
                 Text(model.smartCare.isScanRunning ? "Scanning your Mac..." : smartCareStatusTitle)
                     .font(.system(size: 26, weight: .semibold))
                     .lineLimit(2)
@@ -169,8 +170,8 @@ struct SmartCareView: View {
     @ViewBuilder
     private var smartCareHeroBadges: some View {
         GlassPillBadge(title: "Safe & reversible", tint: .green)
-        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
-        GlassPillBadge(title: "\(selectedCategoryCount) selected", tint: selectedCategoryCount > 0 ? .blue : .secondary)
+        GlassPillBadge(title: model.smartCare.profile.title, tint: .secondary)
+        GlassPillBadge(title: "\(selectedCategoryCount) selected", tint: selectedCategoryCount > 0 ? .accentColor : .secondary)
     }
 
     private var safeCleanupGrid: some View {
@@ -205,7 +206,7 @@ struct SmartCareView: View {
             }
         }
         .padding(12)
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+        .calmGlass(.card, cornerRadius: 18)
     }
 
     private var smartActionCenter: some View {
@@ -233,16 +234,17 @@ struct SmartCareView: View {
                 .padding(.top, 2)
         }
         .padding(12)
-        .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
+        .calmGlass(.card, cornerRadius: 18)
     }
 
     private var smartScanOnboardingCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "sparkles")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(Color.accentColor.opacity(0.72))
                 .frame(width: 44, height: 44)
-                .background(Color.blue.opacity(0.12), in: Circle())
+                .background(Color.primary.opacity(0.036), in: Circle())
+                .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("No scan yet")
@@ -253,14 +255,14 @@ struct SmartCareView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
-                        GlassPillBadge(title: "Scan first", tint: .blue)
+                        GlassPillBadge(title: "Scan first", tint: .accentColor)
                         GlassPillBadge(title: "Clean later", tint: .green)
-                        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
+                        GlassPillBadge(title: model.smartCare.profile.title, tint: .secondary)
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        GlassPillBadge(title: "Scan first", tint: .blue)
+                        GlassPillBadge(title: "Scan first", tint: .accentColor)
                         GlassPillBadge(title: "Clean later", tint: .green)
-                        GlassPillBadge(title: model.smartCare.profile.title, tint: .purple)
+                        GlassPillBadge(title: model.smartCare.profile.title, tint: .secondary)
                     }
                 }
             }
@@ -299,8 +301,17 @@ struct SmartCareView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .foregroundStyle(.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.105))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.22), lineWidth: 0.8)
+            )
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.plain)
         .disabled(!canRunPrimarySmartAction)
     }
 
@@ -403,7 +414,7 @@ struct SmartCareView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: systemImage)
-                    .foregroundStyle(enabled ? Color.blue : Color.secondary)
+                    .foregroundStyle(enabled ? Color.accentColor.opacity(0.72) : Color.secondary)
                 Text(title)
                     .font(.subheadline.weight(.medium))
                 Spacer()

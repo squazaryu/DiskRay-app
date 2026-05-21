@@ -298,7 +298,7 @@ struct UninstallerView: View {
                             selectedAppPath = selectedApp.appURL.path
                             showUninstallPreview = true
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(DRayDangerButtonStyle())
                     }
                 } else if workspaceTab == .rollback {
                     GlassPillBadge(title: "Sessions \(uninstallSessions.count)", tint: .blue)
@@ -335,14 +335,14 @@ struct UninstallerView: View {
                         model.clearRemainingRecords()
                         remainingActionMessage = "Remaining list cleared."
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRayDangerButtonStyle())
                     .disabled(remainingRecords.isEmpty)
                 }
             }
             .padding(.horizontal, layoutMetrics.cardSpacing)
             .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         }
-        .glassSurface(cornerRadius: 14, strokeOpacity: 0.10, shadowOpacity: 0.04, padding: 0)
+        .calmGlass(.section, cornerRadius: 14)
     }
 
     private var workspaceNavigation: some View {

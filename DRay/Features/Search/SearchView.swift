@@ -33,7 +33,8 @@ struct SearchView: View {
             }
 
             searchToolbar
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.10, shadowOpacity: 0.05, padding: layoutMetrics.cardSpacing)
+                .padding(layoutMetrics.cardSpacing)
+                .calmGlass(.section, cornerRadius: 16)
             workspaceNavigation
             statusStrip
 
@@ -134,7 +135,8 @@ struct SearchView: View {
     private var queryWorkspace: some View {
         VStack(alignment: .leading, spacing: 10) {
             filtersPanel
-                .glassSurface(cornerRadius: 16, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
+                .padding(layoutMetrics.cardSpacing)
+                .calmGlass(.section, cornerRadius: 16)
 
             HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -152,7 +154,7 @@ struct SearchView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
-                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+                .calmGlass(.card, cornerRadius: 18)
 
                 VStack(alignment: .leading, spacing: 8) {
                     DRayActionRow(
@@ -173,7 +175,7 @@ struct SearchView: View {
                 .frame(width: 330, alignment: .topLeading)
                 .frame(minHeight: 120, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
-                .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
+                .calmGlass(.card, cornerRadius: 18)
             }
         }
     }
@@ -239,14 +241,14 @@ struct SearchView: View {
                 Button(t("Поиск", "Search")) {
                     model.triggerSearch()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
 
                 if model.search.isLiveRunning {
                     Button(t("Стоп", "Stop")) {
                         model.cancelSearch()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
 
@@ -292,7 +294,7 @@ struct SearchView: View {
                     model.savePreset(named: name)
                     presetName = ""
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 Menu(t("Пресеты", "Presets")) {
                     ForEach(model.search.presets) { preset in
@@ -392,20 +394,20 @@ struct SearchView: View {
             Button(t("В корзину показанные", "Trash Shown")) {
                 requestTrashConfirmation(for: displayedResults)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(displayedResults.isEmpty)
             Button(t("Снять выбор", "Clear Selection")) {
                 selection.removeAll()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(selection.isEmpty)
             Button(t("Показать", "Reveal")) {
                 guard let first = selectedNodes().first else { return }
                 model.revealInFinder(first)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(selection.isEmpty)
             Button(t("Удалить выбранное", "Trash Selected")) {
@@ -463,7 +465,7 @@ struct SearchView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, layoutMetrics.cardSpacing)
             .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-            .background(.regularMaterial)
+            .background(Color.primary.opacity(0.030))
 
             Divider()
 
@@ -550,7 +552,7 @@ struct SearchView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial)
+        .background(Color.primary.opacity(0.030))
     }
 
     private func treeSortButton(title: String, column: SearchTreeSortColumn, alignment: Alignment) -> some View {
@@ -888,12 +890,12 @@ struct SearchView: View {
             Button(t("Выбрать дерево", "Select Tree")) {
                 selection.formUnion(result.nodes.flatMap(\.matchPaths))
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.mini)
         }
         .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.accentColor.opacity(0.052), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func treeLeafRow(_ node: SearchHierarchyNode) -> AnyView {

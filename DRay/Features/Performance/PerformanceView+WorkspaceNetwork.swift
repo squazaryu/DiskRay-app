@@ -204,7 +204,7 @@ extension PerformanceView {
                 Button(t("Скорость", "Speed Test")) {
                     model.runNetworkSpeedTest()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.performance.isNetworkSpeedTestRunning)
 
@@ -231,7 +231,7 @@ extension PerformanceView {
                     Button(t("Скорость", "Speed Test")) {
                         model.runNetworkSpeedTest()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .controlSize(.small)
                     .disabled(model.performance.isNetworkSpeedTestRunning)
                 }
@@ -327,14 +327,14 @@ extension PerformanceView {
                 Text(t("Скорость трафика", "Traffic rate"))
                     .font(.headline)
                 Spacer()
-                performanceLegendDot(t("Входящий", "Incoming"), tint: .blue)
+                performanceLegendDot(t("Входящий", "Incoming"), tint: .accentColor)
                 performanceLegendDot(t("Исходящий", "Outgoing"), tint: .green)
             }
 
             NetworkTrafficDualChart(
                 incoming: networkRateHistory.map(\.incoming),
                 outgoing: networkRateHistory.map(\.outgoing),
-                incomingTint: .blue,
+                incomingTint: .accentColor,
                 outgoingTint: .green
             )
             .frame(height: 240)
@@ -347,7 +347,7 @@ extension PerformanceView {
                         .foregroundStyle(.secondary)
                     Text(currentIncomingRateLabel)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accentColor.opacity(0.76))
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -418,9 +418,9 @@ extension PerformanceView {
                             VStack(spacing: 4) {
                                 Image(systemName: "laptopcomputer")
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(.cyan)
+                                    .foregroundStyle(Color.accentColor.opacity(0.68))
                                     .padding(7)
-                                    .background(.ultraThinMaterial, in: Circle())
+                                    .background(Color.primary.opacity(0.045), in: Circle())
                                 Text(t("Этот Mac", "This Mac"))
                                     .font(.caption2.weight(.semibold))
                                     .padding(.horizontal, 6)
@@ -463,8 +463,8 @@ extension PerformanceView {
                         ForEach(geolocatedHostRows.prefix(12)) { row in
                             MapPolyline(coordinates: [local, row.coordinate])
                                 .stroke(
-                                    endpointTint(for: row.host).opacity(row.host == selectedNetworkHostID ? 0.64 : 0.28),
-                                    lineWidth: row.host == selectedNetworkHostID ? 2.2 : 1.1
+                                    endpointTint(for: row.host).opacity(row.host == selectedNetworkHostID ? 0.42 : 0.16),
+                                    lineWidth: row.host == selectedNetworkHostID ? 1.7 : 0.8
                                 )
                         }
                     }
@@ -1771,7 +1771,7 @@ extension PerformanceView {
     private func endpointTint(for host: String) -> Color {
         let scalarSum = host.unicodeScalars.map(\.value).reduce(0, +)
         let hue = Double(scalarSum % 360) / 360.0
-        return Color(hue: hue, saturation: 0.72, brightness: 0.95)
+        return Color(hue: hue, saturation: 0.34, brightness: 0.72)
     }
 
     private var currentIncomingRate: Double {
@@ -1818,13 +1818,13 @@ extension PerformanceView {
         switch networkDataRepresentation {
         case .bits, .bytes:
             return [
-                DRayDonutSegment(title: "incoming", value: Double(monitor.snapshot.networkInboundBytesTotal), color: .blue),
+                DRayDonutSegment(title: "incoming", value: Double(monitor.snapshot.networkInboundBytesTotal), color: .accentColor),
                 DRayDonutSegment(title: "outgoing", value: Double(monitor.snapshot.networkOutboundBytesTotal), color: .green),
                 DRayDonutSegment(title: "dropped", value: Double(monitor.snapshot.networkDroppedPacketsTotal), color: .gray)
             ]
         case .packets:
             return [
-                DRayDonutSegment(title: "incoming", value: Double(monitor.snapshot.networkInboundPacketsTotal), color: .blue),
+                DRayDonutSegment(title: "incoming", value: Double(monitor.snapshot.networkInboundPacketsTotal), color: .accentColor),
                 DRayDonutSegment(title: "outgoing", value: Double(monitor.snapshot.networkOutboundPacketsTotal), color: .green),
                 DRayDonutSegment(title: "dropped", value: Double(monitor.snapshot.networkDroppedPacketsTotal), color: .gray)
             ]
@@ -1959,7 +1959,7 @@ private struct NetworkTrafficDualChart: View {
                     NetworkAreaPath(values: incoming, maxValue: maxValue)
                         .fill(
                             LinearGradient(
-                                colors: [incomingTint.opacity(0.24), incomingTint.opacity(0.03)],
+                                colors: [incomingTint.opacity(0.11), incomingTint.opacity(0.018)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -1970,14 +1970,14 @@ private struct NetworkTrafficDualChart: View {
 
                 if incoming.count >= 2 {
                     NetworkLinePath(values: incoming, maxValue: maxValue)
-                        .stroke(incomingTint.opacity(0.95), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                        .stroke(incomingTint.opacity(0.58), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
 
                 if outgoing.count >= 2 {
                     NetworkLinePath(values: outgoing, maxValue: maxValue)
-                        .stroke(outgoingTint.opacity(0.95), style: StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round))
+                        .stroke(outgoingTint.opacity(0.56), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }

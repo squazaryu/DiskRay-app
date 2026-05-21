@@ -235,6 +235,89 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Network keeps traffic charts, live map, public IP, latency, port scanner, WOL, speed test history, focus filters, and persisted preferences; map lines/selection states and technical cards are less saturated.
 - Settings keeps permissions, Full Disk Access diagnostics, high-risk settings, appearance, scanning defaults, diagnostics, and recovery controls; section icons and nested rows are calmer.
 
+## Main App Module Refactor Agent Report
+
+### Module: Overview
+Changed:
+- Replaced prominent bordered secondary hero actions with explicit calm primary/secondary hierarchy.
+- Moved hero, recommendations, top consumers, and activity panels to `calmGlass` section/card surfaces.
+- Reduced bright status color usage in activity rows, health color, bottom telemetry, and icon backgrounds.
+
+Preserved:
+- System health score, storage/memory/battery/CPU cards, health explanation, recommendations, top consumers, activity shortcuts, and bottom telemetry.
+
+Visual delta:
+- Overview reads less like a glossy blue dashboard; major surfaces are calmer and secondary actions no longer compete with Smart Scan.
+
+### Module: Smart Care
+Changed:
+- Replaced heavy category/exclusion/action-center cards with calm section/card surfaces.
+- Muted SMART CARE label, profile/selected pills, onboarding icon, category container surfaces, and action row icon tints.
+- Reworked the main Smart Care action into a single muted primary action instead of a detached bright blue block.
+
+Preserved:
+- Smart Scan, Clean Recommended/Clean Selected flow, category cards, progress/status banners, exclusions, risk labels, recommendations, analyzer telemetry, and cleanup gating.
+
+Visual delta:
+- Smart Care is less gamified/glossy while keeping the maintenance flow obvious and actionable.
+
+### Module: Search
+Changed:
+- Search toolbar, filter panel, query workspace, and actions cards now use calm section/card surfaces.
+- Search remains the primary CTA while stop/save/reveal/select/tree actions use neutral secondary styling.
+- Table/tree headers and tree root selection states use flatter low-opacity fills.
+
+Preserved:
+- Scope selection, query input, fast/deep mode, filters, presets, regex validation, result views, selection menus, bulk actions, and destructive Trash Selected action.
+
+Visual delta:
+- Search remains dense and power-user oriented, but controls no longer look like a saturated blue command panel.
+
+### Module: Uninstaller / Remaining
+Changed:
+- Uninstaller action toolbar now uses a calm section surface.
+- Destructive uninstall/clear-list actions use the calm danger button style instead of generic prominent blue/neutral buttons.
+
+Preserved:
+- Applications, rollback, Remaining cleanup, removal method reporting, failure reasons, risk/status badges, Force Remove/high-risk flows, daemon/helper guidance, and cleanup reports.
+
+Visual delta:
+- Operational controls read more clearly as destructive/admin actions without making the whole Uninstaller workspace visually louder.
+
+### Module: Performance
+Changed:
+- Diagnostics CTA uses the primary button hierarchy; export/reveal actions are neutral secondary actions.
+- Workspace segmented navigation and scan-running status use calmer surfaces.
+- Performance infographics were already muted through the shared component pass.
+
+Preserved:
+- CPU, memory, battery, startup, process metrics, charts, diagnostics, export/reveal actions, and relief actions.
+
+Visual delta:
+- Performance keeps live diagnostic density but loses the previous glossy dashboard emphasis.
+
+### Module: Network
+Changed:
+- Speed Test remains the primary action, while network chart colors, map polylines, local marker, endpoint tints, donut segments, and incoming-rate labels are less saturated.
+- Traffic chart fill/line opacity and map line weight were reduced for a more technical, less neon appearance.
+
+Preserved:
+- Public IP, live map, traffic charts, host/program/service lists, latency, port scanner, Wake-on-LAN, speed test history, filters, and persisted preferences.
+
+Visual delta:
+- Network tools remain visible and usable, but the map/chart area no longer dominates as a neon visualization.
+
+### Module: Settings
+Changed:
+- Settings section scaffolding moved from heavy colored glass cards to calmer section surfaces during the shared pass.
+- Section icons and nested rows are visually quieter while keeping the adaptive board stability fix.
+
+Preserved:
+- Permissions, Full Disk Access diagnostics, appearance/density/sidebar controls, high-risk settings, scanning defaults, diagnostics, recovery/safety controls, and reset actions.
+
+Visual delta:
+- Settings is closer to a grouped macOS System Settings surface without hiding risk or permission details.
+
 ## Menu Bar Changes
 - Calmed the menu bar shell background by reducing cyan/indigo wash, border contrast, and shadow strength while keeping the existing compact `430` point width.
 - Calmed menu bar hero, top-consumers, recommendation, quick-actions, and telemetry surfaces with lower accent opacity and flatter nested rows.

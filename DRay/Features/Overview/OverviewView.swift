@@ -25,7 +25,7 @@ struct OverviewView: View {
                         } label: {
                             Label(t("Smart Scan", "Smart Scan"), systemImage: "wand.and.sparkles")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(DRayPrimaryButtonStyle())
                         .controlSize(.small)
                     }
                 }
@@ -67,7 +67,7 @@ struct OverviewView: View {
             }
         }
         .padding(layoutMetrics.cardSpacing + 2)
-        .glassSurface(cornerRadius: 22, strokeOpacity: 0.12, shadowOpacity: 0.10, padding: 0)
+        .calmGlass(.section, cornerRadius: 22)
     }
 
     private var metricGrid: some View {
@@ -106,7 +106,7 @@ struct OverviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
+        .calmGlass(.card, cornerRadius: 16)
     }
 
     private var topConsumersCard: some View {
@@ -130,7 +130,7 @@ struct OverviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
+        .calmGlass(.card, cornerRadius: 16)
     }
 
     private var activityCard: some View {
@@ -164,7 +164,7 @@ struct OverviewView: View {
                     title: t("Производительность", "Performance"),
                     subtitle: performanceActivityText,
                     icon: "waveform.path.ecg",
-                    tint: .cyan,
+                    tint: .teal,
                     actionTitle: t("Открыть", "Open"),
                     section: .performance
                 )
@@ -172,7 +172,7 @@ struct OverviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
+        .calmGlass(.card, cornerRadius: 16)
     }
 
     private var overviewInsightsLayout: some View {
@@ -244,7 +244,7 @@ struct OverviewView: View {
                     } label: {
                         Label(t("Открыть Smart Care", "Open Smart Care"), systemImage: "sparkles")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
 
                     Button {
@@ -252,7 +252,7 @@ struct OverviewView: View {
                     } label: {
                         Label(focusActionTitle, systemImage: focusIcon)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }
@@ -338,9 +338,10 @@ struct OverviewView: View {
         HStack(spacing: 10) {
             Image(systemName: item.icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(item.tint)
+                .foregroundStyle(item.tint.opacity(0.74))
                 .frame(width: 30, height: 30)
-                .background(item.tint.opacity(colorScheme == .dark ? 0.18 : 0.12), in: Circle())
+                .background(Color.primary.opacity(colorScheme == .dark ? 0.045 : 0.032), in: Circle())
+                .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
@@ -357,7 +358,7 @@ struct OverviewView: View {
             Button(item.actionTitle) {
                 rootModel.openSection(item.section)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
         }
         .padding(8)
@@ -510,7 +511,7 @@ struct OverviewView: View {
     }
 
     private var healthColor: Color {
-        if healthScore >= 0.76 { return .blue }
+        if healthScore >= 0.76 { return .accentColor }
         if healthScore >= 0.54 { return .orange }
         return .red
     }
@@ -635,7 +636,7 @@ struct OverviewView: View {
             title: t("Запустить Smart Care", "Run Smart Care"),
             subtitle: t("Обновить рекомендации по безопасной очистке.", "Refresh safe cleanup recommendations."),
             icon: "sparkles",
-            tint: .cyan,
+            tint: .teal,
             actionTitle: t("Открыть", "Open"),
             section: .smartCare
         ))
@@ -672,10 +673,10 @@ struct OverviewView: View {
 
     private var bottomStatusItems: [DRayBottomStatusStrip.Item] {
         [
-            .init(title: t("Uptime", "Uptime"), value: uptimeText, icon: "clock", tint: .blue),
-            .init(title: t("Target", "Target"), value: rootModel.selectedTarget.name, icon: "scope", tint: .cyan),
+            .init(title: t("Uptime", "Uptime"), value: uptimeText, icon: "clock", tint: .secondary),
+            .init(title: t("Target", "Target"), value: rootModel.selectedTarget.name, icon: "scope", tint: .secondary),
             .init(title: "Full Disk", value: rootModel.permissions.hasFullDiskAccess ? "On" : "Required", icon: "lock.shield", tint: rootModel.permissions.hasFullDiskAccess ? .green : .orange),
-            .init(title: t("Network", "Network"), value: networkText, icon: "wifi", tint: .teal)
+            .init(title: t("Network", "Network"), value: networkText, icon: "wifi", tint: .secondary)
         ]
     }
 
