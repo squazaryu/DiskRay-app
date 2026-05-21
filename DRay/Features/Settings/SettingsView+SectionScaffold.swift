@@ -15,7 +15,11 @@ extension SettingsView {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(tint)
                         .frame(width: 24, height: 24)
-                        .background(tint.opacity(0.13), in: Circle())
+                        .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(tint.opacity(0.14), lineWidth: 0.7)
+                        )
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -207,7 +211,7 @@ extension SettingsView {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 }
 

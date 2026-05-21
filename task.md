@@ -142,7 +142,7 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - [x] Baseline build/test
 - [x] Visual helper audit
 - [x] Design tokens / calm surface system
-- [ ] Shared components pass
+- [x] Shared components pass
 - [ ] Overview redesign
 - [ ] Smart Care redesign
 - [ ] Search redesign
@@ -182,7 +182,10 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Calmed shared infographics: icon badges, sparklines, and donut chart segments.
 
 ## Main App Modules Updated
-- Pending.
+- Shared pass updated Overview, Smart Care, Search, Uninstaller/Remaining, Performance helper components, and Settings scaffold surfaces to use calmer nested/card surfaces.
+- Search selected rows now use subtle accent tint plus a left accent bar instead of a saturated block.
+- Uninstaller app selection now uses subtle accent tint plus a left accent bar; Remaining destructive cleanup actions use calm danger styling instead of blue prominent blocks.
+- Performance chips/bars and Settings section icons were softened while keeping semantic status colors.
 
 ## Menu Bar Changes
 - Pending.

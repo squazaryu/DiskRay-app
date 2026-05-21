@@ -361,7 +361,7 @@ struct OverviewView: View {
             .controlSize(.small)
         }
         .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func consumerRow(_ consumer: ProcessConsumer, rank: Int) -> some View {
@@ -397,7 +397,7 @@ struct OverviewView: View {
             .lineLimit(2)
         }
         .padding(9)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
     private var compactHealthFormulaCard: some View {
@@ -420,7 +420,7 @@ struct OverviewView: View {
             .lineLimit(1)
         }
         .padding(7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func healthFactorRow(title: String, value: Double, tint: Color) -> some View {

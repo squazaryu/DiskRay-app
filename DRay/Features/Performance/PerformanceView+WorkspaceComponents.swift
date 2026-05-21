@@ -109,7 +109,7 @@ extension PerformanceView {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
     func startupEntryRow(_ entry: StartupEntry) -> some View {
@@ -165,7 +165,7 @@ extension PerformanceView {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
     func historySparklineCard(title: String, values: [Double], tint: Color) -> some View {
@@ -183,7 +183,7 @@ extension PerformanceView {
         }
         .padding(8)
         .frame(maxWidth: .infinity)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.card, cornerRadius: 10)
     }
 
     func metricCard(title: String, value: String, subtitle: String) -> some View {
@@ -202,7 +202,7 @@ extension PerformanceView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
@@ -222,6 +222,6 @@ extension PerformanceView {
                 .foregroundStyle(.secondary)
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 }

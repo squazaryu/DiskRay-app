@@ -411,13 +411,13 @@ struct SearchView: View {
             Button(t("Удалить выбранное", "Trash Selected")) {
                 requestTrashConfirmation(for: selectedNodes())
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayDangerButtonStyle())
             .controlSize(.small)
             .disabled(selection.isEmpty)
         }
         .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private var resultsPanel: some View {
@@ -475,7 +475,7 @@ struct SearchView: View {
             }
             .frame(maxHeight: .infinity)
         }
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.card, cornerRadius: 12)
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
@@ -528,7 +528,7 @@ struct SearchView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.card, cornerRadius: 12)
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
@@ -585,7 +585,7 @@ struct SearchView: View {
             .padding(8)
         }
         .frame(maxHeight: .infinity)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.card, cornerRadius: 12)
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
@@ -644,8 +644,16 @@ struct SearchView: View {
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+                .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
         )
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.70))
+                    .frame(width: 3)
+                    .padding(.vertical, 7)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             toggleSelection(node)
@@ -686,8 +694,16 @@ struct SearchView: View {
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
+                .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
         )
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.70))
+                    .frame(width: 3)
+                    .padding(.vertical, 7)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             toggleSelection(node)
@@ -731,11 +747,11 @@ struct SearchView: View {
         .padding(layoutMetrics.cardSpacing)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.03))
+                .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 0.8)
+                .stroke(isSelected ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.055), lineWidth: 0.8)
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -1291,7 +1307,7 @@ struct SearchView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 }
 

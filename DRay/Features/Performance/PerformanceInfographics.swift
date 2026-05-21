@@ -31,9 +31,9 @@ struct DiagnosticBurdenBar: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.primary.opacity(0.10))
+                        .fill(Color.primary.opacity(0.08))
                     Capsule()
-                        .fill(tint.opacity(0.78))
+                        .fill(tint.opacity(0.62))
                         .frame(width: max(8, geo.size.width * (clampedValue / 100)))
                 }
             }
@@ -78,14 +78,14 @@ struct RankedShareBar: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(Color.primary.opacity(0.08))
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(accent.opacity(0.75))
+                        .fill(accent.opacity(0.60))
                         .frame(width: max(6, geo.size.width * (clampedPercentage / 100)))
                 }
             }
             .frame(height: 7)
         }
         .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 }
 
@@ -131,7 +131,7 @@ struct StatusChip: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(tint.opacity(0.14), in: Capsule())
+            .background(tint.opacity(0.085), in: Capsule())
             .foregroundStyle(tint)
     }
 }

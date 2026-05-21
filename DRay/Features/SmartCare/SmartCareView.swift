@@ -91,7 +91,7 @@ struct SmartCareView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .calmGlass(.nestedCard, cornerRadius: 8)
                     }
                 }
                 .padding(12)
@@ -267,7 +267,7 @@ struct SmartCareView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 14)
     }
 
     private var primarySmartActionButton: some View {
@@ -378,7 +378,7 @@ struct SmartCareView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
             .padding(10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 14)
         }
         .buttonStyle(.plain)
     }
@@ -396,7 +396,7 @@ struct SmartCareView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func actionCenterRow(_ title: String, systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -412,7 +412,7 @@ struct SmartCareView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(9)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 10)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -580,7 +580,7 @@ struct SmartCareView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private var header: some View {
@@ -739,7 +739,7 @@ struct SmartCareView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
         .padding(.horizontal, 10)
         .padding(.top, 8)
     }
@@ -1215,7 +1215,7 @@ struct SmartCareView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 }
 

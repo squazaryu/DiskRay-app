@@ -319,7 +319,7 @@ struct UninstallerView: View {
                     Button("Deep Sweep") {
                         beginRemainingOperation(.deepSweep)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
 
                     Button("Clean All Remaining", role: .destructive) {
                         let result = model.cleanAllRemainingRecords()
@@ -328,7 +328,7 @@ struct UninstallerView: View {
                             appName: nil
                         )
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayDangerButtonStyle())
                     .disabled(remainingIssueCount == 0)
 
                     Button("Clear List", role: .destructive) {
@@ -379,7 +379,7 @@ struct UninstallerView: View {
             }
             .padding(.horizontal, layoutMetrics.cardSpacing)
             .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .calmGlass(.card, cornerRadius: 10)
 
             ScrollView {
                 LazyVStack(spacing: 6) {
@@ -561,7 +561,7 @@ struct UninstallerView: View {
                 summaryMetric(title: "Total size", value: remnantTotalSizeText)
             }
             .padding(10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .calmGlass(.nestedCard, cornerRadius: 12)
 
             if let top = remnantCoverage.first, top.bytes > 0 {
                 VStack(alignment: .leading, spacing: 8) {
@@ -578,7 +578,7 @@ struct UninstallerView: View {
                     geometryBar(value: top.bytes, total: remnants.reduce(0) { $0 + $1.sizeInBytes }, tint: .orange)
                 }
                 .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .calmGlass(.nestedCard, cornerRadius: 12)
             }
 
             if !topRemnantsBySize.isEmpty {
@@ -601,7 +601,7 @@ struct UninstallerView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .calmGlass(.nestedCard, cornerRadius: 10)
                     }
                 }
             } else {
@@ -610,7 +610,7 @@ struct UninstallerView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .calmGlass(.nestedCard, cornerRadius: 10)
             }
 
             Spacer(minLength: 6)
@@ -770,7 +770,7 @@ struct UninstallerView: View {
                         appName: record.appName
                     )
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayDangerButtonStyle())
                 .disabled(record.issues.isEmpty)
 
                 Button("Remove Record", role: .destructive) {
@@ -781,7 +781,7 @@ struct UninstallerView: View {
             }
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
     private func remainingIssueRow(_ issue: UninstallRemainingIssueRecord) -> some View {
@@ -828,7 +828,7 @@ struct UninstallerView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func formattedRemainingCleanupMessage(
@@ -956,9 +956,9 @@ struct UninstallerView: View {
         .padding(.vertical, 5)
         .frame(height: 34)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tint.opacity(0.12))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.16), lineWidth: 0.7))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(tint.opacity(0.075))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(tint.opacity(0.13), lineWidth: 0.7))
         )
     }
 
@@ -1020,8 +1020,16 @@ struct UninstallerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(selected ? Color.accentColor.opacity(0.16) : Color.clear)
+                    .fill(selected ? Color.accentColor.opacity(0.08) : Color.clear)
             )
+            .overlay(alignment: .leading) {
+                if selected {
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.70))
+                        .frame(width: 3)
+                        .padding(.vertical, 7)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1047,7 +1055,7 @@ struct UninstallerView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func rollbackSessionCard(_ session: UninstallSession) -> some View {
@@ -1086,7 +1094,7 @@ struct UninstallerView: View {
             }
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func uninstallReportSections(_ report: UninstallValidationReport) -> some View {
@@ -1175,7 +1183,7 @@ struct UninstallerView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .calmGlass(.nestedCard, cornerRadius: 10)
                     }
                 }
             }
@@ -1219,7 +1227,7 @@ struct UninstallerView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func reportSectionCard(title: String, status: UninstallActionStatus, rows: [UninstallActionResult]) -> some View {
@@ -1274,7 +1282,7 @@ struct UninstallerView: View {
             }
         }
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func copyToPasteboard(_ text: String) {

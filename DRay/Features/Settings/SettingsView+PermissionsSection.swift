@@ -116,7 +116,7 @@ extension SettingsView {
             }
         }
         .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 10)
     }
 
     private func fullDiskDiagnosticTitle(_ status: FullDiskAccessDiagnosticStatus) -> String {
