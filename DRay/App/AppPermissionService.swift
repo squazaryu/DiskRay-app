@@ -9,11 +9,52 @@ enum PermissionReadiness {
     case folderAndFullDiskMissing
 }
 
+enum FullDiskAccessDiagnosticStatus: String, Sendable {
+    case likelyGranted
+    case likelyMissing
+    case partial
+    case unknown
+}
+
+struct FullDiskAccessReadResult: Sendable {
+    let readable: Bool
+    let errorDescription: String?
+
+    init(readable: Bool, errorDescription: String? = nil) {
+        self.readable = readable
+        self.errorDescription = errorDescription
+    }
+}
+
+struct FullDiskAccessProbe: Identifiable, Sendable {
+    let id: String
+    let path: String
+    let exists: Bool
+    let readable: Bool
+    let denied: Bool
+    let errorDescription: String?
+
+    var name: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+}
+
+struct FullDiskAccessDiagnosticReport: Sendable {
+    let checkedAt: Date
+    let status: FullDiskAccessDiagnosticStatus
+    let probes: [FullDiskAccessProbe]
+
+    var likelyGranted: Bool {
+        status == .likelyGranted || status == .partial
+    }
+}
+
 @MainActor
 final class AppPermissionService: ObservableObject {
     @Published private(set) var firstLaunchNeedsSetup = false
     @Published private(set) var hasFolderPermission = false
     @Published private(set) var hasFullDiskAccess = false
+    @Published private(set) var fullDiskAccessDiagnostic = AppPermissionService.evaluateFullDiskAccessDiagnostic()
     @Published var permissionHint: String?
     private var permissionRefreshGeneration: UInt64 = 0
 
@@ -30,7 +71,8 @@ final class AppPermissionService: ObservableObject {
 
     func refreshPermissionStatus(for url: URL?) {
         hasFolderPermission = Self.evaluateFolderAccess(for: url)
-        hasFullDiskAccess = Self.evaluateFullDiskAccess()
+        fullDiskAccessDiagnostic = Self.evaluateFullDiskAccessDiagnostic()
+        hasFullDiskAccess = fullDiskAccessDiagnostic.likelyGranted
     }
 
     func refreshPermissionStatusAsync(for url: URL?) {
@@ -39,12 +81,13 @@ final class AppPermissionService: ObservableObject {
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let folderPermission = Self.evaluateFolderAccess(for: url)
-            let fullDiskAccess = Self.evaluateFullDiskAccess()
+            let fullDiskAccessDiagnostic = Self.evaluateFullDiskAccessDiagnostic()
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard generation == self.permissionRefreshGeneration else { return }
                 self.hasFolderPermission = folderPermission
-                self.hasFullDiskAccess = fullDiskAccess
+                self.fullDiskAccessDiagnostic = fullDiskAccessDiagnostic
+                self.hasFullDiskAccess = fullDiskAccessDiagnostic.likelyGranted
             }
         }
     }
@@ -54,7 +97,8 @@ final class AppPermissionService: ObservableObject {
     }
 
     func refreshFullDiskAccess() {
-        hasFullDiskAccess = Self.evaluateFullDiskAccess()
+        fullDiskAccessDiagnostic = Self.evaluateFullDiskAccessDiagnostic()
+        hasFullDiskAccess = fullDiskAccessDiagnostic.likelyGranted
     }
 
     var readiness: PermissionReadiness {
@@ -175,25 +219,62 @@ final class AppPermissionService: ObservableObject {
     }
 
     private nonisolated static func evaluateFullDiskAccess() -> Bool {
+        evaluateFullDiskAccessDiagnostic().likelyGranted
+    }
+
+    nonisolated static func evaluateFullDiskAccessDiagnostic(
+        candidates: [URL] = defaultFullDiskAccessProbeURLs(),
+        readProbe: @escaping @Sendable (URL) -> FullDiskAccessReadResult = AppPermissionService.readFullDiskProbe
+    ) -> FullDiskAccessDiagnosticReport {
+        let probes = candidates.map { candidate in
+            let path = candidate.path
+            let exists = FileManager.default.fileExists(atPath: path)
+            let result = exists ? readProbe(candidate) : FullDiskAccessReadResult(readable: false)
+            return FullDiskAccessProbe(
+                id: path,
+                path: path,
+                exists: exists,
+                readable: result.readable,
+                denied: exists && !result.readable,
+                errorDescription: result.errorDescription
+            )
+        }
+
+        let readableCount = probes.filter(\.readable).count
+        let deniedCount = probes.filter(\.denied).count
+        let status: FullDiskAccessDiagnosticStatus
+        if readableCount > 0, deniedCount > 0 {
+            status = .partial
+        } else if readableCount > 0 {
+            status = .likelyGranted
+        } else if deniedCount > 0 {
+            status = .likelyMissing
+        } else {
+            status = .unknown
+        }
+
+        return FullDiskAccessDiagnosticReport(
+            checkedAt: Date(),
+            status: status,
+            probes: probes
+        )
+    }
+
+    private nonisolated static func defaultFullDiskAccessProbeURLs() -> [URL] {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let candidates: [URL] = [
+        return [
             home.appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db"),
             home.appendingPathComponent("Library/Safari/History.db"),
             home.appendingPathComponent("Library/Safari/Bookmarks.plist")
         ]
-
-        for candidate in candidates {
-            if canReadPath(candidate) {
-                return true
-            }
-        }
-        return false
     }
 
-    private nonisolated static func canReadPath(_ url: URL) -> Bool {
+    private nonisolated static func readFullDiskProbe(_ url: URL) -> FullDiskAccessReadResult {
         let fm = FileManager.default
         let path = url.path
-        guard fm.fileExists(atPath: path) else { return false }
+        guard fm.fileExists(atPath: path) else {
+            return FullDiskAccessReadResult(readable: false)
+        }
 
         let started = url.startAccessingSecurityScopedResource()
         defer {
@@ -201,15 +282,18 @@ final class AppPermissionService: ObservableObject {
         }
 
         if fm.isReadableFile(atPath: path) {
-            return true
+            return FullDiskAccessReadResult(readable: true)
         }
 
-        let handle = try? FileHandle(forReadingFrom: url)
         do {
-            try handle?.close()
-            return handle != nil
+            let handle = try FileHandle(forReadingFrom: url)
+            try handle.close()
+            return FullDiskAccessReadResult(readable: true)
         } catch {
-            return false
+            return FullDiskAccessReadResult(
+                readable: false,
+                errorDescription: error.localizedDescription
+            )
         }
     }
 

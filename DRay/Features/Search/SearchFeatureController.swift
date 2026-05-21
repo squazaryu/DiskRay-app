@@ -38,12 +38,14 @@ final class SearchFeatureController: ObservableObject {
         guard !query.isEmpty else {
             liveSearchTask?.cancel()
             state.liveResults = []
+            state.validationMessage = nil
             state.isLiveRunning = false
             return
         }
 
         liveSearchTask?.cancel()
         state.isLiveRunning = true
+        state.validationMessage = nil
 
         let request = LiveSearchRequest(
             rootURL: resolvedSearchRootURL(),
@@ -67,11 +69,28 @@ final class SearchFeatureController: ObservableObject {
 
         liveSearchTask = Task { [weak self] in
             guard let self else { return }
-            let results = await liveSearchService.search(request)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self.state.liveResults = results
-                self.state.isLiveRunning = false
+            do {
+                let results = try await liveSearchService.search(request)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.state.liveResults = results
+                    self.state.validationMessage = nil
+                    self.state.isLiveRunning = false
+                }
+            } catch let error as LiveSearchValidationError {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.state.liveResults = []
+                    self.state.validationMessage = error.message
+                    self.state.isLiveRunning = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.state.liveResults = []
+                    self.state.validationMessage = error.localizedDescription
+                    self.state.isLiveRunning = false
+                }
             }
         }
     }
@@ -83,6 +102,7 @@ final class SearchFeatureController: ObservableObject {
 
     func clearResults() {
         state.liveResults = []
+        state.validationMessage = nil
     }
 
     func savePreset(name: String) {

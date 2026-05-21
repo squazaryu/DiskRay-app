@@ -1248,6 +1248,11 @@ struct UninstallerView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
+                            if let method = row.removalMethod {
+                                Text("Method: \(removalMethodTitle(method))")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(statusColor(row.status))
+                            }
                             if let category = row.failureCategory {
                                 Text("Category: \(failureCategoryTitle(category))")
                                     .font(.caption2.weight(.semibold))
@@ -1321,6 +1326,18 @@ struct UninstallerView: View {
         case .privilegedHelper: return "Privileged Helper"
         case .protectedBySystem: return "SIP/TCC Protected"
         case .unknown: return "Unknown"
+        }
+    }
+
+    private func removalMethodTitle(_ method: UninstallRemovalMethod) -> String {
+        switch method {
+        case .removedByStandardTrash: return "Standard Trash"
+        case .removedByFinderRecycle: return "Finder recycle"
+        case .removedByAdminTrash: return "Admin Trash"
+        case .forceRemovedByAdmin: return "Force Remove by admin"
+        case .skippedProtected: return "Skipped protected"
+        case .missing: return "Missing"
+        case .failed: return "Failed"
         }
     }
 }

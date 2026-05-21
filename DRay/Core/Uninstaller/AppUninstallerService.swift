@@ -1,10 +1,49 @@
 import Foundation
 import AppKit
 
+struct AppUninstallerTrashResult: Sendable {
+    let success: Bool
+    let trashedPath: String?
+    let details: String?
+}
+
+struct AppUninstallerHardRemoveResult: Sendable {
+    let success: Bool
+    let details: String
+}
+
+struct AppUninstallerOperations: Sendable {
+    var fileExists: @Sendable (String) -> Bool
+    var standardTrash: @Sendable (URL) throws -> String?
+    var finderRecycle: @Sendable (URL) async -> AppUninstallerTrashResult
+    var adminTrash: @Sendable (URL) -> AppUninstallerTrashResult
+    var adminHardRemove: @Sendable (URL) -> AppUninstallerHardRemoveResult
+
+    init(
+        fileExists: @escaping @Sendable (String) -> Bool,
+        standardTrash: @escaping @Sendable (URL) throws -> String?,
+        finderRecycle: @escaping @Sendable (URL) async -> AppUninstallerTrashResult,
+        adminTrash: @escaping @Sendable (URL) -> AppUninstallerTrashResult,
+        adminHardRemove: @escaping @Sendable (URL) -> AppUninstallerHardRemoveResult
+    ) {
+        self.fileExists = fileExists
+        self.standardTrash = standardTrash
+        self.finderRecycle = finderRecycle
+        self.adminTrash = adminTrash
+        self.adminHardRemove = adminHardRemove
+    }
+}
+
 actor AppUninstallerService: UninstallerServicing {
     private static let deepSweepBundlePattern = try! NSRegularExpression(
         pattern: #"[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*){2,}"#
     )
+
+    private let operations: AppUninstallerOperations?
+
+    init(operations: AppUninstallerOperations? = nil) {
+        self.operations = operations
+    }
 
     func installedApps() -> [InstalledApp] {
         let roots = [
@@ -237,7 +276,11 @@ actor AppUninstallerService: UninstallerServicing {
         }
     }
 
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
+    func uninstall(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        allowForceRemove: Bool
+    ) async -> UninstallValidationReport {
         var results: [UninstallActionResult] = []
         let targets: [(URL, UninstallItemType)] = previewItems.map { ($0.url, $0.type) }
         terminateIfRunning(bundleID: app.bundleID)
@@ -255,7 +298,8 @@ actor AppUninstallerService: UninstallerServicing {
                         trashedPath: nil,
                         details: "Self-uninstall is blocked for safety.",
                         failureCategory: .protectedBySystem,
-                        remediationHint: "DRay cannot remove itself from the Uninstaller module."
+                        remediationHint: "DRay cannot remove itself from the Uninstaller module.",
+                        removalMethod: .failed
                     )
                 )
                 continue
@@ -270,27 +314,37 @@ actor AppUninstallerService: UninstallerServicing {
                         trashedPath: nil,
                         details: "Protected system path",
                         failureCategory: .protectedBySystem,
-                        remediationHint: "System files protected by SIP/TCC cannot be removed."
+                        remediationHint: "System files protected by SIP/TCC cannot be removed.",
+                        removalMethod: .skippedProtected
                     )
                 )
                 continue
             }
 
-            guard FileManager.default.fileExists(atPath: path) else {
-                results.append(UninstallActionResult(url: target, type: type, status: .missing, trashedPath: nil, details: "Not found"))
+            guard fileExists(atPath: path) else {
+                results.append(
+                    UninstallActionResult(
+                        url: target,
+                        type: type,
+                        status: .missing,
+                        trashedPath: nil,
+                        details: "Not found",
+                        removalMethod: .missing
+                    )
+                )
                 continue
             }
 
             var primaryTrashError: Error?
             do {
-                var trashedURL: NSURL?
-                try FileManager.default.trashItem(at: target, resultingItemURL: &trashedURL)
+                let trashedPath = try standardTrash(target)
                 results.append(UninstallActionResult(
                     url: target,
                     type: type,
                     status: .removed,
-                    trashedPath: (trashedURL as URL?)?.path,
-                    details: nil
+                    trashedPath: trashedPath,
+                    details: "Moved to Trash with standard macOS trash API.",
+                    removalMethod: .removedByStandardTrash
                 ))
                 continue
             } catch {
@@ -298,14 +352,15 @@ actor AppUninstallerService: UninstallerServicing {
             }
 
             // Finder-based recycle handles some App Store installed apps better than FileManager.trashItem.
-            let recycleResult = await recycleWithFinder(target: target)
+            let recycleResult = await finderRecycle(target)
             if recycleResult.success {
                 results.append(UninstallActionResult(
                     url: target,
                     type: type,
                     status: .removed,
                     trashedPath: recycleResult.trashedPath,
-                    details: recycleResult.details
+                    details: recycleResult.details,
+                    removalMethod: .removedByFinderRecycle
                 ))
                 continue
             }
@@ -319,32 +374,38 @@ actor AppUninstallerService: UninstallerServicing {
             }
 
             if type == .appBundle, path.hasPrefix("/Applications/"), isPermissionError(primaryTrashError ?? NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)) {
-                let adminTrashResult = moveToTrashWithAdministratorPrivileges(target: target)
+                let adminTrashResult = adminTrash(target)
                 if adminTrashResult.success {
                     results.append(UninstallActionResult(
                         url: target,
                         type: type,
                         status: .removed,
                         trashedPath: adminTrashResult.trashedPath,
-                        details: adminTrashResult.details
+                        details: adminTrashResult.details,
+                        removalMethod: .removedByAdminTrash
                     ))
                     continue
                 }
-                attempts.append("Admin move to trash: \(adminTrashResult.details)")
+                attempts.append("Admin move to trash: \(adminTrashResult.details ?? "unknown admin trash error")")
 
                 // Last-resort path for App Store bundles when trash APIs are denied by App Management/TCC.
-                let adminRemoveResult = removeWithAdministratorPrivileges(target: target)
-                if adminRemoveResult.success {
-                    results.append(UninstallActionResult(
-                        url: target,
-                        type: type,
-                        status: .removed,
-                        trashedPath: nil,
-                        details: adminRemoveResult.details
-                    ))
-                    continue
+                if allowForceRemove {
+                    let adminRemoveResult = adminHardRemove(target)
+                    if adminRemoveResult.success {
+                        results.append(UninstallActionResult(
+                            url: target,
+                            type: type,
+                            status: .removed,
+                            trashedPath: nil,
+                            details: adminRemoveResult.details,
+                            removalMethod: .forceRemovedByAdmin
+                        ))
+                        continue
+                    }
+                    attempts.append("Admin hard remove: \(adminRemoveResult.details)")
+                } else {
+                    attempts.append("Admin hard remove: skipped because high-risk deletion is disabled")
                 }
-                attempts.append("Admin hard remove: \(adminRemoveResult.details)")
             }
 
             let diagnosis = diagnoseDeleteFailure(
@@ -361,12 +422,61 @@ actor AppUninstallerService: UninstallerServicing {
                     trashedPath: nil,
                     details: attempts.joined(separator: " | "),
                     failureCategory: diagnosis.category,
-                    remediationHint: diagnosis.remediation
+                    remediationHint: diagnosis.remediation,
+                    removalMethod: .failed
                 )
             )
         }
 
         return UninstallValidationReport(appName: app.name, createdAt: Date(), results: results)
+    }
+
+    private func fileExists(atPath path: String) -> Bool {
+        if let operations {
+            return operations.fileExists(path)
+        }
+        return FileManager.default.fileExists(atPath: path)
+    }
+
+    private func standardTrash(_ target: URL) throws -> String? {
+        if let operations {
+            return try operations.standardTrash(target)
+        }
+        var trashedURL: NSURL?
+        try FileManager.default.trashItem(at: target, resultingItemURL: &trashedURL)
+        return (trashedURL as URL?)?.path
+    }
+
+    private func finderRecycle(_ target: URL) async -> AppUninstallerTrashResult {
+        if let operations {
+            return await operations.finderRecycle(target)
+        }
+        let result = await recycleWithFinder(target: target)
+        return AppUninstallerTrashResult(
+            success: result.success,
+            trashedPath: result.trashedPath,
+            details: result.details
+        )
+    }
+
+    private func adminTrash(_ target: URL) -> AppUninstallerTrashResult {
+        if let operations {
+            return operations.adminTrash(target)
+        }
+        let result = moveToTrashWithAdministratorPrivileges(target: target)
+        return AppUninstallerTrashResult(
+            success: result.success,
+            trashedPath: result.trashedPath,
+            details: result.details
+        )
+    }
+
+    private func adminHardRemove(_ target: URL) -> AppUninstallerHardRemoveResult {
+        if let operations {
+            return operations.adminHardRemove(target)
+        }
+        let result = removeWithAdministratorPrivileges(target: target)
+        return AppUninstallerHardRemoveResult(success: result.success, details: result.details)
     }
 
     private func searchTokens(for app: InstalledApp) -> [String] {

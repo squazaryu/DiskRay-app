@@ -57,12 +57,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 2.1.2 48
+./scripts/install_app.sh 2.1.3 1
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 2.1.2 48
+./scripts/package_release.sh 2.1.3 1
 ```
 Artifacts are created in `dist`.
 
@@ -78,7 +78,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.1.2 48`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.1.3 1`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -96,4 +96,4 @@ Optional:
 - Settings model: `docs/SETTINGS_MODEL.md`
 
 ## Current Channel
-`v2.1.2 (build 48)` is the active release channel with Smart Care action-flow polish, corrected adaptive density behavior, Search/Uninstaller cleanup hardening, refined Remaining diagnostics, Network workspace documentation, and 2.1.1 UI stabilization rolled forward.
+`v2.1.3 (build 1)` is the active release channel with transparent Uninstaller fallback reporting, shared path-safety policy, bounded command execution for Search/Network diagnostics, Full Disk Access diagnostics, persisted Network workspace preferences, and menu-bar helper/icon-theme reliability fixes.

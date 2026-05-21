@@ -5,12 +5,19 @@ protocol UninstallerServicing: Sendable {
     func findRemnants(for app: InstalledApp, mode: UninstallMode) async -> [AppRemnant]
     func findStartupReferences(for app: InstalledApp) async -> [UninstallStartupReference]
     func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate]
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport
+    func uninstall(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        allowForceRemove: Bool
+    ) async -> UninstallValidationReport
 }
 
 extension UninstallerServicing {
     func findStartupReferences(for app: InstalledApp) async -> [UninstallStartupReference] { [] }
     func deepSweepOrphanRemnants(installedApps: [InstalledApp]) async -> [UninstallDeepSweepCandidate] { [] }
+    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
+        await uninstall(app: app, previewItems: previewItems, allowForceRemove: false)
+    }
 }
 
 struct UninstallExecutionResult: Sendable {
@@ -41,18 +48,27 @@ struct UninstallerUseCase {
         await service.deepSweepOrphanRemnants(installedApps: installedApps)
     }
 
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
-        await service.uninstall(app: app, previewItems: previewItems)
+    func uninstall(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        allowForceRemove: Bool = false
+    ) async -> UninstallValidationReport {
+        await service.uninstall(app: app, previewItems: previewItems, allowForceRemove: allowForceRemove)
     }
 
     func uninstallAndVerify(
         app: InstalledApp,
         previewItems: [UninstallPreviewItem],
         mode: UninstallMode,
+        allowForceRemove: Bool,
         isProtectedPath: (String) -> Bool,
         isAppRunning: Bool
     ) async -> UninstallExecutionResult {
-        let validation = await service.uninstall(app: app, previewItems: previewItems)
+        let validation = await service.uninstall(
+            app: app,
+            previewItems: previewItems,
+            allowForceRemove: allowForceRemove
+        )
         let remaining = await service.findRemnants(for: app, mode: mode)
         let startupReferences = await service.findStartupReferences(for: app)
         let verifyReport = planner.buildVerifyReport(

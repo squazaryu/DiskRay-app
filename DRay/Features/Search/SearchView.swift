@@ -259,6 +259,11 @@ struct SearchView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            if let validationMessage = model.search.validationMessage {
+                Label(localizedSearchValidationMessage(validationMessage), systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -1029,6 +1034,13 @@ struct SearchView: View {
         case .deep:
             return t("Deep", "Deep")
         }
+    }
+
+    private func localizedSearchValidationMessage(_ message: String) -> String {
+        if message == LiveSearchValidationError.invalidRegularExpression.message {
+            return t("Некорректное регулярное выражение", "Invalid regular expression")
+        }
+        return message
     }
 
     private func localizedSortTitle(_ sort: SearchResultSort) -> String {

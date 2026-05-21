@@ -26,12 +26,13 @@ struct UninstallPlanningUseCase {
         remaining: [AppRemnant],
         startupReferences: [UninstallStartupReference] = [],
         isProtectedPath: (String) -> Bool,
-        isAppRunning: Bool
+        isAppRunning: Bool,
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     ) -> UninstallVerifyReport {
         let attemptedPaths = Set(previewItems.map { $0.url.path })
         let actionByPath = Dictionary(uniqueKeysWithValues: (validation?.results ?? []).map { ($0.url.path, $0) })
 
-        let issues = remaining.map { remnant in
+        var issues = remaining.map { remnant in
             let path = remnant.url.path
             let risk = previewItem(for: remnant).risk
             let reason: String
@@ -68,6 +69,48 @@ struct UninstallPlanningUseCase {
                 risk: risk
             )
         }
+        var issuePaths = Set(issues.map { $0.url.standardizedFileURL.path })
+
+        for previewItem in previewItems {
+            let path = previewItem.url.standardizedFileURL.path
+            guard !issuePaths.contains(path), fileExists(path) else { continue }
+            let action = actionByPath[previewItem.url.path] ?? actionByPath[path]
+            let reason = unresolvedActionReason(
+                for: action,
+                previewItem: previewItem,
+                isProtectedPath: isProtectedPath,
+                isAppRunning: isAppRunning
+            )
+            issues.append(
+                UninstallVerifyIssue(
+                    url: URL(fileURLWithPath: path),
+                    sizeInBytes: previewItem.sizeInBytes,
+                    reason: reason,
+                    risk: previewItem.risk
+                )
+            )
+            issuePaths.insert(path)
+        }
+
+        for action in validation?.results ?? [] {
+            let path = action.url.standardizedFileURL.path
+            guard !issuePaths.contains(path), fileExists(path) else { continue }
+            let risk = previewItems.first { $0.url.standardizedFileURL.path == path }?.risk ?? riskForAction(action)
+            issues.append(
+                UninstallVerifyIssue(
+                    url: URL(fileURLWithPath: path),
+                    sizeInBytes: 0,
+                    reason: unresolvedActionReason(
+                        for: action,
+                        previewItem: nil,
+                        isProtectedPath: isProtectedPath,
+                        isAppRunning: isAppRunning
+                    ),
+                    risk: risk
+                )
+            )
+            issuePaths.insert(path)
+        }
 
         return UninstallVerifyReport(
             appName: app.name,
@@ -77,6 +120,68 @@ struct UninstallPlanningUseCase {
             remaining: issues.sorted { $0.sizeInBytes > $1.sizeInBytes },
             startupReferences: startupReferences
         )
+    }
+
+    private func unresolvedActionReason(
+        for action: UninstallActionResult?,
+        previewItem: UninstallPreviewItem?,
+        isProtectedPath: (String) -> Bool,
+        isAppRunning: Bool
+    ) -> String {
+        let path = action?.url.path ?? previewItem?.url.path ?? ""
+        if let action {
+            switch action.status {
+            case .removed:
+                let method = action.removalMethod.map(removalMethodTitle) ?? "remove call"
+                return isAppRunning
+                    ? "Still present after \(method); a running app/helper may have recreated it."
+                    : "Still present after \(method); retry cleanup or use Remaining for manual/admin cleanup."
+            case .skippedProtected:
+                return "Skipped: system-protected path (SIP/TCC)."
+            case .missing:
+                return "Path was reported missing during uninstall but exists again after verification."
+            case .failed:
+                return failedRemovalReason(for: action, path: path)
+            }
+        }
+        if isProtectedPath(path) {
+            return "System-protected path (SIP/TCC)."
+        }
+        if isAppRunning {
+            return "Application is still running and may recreate this item."
+        }
+        return "Selected item remains after uninstall verification."
+    }
+
+    private func removalMethodTitle(_ method: UninstallRemovalMethod) -> String {
+        switch method {
+        case .removedByStandardTrash:
+            return "standard Trash"
+        case .removedByFinderRecycle:
+            return "Finder recycle"
+        case .removedByAdminTrash:
+            return "admin Trash"
+        case .forceRemovedByAdmin:
+            return "admin Force Remove"
+        case .skippedProtected:
+            return "protected skip"
+        case .missing:
+            return "missing-path check"
+        case .failed:
+            return "failed remove attempt"
+        }
+    }
+
+    private func riskForAction(_ action: UninstallActionResult) -> UninstallRiskLevel {
+        switch action.type {
+        case .appBundle:
+            return .high
+        case .remnant:
+            return action.url.path.contains("/Library/LaunchDaemons")
+                || action.url.path.contains("/Library/PrivilegedHelperTools")
+                ? .high
+                : .medium
+        }
     }
 
     private func failedRemovalReason(for action: UninstallActionResult, path: String) -> String {

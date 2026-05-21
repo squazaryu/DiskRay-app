@@ -20,8 +20,25 @@ struct LiveSearchRequest: Sendable {
     let limit: Int
 }
 
+enum LiveSearchValidationError: Error, Equatable, Sendable {
+    case invalidRegularExpression
+
+    var message: String {
+        switch self {
+        case .invalidRegularExpression:
+            return "Invalid regular expression"
+        }
+    }
+}
+
 actor LiveSearchService {
-    func search(_ request: LiveSearchRequest) -> [FileNode] {
+    private let commandRunner: SystemCommandRunner
+
+    init(commandRunner: SystemCommandRunner = .live) {
+        self.commandRunner = commandRunner
+    }
+
+    func search(_ request: LiveSearchRequest) async throws -> [FileNode] {
         let rootURL = request.rootURL
         let started = rootURL.startAccessingSecurityScopedResource()
         defer {
@@ -29,7 +46,7 @@ actor LiveSearchService {
         }
 
         if request.mode == .live, !request.useRegex {
-            if let indexedResults = indexedSearch(request) {
+            if let indexedResults = try await indexedSearch(request) {
                 if !indexedResults.isEmpty || !shouldFallbackToEnumerator(afterEmptyIndexedFor: request) {
                     return indexedResults
                 }
@@ -37,17 +54,17 @@ actor LiveSearchService {
                 if request.rootURL.standardizedFileURL.path == "/" {
                     return []
                 }
-                return enumeratorSearch(request)
+                return try enumeratorSearch(request)
             }
         }
 
-        return enumeratorSearch(request)
+        return try enumeratorSearch(request)
     }
 
-    private func indexedSearch(_ request: LiveSearchRequest) -> [FileNode]? {
+    private func indexedSearch(_ request: LiveSearchRequest) async throws -> [FileNode]? {
         let fm = FileManager.default
-        let context = makeFilterContext(for: request)
-        guard let candidatePaths = mdfindPaths(for: request) else {
+        let context = try makeFilterContext(for: request)
+        guard let candidatePaths = await mdfindPaths(for: request) else {
             return nil
         }
         if candidatePaths.isEmpty {
@@ -75,8 +92,8 @@ actor LiveSearchService {
         return results.sorted { $0.sizeInBytes > $1.sizeInBytes }
     }
 
-    private func enumeratorSearch(_ request: LiveSearchRequest) -> [FileNode] {
-        let context = makeFilterContext(for: request)
+    private func enumeratorSearch(_ request: LiveSearchRequest) throws -> [FileNode] {
+        let context = try makeFilterContext(for: request)
         let fm = FileManager.default
 
         var options: FileManager.DirectoryEnumerationOptions = []
@@ -189,8 +206,17 @@ actor LiveSearchService {
         let rootComponents: Int
     }
 
-    private func makeFilterContext(for request: LiveSearchRequest) -> FilterContext {
-        let regex = request.useRegex ? (try? NSRegularExpression(pattern: request.query, options: [.caseInsensitive])) : nil
+    private func makeFilterContext(for request: LiveSearchRequest) throws -> FilterContext {
+        let regex: NSRegularExpression?
+        if request.useRegex {
+            do {
+                regex = try NSRegularExpression(pattern: request.query, options: [.caseInsensitive])
+            } catch {
+                throw LiveSearchValidationError.invalidRegularExpression
+            }
+        } else {
+            regex = nil
+        }
         let cutoff: Date? = request.modifiedWithinDays.map {
             Calendar.current.date(byAdding: .day, value: -$0, to: Date()) ?? .distantPast
         }
@@ -202,10 +228,7 @@ actor LiveSearchService {
         )
     }
 
-    private func mdfindPaths(for request: LiveSearchRequest) -> [String]? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-
+    private func mdfindPaths(for request: LiveSearchRequest) async -> [String]? {
         let rootPath = request.rootURL.standardizedFileURL.path
         let query = request.query.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidateBudget = max(request.limit * 6, request.limit + 256)
@@ -220,24 +243,15 @@ actor LiveSearchService {
         } else {
             arguments.append(contentsOf: ["-name", query])
         }
-        process.arguments = arguments
-
-        let output = Pipe()
-        let errorOutput = Pipe()
-        process.standardOutput = output
-        process.standardError = errorOutput
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                return nil
-            }
-            let data = output.fileHandleForReading.readDataToEndOfFile()
-            return splitNullSeparatedPaths(data, limit: candidateBudget)
-        } catch {
+        let result = await commandRunner.run(
+            executablePath: "/usr/bin/mdfind",
+            arguments: arguments,
+            timeoutSeconds: 8
+        )
+        guard result.succeeded, let data = result.stdout.data(using: .utf8) else {
             return nil
         }
+        return splitNullSeparatedPaths(data, limit: candidateBudget)
     }
 
     private func splitNullSeparatedPaths(_ data: Data, limit: Int) -> [String] {

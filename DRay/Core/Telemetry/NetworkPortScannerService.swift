@@ -12,17 +12,9 @@ struct NetworkPortScanSummary: Sendable {
 }
 
 actor NetworkPortScannerService {
-    struct CommandResult: Sendable {
-        let status: Int32
-        let stdout: String
-        let stderr: String
-    }
+    private let commandRunner: SystemCommandRunner
 
-    typealias CommandRunner = @Sendable (_ launchPath: String, _ arguments: [String]) -> CommandResult
-
-    private let commandRunner: CommandRunner
-
-    init(commandRunner: @escaping CommandRunner = NetworkPortScannerService.defaultCommandRunner) {
+    init(commandRunner: SystemCommandRunner = .live) {
         self.commandRunner = commandRunner
     }
 
@@ -44,6 +36,18 @@ actor NetworkPortScannerService {
                 measuredAt: Date(),
                 durationSeconds: 0,
                 errorMessage: "Host is empty."
+            )
+        }
+        guard Self.isValidHost(normalizedHost) else {
+            return NetworkPortScanSummary(
+                host: normalizedHost,
+                startPort: startPort,
+                endPort: endPort,
+                scannedCount: 0,
+                openPorts: [],
+                measuredAt: Date(),
+                durationSeconds: 0,
+                errorMessage: "Host is invalid."
             )
         }
 
@@ -76,7 +80,7 @@ actor NetworkPortScannerService {
             for _ in 0..<min(concurrency, ports.count) {
                 guard let port = iterator.next() else { break }
                 group.addTask {
-                    let isOpen = Self.scanSinglePort(
+                    let isOpen = await Self.scanSinglePort(
                         runner: runner,
                         host: normalizedHost,
                         port: port,
@@ -92,7 +96,7 @@ actor NetworkPortScannerService {
                 }
                 if let nextPort = iterator.next() {
                     group.addTask {
-                        let open = Self.scanSinglePort(
+                        let open = await Self.scanSinglePort(
                             runner: runner,
                             host: normalizedHost,
                             port: nextPort,
@@ -118,40 +122,25 @@ actor NetworkPortScannerService {
     }
 
     private nonisolated static func scanSinglePort(
-        runner: CommandRunner,
+        runner: SystemCommandRunner,
         host: String,
         port: Int,
         timeoutSeconds: Int
-    ) -> Bool {
-        let result = runner(
-            "/usr/bin/nc",
-            ["-z", "-w", String(timeoutSeconds), host, String(port)]
+    ) async -> Bool {
+        let result = await runner.run(
+            executablePath: "/usr/bin/nc",
+            arguments: ["-z", "-w", String(timeoutSeconds), host, String(port)],
+            timeoutSeconds: Double(timeoutSeconds + 1)
         )
-        return result.status == 0
+        return result.succeeded
     }
 
-    nonisolated private static func defaultCommandRunner(_ launchPath: String, _ arguments: [String]) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-
-        do {
-            try process.run()
-        } catch {
-            return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
+    nonisolated private static func isValidHost(_ host: String) -> Bool {
+        guard host.count <= 253 else { return false }
+        guard !host.contains(where: { $0.isWhitespace }) else { return false }
+        guard !host.hasPrefix("-"), !host.hasSuffix("-") else { return false }
+        return host.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "." || character == "-" || character == ":"
         }
-
-        let outputData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        let stdout = String(data: outputData, encoding: .utf8) ?? ""
-        let stderr = String(data: errorData, encoding: .utf8) ?? ""
-        return CommandResult(status: process.terminationStatus, stdout: stdout, stderr: stderr)
     }
 }

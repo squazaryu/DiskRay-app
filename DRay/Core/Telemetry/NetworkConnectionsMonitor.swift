@@ -70,24 +70,16 @@ struct NetworkConnectionsSnapshot: Sendable {
 
 @MainActor
 final class NetworkConnectionsMonitor: ObservableObject {
-    struct CommandResult: Sendable {
-        let status: Int32
-        let stdout: String
-        let stderr: String
-    }
-
-    typealias CommandRunner = @Sendable (_ launchPath: String, _ arguments: [String]) -> CommandResult
-
     @Published private(set) var snapshot: NetworkConnectionsSnapshot = .empty
 
     private let sampleInterval: TimeInterval
-    private let commandRunner: CommandRunner
+    private let commandRunner: SystemCommandRunner
     private var timer: Timer?
     private var sampleTask: Task<Void, Never>?
 
     init(
         sampleInterval: TimeInterval = 2.2,
-        commandRunner: @escaping CommandRunner = NetworkConnectionsMonitor.defaultCommandRunner
+        commandRunner: SystemCommandRunner = .live
     ) {
         self.sampleInterval = max(1.0, sampleInterval)
         self.commandRunner = commandRunner
@@ -96,14 +88,13 @@ final class NetworkConnectionsMonitor: ObservableObject {
     func start() {
         guard timer == nil else { return }
         refreshNow()
-        timer = Timer.scheduledTimer(withTimeInterval: sampleInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: sampleInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshNow()
             }
         }
-        if let timer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func stop() {
@@ -116,23 +107,30 @@ final class NetworkConnectionsMonitor: ObservableObject {
     func refreshNow() {
         sampleTask?.cancel()
         sampleTask = Task { [commandRunner] in
-            let sampled = await Task.detached(priority: .utility) {
-                Self.collectSnapshot(commandRunner: commandRunner)
-            }.value
+            let sampled = await Self.collectSnapshot(commandRunner: commandRunner)
             guard !Task.isCancelled else { return }
             snapshot = sampled
         }
     }
 
-    nonisolated private static func collectSnapshot(commandRunner: CommandRunner) -> NetworkConnectionsSnapshot {
+    nonisolated static func collectSnapshot(commandRunner: SystemCommandRunner) async -> NetworkConnectionsSnapshot {
         let now = Date()
-        let run = commandRunner(
-            "/usr/bin/nettop",
-            ["-L", "1", "-n", "-J", "interface,state,bytes_in,bytes_out"]
+        let run = await commandRunner.run(
+            executablePath: "/usr/bin/nettop",
+            arguments: ["-L", "1", "-n", "-J", "interface,state,bytes_in,bytes_out"],
+            timeoutSeconds: 6
         )
 
-        guard run.status == 0 else {
+        guard run.succeeded else {
             let message = run.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallbackMessage: String
+            if run.timedOut {
+                fallbackMessage = "nettop timed out"
+            } else if run.wasCancelled {
+                fallbackMessage = "nettop cancelled"
+            } else {
+                fallbackMessage = "nettop failed (\(run.exitCode))"
+            }
             return NetworkConnectionsSnapshot(
                 collectedAt: now,
                 totalConnections: 0,
@@ -148,14 +146,14 @@ final class NetworkConnectionsMonitor: ObservableObject {
                 serviceToPrograms: [:],
                 programToHosts: [:],
                 programToServices: [:],
-                sampleError: message.isEmpty ? "nettop failed (\(run.status))" : message
+                sampleError: message.isEmpty ? fallbackMessage : message
             )
         }
 
         return parseSnapshot(stdout: run.stdout, sampledAt: now)
     }
 
-    nonisolated private static func parseSnapshot(stdout: String, sampledAt: Date) -> NetworkConnectionsSnapshot {
+    nonisolated static func parseSnapshot(stdout: String, sampledAt: Date) -> NetworkConnectionsSnapshot {
         var currentProgram = "Unknown"
         var tcpConnections = 0
         var udpConnections = 0
@@ -402,7 +400,7 @@ final class NetworkConnectionsMonitor: ObservableObject {
         return ParsedEndpoint(host: host, port: port)
     }
 
-    nonisolated private static func normalizedProgramName(_ descriptor: String) -> String {
+    nonisolated static func normalizedProgramName(_ descriptor: String) -> String {
         let trimmed = descriptor.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "Unknown" }
         if let dotIndex = trimmed.lastIndex(of: ".") {
@@ -417,7 +415,7 @@ final class NetworkConnectionsMonitor: ObservableObject {
         return trimmed
     }
 
-    nonisolated private static func isLikelyGeolocatableHost(_ host: String) -> Bool {
+    nonisolated static func isLikelyGeolocatableHost(_ host: String) -> Bool {
         let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty, normalized != "*", normalized != "localhost" else { return false }
 
@@ -502,32 +500,6 @@ final class NetworkConnectionsMonitor: ObservableObject {
         8443: "https-alt"
     ]
 
-    nonisolated private static func defaultCommandRunner(_ launchPath: String, _ arguments: [String]) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-        } catch {
-            return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
-        }
-
-        let output = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let error = errorPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        return CommandResult(
-            status: process.terminationStatus,
-            stdout: String(data: output, encoding: .utf8) ?? "",
-            stderr: String(data: error, encoding: .utf8) ?? ""
-        )
-    }
 }
 
 private struct TrafficAccumulator {

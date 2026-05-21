@@ -628,7 +628,7 @@ actor NetworkGeolocationResolver {
         var request = URLRequest(url: url)
         request.timeoutInterval = 6
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("DRay/2.1.2", forHTTPHeaderField: "User-Agent")
+        request.setValue("DRay/2.1.3", forHTTPHeaderField: "User-Agent")
 
         do {
             let (data, response) = try await session.data(for: request)

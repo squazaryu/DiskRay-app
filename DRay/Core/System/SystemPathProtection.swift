@@ -14,7 +14,6 @@ enum SystemPathProtection {
     ]
 
     static func isProtected(_ path: String) -> Bool {
-        if path == "/" { return true }
-        return protectedPrefixes.contains { path == $0 || path.hasPrefix($0 + "/") }
+        PathSafetyPolicy.isProtected(path)
     }
 }

@@ -32,6 +32,16 @@ enum UninstallActionStatus: String, Codable, Sendable {
     case failed
 }
 
+enum UninstallRemovalMethod: String, Codable, Sendable {
+    case removedByStandardTrash
+    case removedByFinderRecycle
+    case removedByAdminTrash
+    case forceRemovedByAdmin
+    case skippedProtected
+    case missing
+    case failed
+}
+
 enum UninstallFailureCategory: String, Codable, Sendable {
     case permissionDenied
     case appStoreManaged
@@ -53,6 +63,7 @@ struct UninstallActionResult: Identifiable, Codable, Sendable {
     let details: String?
     let failureCategory: UninstallFailureCategory?
     let remediationHint: String?
+    let removalMethod: UninstallRemovalMethod?
 
     init(
         url: URL,
@@ -61,7 +72,8 @@ struct UninstallActionResult: Identifiable, Codable, Sendable {
         trashedPath: String?,
         details: String?,
         failureCategory: UninstallFailureCategory? = nil,
-        remediationHint: String? = nil
+        remediationHint: String? = nil,
+        removalMethod: UninstallRemovalMethod? = nil
     ) {
         self.url = url
         self.type = type
@@ -70,10 +82,24 @@ struct UninstallActionResult: Identifiable, Codable, Sendable {
         self.details = details
         self.failureCategory = failureCategory
         self.remediationHint = remediationHint
+        self.removalMethod = removalMethod ?? Self.defaultRemovalMethod(for: status)
     }
 
     enum CodingKeys: String, CodingKey {
-        case url, type, status, trashedPath, details, failureCategory, remediationHint
+        case url, type, status, trashedPath, details, failureCategory, remediationHint, removalMethod
+    }
+
+    private static func defaultRemovalMethod(for status: UninstallActionStatus) -> UninstallRemovalMethod? {
+        switch status {
+        case .removed:
+            return nil
+        case .skippedProtected:
+            return .skippedProtected
+        case .missing:
+            return .missing
+        case .failed:
+            return .failed
+        }
     }
 }
 

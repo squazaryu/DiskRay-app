@@ -69,7 +69,8 @@ if [[ -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRayDark.icns"
 fi
 
-# Closed-app default icon. Runtime switches only the running app Dock icon.
+# Closed-app default icon. The menu bar helper keeps this bundle resource synced
+# with system appearance while DRay is closed to the menu bar.
 if [[ "$ICON_THEME" == "dark" && -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
 elif [[ "$ICON_THEME" == "light" && -f "assets/DRayLight.icns" ]]; then

@@ -24,6 +24,12 @@ struct PerformanceView: View {
     @State var networkDataRepresentation: NetworkDataRepresentation = .bytes
     @State var networkHistory: [NetworkHistoryPoint] = []
     @State var networkSubscreen: NetworkWorkspaceSubscreen = .overview
+    @AppStorage("dray.network.resolveLocations") var persistedNetworkResolveLocations = true
+    @AppStorage("dray.network.dataRepresentation") var persistedNetworkDataRepresentation = NetworkDataRepresentation.bytes.rawValue
+    @AppStorage("dray.network.portScanner.host") var persistedPortScannerHost = "127.0.0.1"
+    @AppStorage("dray.network.portScanner.startPort") var persistedPortScannerStartPort = "1"
+    @AppStorage("dray.network.portScanner.endPort") var persistedPortScannerEndPort = "1024"
+    @State var didRestoreNetworkWorkspacePreferences = false
     @State var selectedNetworkHostID: String?
     @State var selectedNetworkServiceID: String?
     @State var selectedNetworkProgramID: String?
@@ -93,6 +99,7 @@ struct PerformanceView: View {
             Text(reliefResultMessage ?? "")
         }
         .onAppear {
+            restoreNetworkWorkspacePreferences()
             monitor.start()
             networkConnectionsMonitor.start()
             networkGeolocationMonitor.start()
@@ -141,8 +148,21 @@ struct PerformanceView: View {
             appendNetworkHistory(result)
         }
         .onChange(of: networkDataRepresentation) {
+            persistedNetworkDataRepresentation = networkDataRepresentation.rawValue
             networkRateHistory.removeAll()
             appendNetworkRatePoint(from: monitor.snapshot)
+        }
+        .onChange(of: networkGeolocationMonitor.resolveEnabled) {
+            persistedNetworkResolveLocations = networkGeolocationMonitor.resolveEnabled
+        }
+        .onChange(of: portScannerHost) {
+            persistedPortScannerHost = portScannerHost
+        }
+        .onChange(of: portScannerStartPort) {
+            persistedPortScannerStartPort = portScannerStartPort
+        }
+        .onChange(of: portScannerEndPort) {
+            persistedPortScannerEndPort = portScannerEndPort
         }
         .onChange(of: workspaceTab) {
             refreshNetworkToolsMonitoring()
@@ -154,6 +174,45 @@ struct PerformanceView: View {
             let valid = Set(startupEntries.map { $0.url.path })
             selectedPaths = selectedPaths.intersection(valid)
         }
+    }
+
+    private func restoreNetworkWorkspacePreferences() {
+        guard !didRestoreNetworkWorkspacePreferences else { return }
+        didRestoreNetworkWorkspacePreferences = true
+
+        if let representation = NetworkDataRepresentation(rawValue: persistedNetworkDataRepresentation) {
+            networkDataRepresentation = representation
+        } else {
+            networkDataRepresentation = .bytes
+            persistedNetworkDataRepresentation = NetworkDataRepresentation.bytes.rawValue
+        }
+
+        networkGeolocationMonitor.resolveEnabled = persistedNetworkResolveLocations
+
+        let host = persistedPortScannerHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        portScannerHost = host.isEmpty ? "127.0.0.1" : persistedPortScannerHost
+
+        let startPort = validatedPortScannerText(persistedPortScannerStartPort, fallback: "1")
+        let endPort = validatedPortScannerText(persistedPortScannerEndPort, fallback: "1024")
+        if let start = Int(startPort), let end = Int(endPort), start <= end {
+            portScannerStartPort = startPort
+            portScannerEndPort = endPort
+        } else {
+            portScannerStartPort = "1"
+            portScannerEndPort = "1024"
+        }
+
+        persistedPortScannerHost = portScannerHost
+        persistedPortScannerStartPort = portScannerStartPort
+        persistedPortScannerEndPort = portScannerEndPort
+    }
+
+    private func validatedPortScannerText(_ rawValue: String, fallback: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let port = Int(trimmed), (1...65_535).contains(port) else {
+            return fallback
+        }
+        return trimmed
     }
 
     private var header: some View {

@@ -68,6 +68,22 @@ struct SmartCareUseCaseTests {
         #expect(selectedKeys(in: aggressive) == ["safe-low", "safe-medium", "unsafe-low"])
     }
 
+    @Test
+    func cleanupModelsUseStableIDsForRescanDiffing() {
+        let rawURL = URL(fileURLWithPath: "/tmp/dray/../dray/cache.db")
+        let firstItem = CleanupItem(url: rawURL, sizeInBytes: 10)
+        let secondItem = CleanupItem(url: rawURL.standardizedFileURL, sizeInBytes: 20)
+
+        #expect(firstItem.id == secondItem.id)
+        #expect(firstItem.id == rawURL.standardizedFileURL.path)
+
+        let firstCategory = makeCategory(key: "user_caches", safe: true, risk: .low)
+        let secondCategory = makeCategory(key: "user_caches", safe: false, risk: .medium)
+
+        #expect(firstCategory.id == "user_caches")
+        #expect(firstCategory.id == secondCategory.id)
+    }
+
     private func selectedKeys(in categories: [SmartCategoryState]) -> [String] {
         categories.filter(\.isSelected).map(\.id).sorted()
     }

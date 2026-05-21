@@ -121,22 +121,14 @@ final class NetworkLatencyMonitor: ObservableObject {
 }
 
 actor NetworkLatencyProbeService {
-    struct CommandResult: Sendable {
-        let status: Int32
-        let stdout: String
-        let stderr: String
-    }
-
-    typealias CommandRunner = @Sendable (_ launchPath: String, _ arguments: [String]) -> CommandResult
-
-    private let commandRunner: CommandRunner
+    private let commandRunner: SystemCommandRunner
     private let packetsPerProbe: Int
     private let packetWaitMillis: Int
 
     init(
         packetsPerProbe: Int = 3,
         packetWaitMillis: Int = 800,
-        commandRunner: @escaping CommandRunner = NetworkLatencyProbeService.defaultCommandRunner
+        commandRunner: SystemCommandRunner = .live
     ) {
         self.packetsPerProbe = max(1, packetsPerProbe)
         self.packetWaitMillis = max(100, packetWaitMillis)
@@ -147,6 +139,7 @@ actor NetworkLatencyProbeService {
         let runner = commandRunner
         let countArg = String(packetsPerProbe)
         let waitArg = String(packetWaitMillis)
+        let commandTimeoutSeconds = Double(max(2, (packetWaitMillis * packetsPerProbe) / 1_000 + 2))
 
         let measuredAt = Date()
         let order = Dictionary(uniqueKeysWithValues: targets.enumerated().map { ($0.element.id, $0.offset) })
@@ -157,9 +150,10 @@ actor NetworkLatencyProbeService {
         await withTaskGroup(of: NetworkLatencyProbeSample.self) { group in
             for target in targets {
                 group.addTask {
-                    let run = runner(
-                        "/sbin/ping",
-                        ["-q", "-n", "-c", countArg, "-W", waitArg, target.host]
+                    let run = await runner.run(
+                        executablePath: "/sbin/ping",
+                        arguments: ["-q", "-n", "-c", countArg, "-W", waitArg, target.host],
+                        timeoutSeconds: commandTimeoutSeconds
                     )
 
                     let mergedOutput = run.stdout + "\n" + run.stderr
@@ -168,12 +162,16 @@ actor NetworkLatencyProbeService {
                     let textError = run.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     let errorMessage: String?
-                    if run.status == 0 || packetLoss != nil {
+                    if run.succeeded || packetLoss != nil {
                         errorMessage = nil
+                    } else if run.timedOut {
+                        errorMessage = "Ping timed out for \(target.host)"
+                    } else if run.wasCancelled {
+                        errorMessage = "Ping cancelled for \(target.host)"
                     } else if !textError.isEmpty {
                         errorMessage = textError
                     } else {
-                        errorMessage = "Ping failed for \(target.host) (status \(run.status))"
+                        errorMessage = "Ping failed for \(target.host) (status \(run.exitCode))"
                     }
 
                     return NetworkLatencyProbeSample(
@@ -197,7 +195,7 @@ actor NetworkLatencyProbeService {
         return rows
     }
 
-    private nonisolated static func extractPacketLossPercent(from output: String) -> Double? {
+    nonisolated static func extractPacketLossPercent(from output: String) -> Double? {
         for rawLine in output.split(separator: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard line.contains("% packet loss"),
@@ -211,7 +209,7 @@ actor NetworkLatencyProbeService {
         return nil
     }
 
-    private nonisolated static func extractAverageLatencyMs(from output: String) -> Double? {
+    nonisolated static func extractAverageLatencyMs(from output: String) -> Double? {
         for rawLine in output.split(separator: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard line.contains("min/avg/max"),
@@ -226,33 +224,4 @@ actor NetworkLatencyProbeService {
         return nil
     }
 
-    nonisolated private static func defaultCommandRunner(_ launchPath: String, _ arguments: [String]) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = arguments
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-
-        do {
-            try process.run()
-        } catch {
-            return CommandResult(status: 1, stdout: "", stderr: error.localizedDescription)
-        }
-
-        let outputData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        let stdout = String(data: outputData, encoding: .utf8) ?? ""
-        let stderr = String(data: errorData, encoding: .utf8) ?? ""
-
-        return CommandResult(
-            status: process.terminationStatus,
-            stdout: stdout,
-            stderr: stderr
-        )
-    }
 }

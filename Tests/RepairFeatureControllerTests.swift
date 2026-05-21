@@ -148,7 +148,11 @@ private actor RepairControllerServiceStub: UninstallerServicing {
         remnants
     }
 
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
+    func uninstall(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        allowForceRemove: Bool
+    ) async -> UninstallValidationReport {
         validation
     }
 }

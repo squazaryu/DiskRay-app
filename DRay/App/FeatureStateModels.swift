@@ -26,6 +26,7 @@ struct SearchFeatureState {
     var includePackageContents = true
     var isLiveRunning = false
     var liveResults: [FileNode] = []
+    var validationMessage: String?
     var presets: [SearchPreset] = []
 
     var results: [FileNode] {

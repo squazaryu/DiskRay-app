@@ -7,14 +7,16 @@ enum CleanupRiskLevel: String, Codable, Sendable {
 }
 
 struct CleanupItem: Identifiable, Hashable, Sendable {
-    let id = UUID()
+    let id: String
     let url: URL
     let sizeInBytes: Int64
     let confidenceScore: Double
     let explainability: String
 
     init(url: URL, sizeInBytes: Int64, confidenceScore: Double = 0.7, explainability: String = "Matched analyzer cleanup rules.") {
-        self.url = url
+        let standardizedURL = url.standardizedFileURL
+        self.id = standardizedURL.path
+        self.url = standardizedURL
         self.sizeInBytes = sizeInBytes
         self.confidenceScore = confidenceScore
         self.explainability = explainability
@@ -24,7 +26,7 @@ struct CleanupItem: Identifiable, Hashable, Sendable {
 }
 
 struct CleanupCategoryResult: Identifiable, Hashable, Sendable {
-    let id = UUID()
+    let id: String
     let key: String
     let title: String
     let description: String
@@ -46,6 +48,7 @@ struct CleanupCategoryResult: Identifiable, Hashable, Sendable {
         explainability: String = "Category selected by analyzer based on age/path heuristics.",
         items: [CleanupItem]
     ) {
+        self.id = key
         self.key = key
         self.title = title
         self.description = description

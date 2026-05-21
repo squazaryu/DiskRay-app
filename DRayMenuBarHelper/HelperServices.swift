@@ -182,13 +182,131 @@ struct DRayMainBridge {
 final class AppBundleIconThemeSynchronizer {
     static let shared = AppBundleIconThemeSynchronizer()
 
+    private var appBundleURL: URL?
+    private var themeObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+    private var lastAppliedDarkIcon: Bool?
+
     private init() {}
 
-    // Intentionally left as a no-op. Updating Finder icons for the .app bundle from
-    // helper/runtime code can cause stale folder-like icon state in Dock/Finder.
-    func start(appPath _: String) {}
-    func stop() {}
-    func applyCurrentThemeIcon(force _: Bool) {}
+    func start(appPath: String) {
+        stop()
+        let url = URL(fileURLWithPath: appPath)
+        guard url.pathExtension == "app" else { return }
+        appBundleURL = url
+
+        themeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.applyCurrentThemeIcon(force: true)
+            }
+        }
+
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.applyCurrentThemeIcon(force: true)
+            }
+        }
+
+        applyCurrentThemeIcon(force: true)
+    }
+
+    func stop() {
+        if let themeObserver {
+            DistributedNotificationCenter.default().removeObserver(themeObserver)
+            self.themeObserver = nil
+        }
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
+        appBundleURL = nil
+        lastAppliedDarkIcon = nil
+    }
+
+    func applyCurrentThemeIcon(force: Bool) {
+        guard let appBundleURL else { return }
+        let useDarkIcon = Self.systemThemeIsDark()
+        guard force || lastAppliedDarkIcon != useDarkIcon else { return }
+
+        let resourcesURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Resources", isDirectory: true)
+        let sourceName = useDarkIcon ? "DRayDark" : "DRayLight"
+        let sourceURL = resourcesURL.appendingPathComponent("\(sourceName).icns")
+        let destinationURL = resourcesURL.appendingPathComponent("DRay.icns")
+
+        do {
+            try synchronizeIconResource(from: sourceURL, to: destinationURL, appBundleURL: appBundleURL, force: force)
+            lastAppliedDarkIcon = useDarkIcon
+        } catch {
+            // Best-effort only: a read-only app bundle should not break the helper.
+        }
+    }
+
+    private func synchronizeIconResource(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        appBundleURL: URL,
+        force: Bool
+    ) throws {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: sourceURL.path) else { return }
+
+        let desiredData = try Data(contentsOf: sourceURL)
+        if !force,
+           let currentData = try? Data(contentsOf: destinationURL),
+           currentData == desiredData {
+            return
+        }
+
+        let temporaryURL = destinationURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(".DRay.icns.\(UUID().uuidString)")
+        try desiredData.write(to: temporaryURL, options: .atomic)
+
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            _ = try fileManager.replaceItemAt(
+                destinationURL,
+                withItemAt: temporaryURL,
+                backupItemName: nil,
+                options: []
+            )
+        } else {
+            try fileManager.moveItem(at: temporaryURL, to: destinationURL)
+        }
+
+        touch(appBundleURL)
+        touch(appBundleURL.appendingPathComponent("Contents/Info.plist", isDirectory: false))
+        NSWorkspace.shared.noteFileSystemChanged(appBundleURL.path)
+    }
+
+    private func touch(_ url: URL) {
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+    }
+
+    private static func systemThemeIsDark() -> Bool {
+        if let style = UserDefaults.standard
+            .persistentDomain(forName: UserDefaults.globalDomain)?["AppleInterfaceStyle"] as? String {
+            return style.caseInsensitiveCompare("Dark") == .orderedSame
+        }
+
+        if let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") {
+            return style.caseInsensitiveCompare("Dark") == .orderedSame
+        }
+
+        if let match = NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) {
+            return match == .darkAqua
+        }
+        return false
+    }
 }
 
 struct LoadReliefResult {

@@ -9,7 +9,7 @@
 
 Current release example:
 ```bash
-./scripts/package_release.sh 2.1.2 48
+./scripts/package_release.sh 2.1.3 1
 ```
 
 2. Optional signed + notarized release:
@@ -40,11 +40,11 @@ gh release create v2.0.0 \
 
 For the current channel:
 ```bash
-gh release create v2.1.2 \
-  dist/DRay-2.1.2.zip \
-  dist/DRay-2.1.2.dmg \
-  --title "DRay 2.1.2" \
-  --notes-file docs/releases/2.1.2.md
+gh release create v2.1.3 \
+  dist/DRay-2.1.3.zip \
+  dist/DRay-2.1.3.dmg \
+  --title "DRay 2.1.3" \
+  --notes-file docs/releases/2.1.3.md
 ```
 
 ## CI Release

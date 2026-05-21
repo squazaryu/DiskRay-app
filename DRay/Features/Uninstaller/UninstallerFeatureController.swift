@@ -186,6 +186,7 @@ final class UninstallerFeatureController: ObservableObject {
                 app: app,
                 previewItems: items,
                 mode: state.uninstallMode,
+                allowForceRemove: state.experimentalElevatedDeletionEnabled,
                 isProtectedPath: { path in
                     safeFileOperations.isProtectedPath(path)
                 },

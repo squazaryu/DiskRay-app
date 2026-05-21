@@ -2,7 +2,6 @@ import Foundation
 
 actor SmartScanService: SmartCareServicing {
     private let analyzers: [CleanupAnalyzer]
-    private let protectedPathPrefixes = ["/System", "/Library", "/bin", "/sbin", "/usr", "/private/var", "/private/etc"]
 
     init(analyzers: [CleanupAnalyzer] = [
         UserLogsAnalyzer(),
@@ -86,7 +85,7 @@ actor SmartScanService: SmartCareServicing {
 
         for (index, item) in candidates.enumerated() {
             let path = item.url.path
-            if protectedPathPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
+            if PathSafetyPolicy.shouldSkipForSafeCleanup(path) {
                 failed += 1
                 if let onProgress {
                     await onProgress(

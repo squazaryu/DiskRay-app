@@ -60,6 +60,7 @@ struct UninstallerUseCaseTests {
             app: app,
             previewItems: previewItems,
             mode: .standard,
+            allowForceRemove: false,
             isProtectedPath: { _ in false },
             isAppRunning: false
         )
@@ -146,7 +147,11 @@ private actor UninstallerServiceStub: UninstallerServicing {
         return remnants
     }
 
-    func uninstall(app: InstalledApp, previewItems: [UninstallPreviewItem]) async -> UninstallValidationReport {
+    func uninstall(
+        app: InstalledApp,
+        previewItems: [UninstallPreviewItem],
+        allowForceRemove: Bool
+    ) async -> UninstallValidationReport {
         recordedCalls.append("uninstall")
         return validation
     }
