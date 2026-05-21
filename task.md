@@ -152,7 +152,7 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - [x] Settings redesign
 - [x] Menu bar helper redesign
 - [ ] Light/dark/compact manual review
-- [ ] Final build/test
+- [x] Final build/test
 
 ## Visual Guardrails
 - Nested cards are mostly flat or near-flat.
@@ -197,7 +197,26 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Reduced menu bar health ring, metric icon badge, sparkline, progress bar, and row-accent saturation.
 - Kept Storage, Memory, Battery, CPU, Top Consumers, Recommendation, Quick Actions, Telemetry, Open DRay, More, and Quit Completely available.
 
+## Changed Files
+- `DRay/App/GlassTheme.swift`
+- `DRay/App/DRayInfographics.swift`
+- `DRay/Features/Overview/OverviewView.swift`
+- `DRay/Features/SmartCare/SmartCareView.swift`
+- `DRay/Features/Search/SearchView.swift`
+- `DRay/Features/Uninstaller/UninstallerView.swift`
+- `DRay/Features/Performance/PerformanceInfographics.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceComponents.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceOverview.swift`
+- `DRay/Features/Settings/SettingsView+PermissionsSection.swift`
+- `DRay/Features/Settings/SettingsView+SectionScaffold.swift`
+- `DRayMenuBarHelper/MenuBarPopupCards.swift`
+- `DRayMenuBarHelper/MenuBarPopupView.swift`
+- `task.md`
+
 ## Manual Visual QA
+
+Manual visual QA was not executed in this terminal pass. The code was build/test validated; light/dark/compact screenshots and menu bar interaction checks remain required before merging.
 
 ### Light mode
 - [ ] Main app checked
@@ -242,22 +261,32 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - [ ] Quit Completely remains available.
 
 ## Functionality Preservation QA
-- [ ] Force Remove still visible/available where expected.
-- [ ] App Store app deletion behavior unchanged.
-- [ ] Search filters intact.
-- [ ] Regex validation intact.
-- [ ] Network tools intact.
-- [ ] Full Disk Access diagnostics intact.
-- [ ] High-risk setting intact.
-- [ ] Remaining cleanup details intact.
-- [ ] Removal method reporting intact.
-- [ ] LaunchDaemon / PrivilegedHelper guidance intact.
+- [x] Force Remove still visible/available where expected at code level; no removal pipeline behavior was changed in this UI refactor.
+- [x] App Store app deletion behavior unchanged; no Uninstaller deletion service logic was changed.
+- [x] Search filters intact; Search UI controls remain present and tests pass.
+- [x] Regex validation intact; existing regex validation tests pass.
+- [x] Network tools intact; Network UI/tooling code paths remain present and tests pass.
+- [x] Full Disk Access diagnostics intact; Settings diagnostics remain present and tests pass.
+- [x] High-risk setting intact; Settings high-risk controls were not removed.
+- [x] Remaining cleanup details intact; Remaining/Uninstaller report rows were not removed.
+- [x] Removal method reporting intact; Uninstaller reporting remains present.
+- [x] LaunchDaemon / PrivilegedHelper guidance intact; remediation/reporting code was not removed.
 
 ## Validation
 - Baseline `swift build`: passed.
 - Baseline `swift test`: passed, 115 tests.
-- Final `swift build`: pending.
-- Final `swift test`: pending.
+- After visual foundation `swift build`: passed.
+- After visual foundation `swift test`: passed, 115 tests.
+- After shared component pass `swift build`: passed.
+- After shared component pass `swift test`: passed, 115 tests.
+- After main module pass `swift build`: passed.
+- After main module pass `swift test`: passed, 115 tests.
+- After menu bar pass `swift build`: passed.
+- After menu bar pass `swift test`: passed, 115 tests.
+- Final `swift build`: passed.
+- Final `swift test`: passed, 115 tests.
 
 ## Backlog / Risks
-- Pending.
+- Manual visual QA remains: light/dark mode, compact/full-size windows, Russian text fit, and menu bar normal/scan-running states.
+- No release package, tag, version bump, or remote push was performed for this branch.
+- Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.
