@@ -31,7 +31,7 @@ struct MenuBarPopupView: View {
         .background(shellBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(borderColor.opacity(0.9), lineWidth: 1)
+                .stroke(borderColor, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .frame(width: 430)
@@ -152,7 +152,7 @@ struct MenuBarPopupView: View {
                     .foregroundStyle(healthHeroBatteryTint)
                 Text("Last checked: \(monitor.snapshot.updatedAt, style: .time)")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 8)
@@ -168,7 +168,7 @@ struct MenuBarPopupView: View {
             .controlSize(.small)
         }
         .padding(12)
-        .background(cardBackground(accent: .blue, cornerRadius: 16))
+        .background(cardBackground(accent: .accentColor, cornerRadius: 16))
     }
 
     private var metricTilesGrid: some View {
@@ -251,7 +251,7 @@ struct MenuBarPopupView: View {
                             detail: "MEM \(Int(consumer.memoryMB))MB · EI \(String(format: "%.1f", consumer.batteryImpactScore))",
                             value: "\(Int(consumer.cpuPercent))%",
                             progress: min(1, consumer.cpuPercent / maxTopCPU),
-                            tint: .blue
+                            tint: .accentColor
                         )
                     }
                 }
@@ -287,7 +287,7 @@ struct MenuBarPopupView: View {
             }
         }
         .padding(10)
-        .background(cardBackground(accent: .blue, cornerRadius: 16))
+        .background(cardBackground(accent: .accentColor, cornerRadius: 16))
     }
 
     private var recommendationCard: some View {
@@ -310,7 +310,7 @@ struct MenuBarPopupView: View {
             .controlSize(.small)
         }
         .padding(9)
-        .background(cardBackground(accent: .cyan, cornerRadius: 14))
+        .background(cardBackground(accent: .gray, cornerRadius: 14))
     }
 
     private var quickActionsSection: some View {
@@ -324,7 +324,7 @@ struct MenuBarPopupView: View {
                     model.open(section: .smartCare, action: .runUnifiedScan)
                 }
                 .font(popupButtonFont)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .controlSize(.small)
 
                 Button("Open DRay") {
@@ -364,7 +364,7 @@ struct MenuBarPopupView: View {
             }
         }
         .padding(9)
-        .background(cardBackground(accent: .teal, cornerRadius: 14))
+        .background(cardBackground(accent: .gray, cornerRadius: 14))
     }
 
     private var footerTelemetrySection: some View {
@@ -415,8 +415,8 @@ struct MenuBarPopupView: View {
                     LinearGradient(
                         colors: [
                             Color.white.opacity(colorScheme == .dark ? 0.14 : 0.34),
-                            Color.white.opacity(colorScheme == .dark ? 0.03 : 0.10),
-                            Color.black.opacity(colorScheme == .dark ? 0.16 : 0.07)
+                            Color.white.opacity(colorScheme == .dark ? 0.025 : 0.075),
+                            Color.black.opacity(colorScheme == .dark ? 0.10 : 0.035)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -424,7 +424,7 @@ struct MenuBarPopupView: View {
                 )
             RadialGradient(
                 colors: [
-                    Color.cyan.opacity(colorScheme == .dark ? 0.10 : 0.07),
+                    Color.accentColor.opacity(colorScheme == .dark ? 0.040 : 0.030),
                     .clear
                 ],
                 center: .topLeading,
@@ -433,7 +433,7 @@ struct MenuBarPopupView: View {
             )
             RadialGradient(
                 colors: [
-                    Color.indigo.opacity(colorScheme == .dark ? 0.08 : 0.05),
+                    Color.indigo.opacity(colorScheme == .dark ? 0.030 : 0.020),
                     .clear
                 ],
                 center: .bottomTrailing,
@@ -451,9 +451,9 @@ struct MenuBarPopupView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                accent.opacity(colorScheme == .dark ? 0.16 : 0.10),
-                                Color.white.opacity(colorScheme == .dark ? 0.10 : 0.28),
-                                Color.white.opacity(colorScheme == .dark ? 0.03 : 0.10),
+                                accent.opacity(colorScheme == .dark ? 0.060 : 0.038),
+                                Color.white.opacity(colorScheme == .dark ? 0.035 : 0.140),
+                                Color.white.opacity(colorScheme == .dark ? 0.010 : 0.040),
                                 Color.clear
                             ],
                             startPoint: .topLeading,
@@ -463,18 +463,17 @@ struct MenuBarPopupView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(colorScheme == .dark ? Color.white.opacity(0.20) : Color.white.opacity(0.66), lineWidth: 0.7)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.080 : 0.060), lineWidth: 0.7)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(colorScheme == .dark ? Color.black.opacity(0.26) : Color.black.opacity(0.08), lineWidth: 0.5)
+                    .stroke(colorScheme == .dark ? Color.black.opacity(0.12) : Color.white.opacity(0.16), lineWidth: 0.4)
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.16 : 0.10), radius: 7, y: 3)
-            .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.18), radius: 3, x: -1, y: -1)
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.08 : 0.028), radius: 5, y: 2)
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.72)
+        colorScheme == .dark ? Color.white.opacity(0.10) : Color.primary.opacity(0.055)
     }
 
     private func telemetryPill(title: String, value: String, tint: Color) -> some View {
@@ -492,7 +491,7 @@ struct MenuBarPopupView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(MenuBarCompactRowSurface(colorScheme: colorScheme, accent: tint, cornerRadius: 10))
     }
 
     private func formattedUptime(_ uptimeSeconds: TimeInterval) -> String {

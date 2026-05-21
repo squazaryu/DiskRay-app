@@ -4,16 +4,21 @@ struct MenuBarMiniRing: View {
     let icon: String
     var tint: Color
     var size: CGFloat = 76
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.08), lineWidth: 12)
+                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.07), lineWidth: 12)
             Circle()
                 .trim(from: 0.08, to: 0.88)
                 .stroke(
                     LinearGradient(
-                        colors: [tint.opacity(0.95), Color.cyan.opacity(0.75), tint.opacity(0.35)],
+                        colors: [
+                            tint.opacity(colorScheme == .dark ? 0.72 : 0.64),
+                            tint.opacity(colorScheme == .dark ? 0.42 : 0.34),
+                            tint.opacity(colorScheme == .dark ? 0.22 : 0.18)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -21,11 +26,15 @@ struct MenuBarMiniRing: View {
                 )
                 .rotationEffect(.degrees(-125))
             Circle()
-                .fill(.ultraThinMaterial)
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.05 : 0.035))
+                .overlay(
+                    Circle()
+                        .strokeBorder(tint.opacity(colorScheme == .dark ? 0.16 : 0.12), lineWidth: 0.8)
+                )
                 .padding(14)
             Image(systemName: icon)
                 .font(.system(size: size * 0.28, weight: .semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(tint.opacity(colorScheme == .dark ? 0.86 : 0.78))
         }
         .frame(width: size, height: size)
     }
@@ -42,13 +51,13 @@ struct MenuBarSparklineView: View {
                 fillPath(points: points, size: proxy.size)
                     .fill(
                         LinearGradient(
-                            colors: [tint.opacity(0.18), tint.opacity(0.02)],
+                            colors: [tint.opacity(0.10), tint.opacity(0.015)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                 linePath(points: points)
-                    .stroke(tint.opacity(0.82), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                    .stroke(tint.opacity(0.62), style: StrokeStyle(lineWidth: 1.45, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -111,9 +120,16 @@ struct MenuBarMetricTileCard: View {
             HStack(spacing: 7) {
                 Image(systemName: icon)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(tint.opacity(colorScheme == .dark ? 0.82 : 0.72))
                     .frame(width: 21, height: 21)
-                    .background(tint.opacity(colorScheme == .dark ? 0.20 : 0.13), in: Circle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.07))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(tint.opacity(colorScheme == .dark ? 0.16 : 0.12), lineWidth: 0.7)
+                    )
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
@@ -163,9 +179,9 @@ struct MenuBarProgressBar: View {
         GeometryReader { proxy in
             let clamped = min(1, max(0, value))
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.16))
+                Capsule().fill(Color.secondary.opacity(0.12))
                 Capsule()
-                    .fill(LinearGradient(colors: [tint, tint.opacity(0.45)], startPoint: .leading, endPoint: .trailing))
+                    .fill(LinearGradient(colors: [tint.opacity(0.64), tint.opacity(0.30)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(height, proxy.size.width * clamped))
             }
         }
@@ -213,7 +229,7 @@ struct MenuBarMetricLineView: View {
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(accent.opacity(colorScheme == .dark ? 0.72 : 0.55))
+                .fill(accent.opacity(colorScheme == .dark ? 0.50 : 0.38))
                 .frame(width: 3, height: 34)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -262,7 +278,7 @@ struct MenuBarBatteryLineView: View {
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(accent.opacity(colorScheme == .dark ? 0.72 : 0.55))
+                .fill(accent.opacity(colorScheme == .dark ? 0.50 : 0.38))
                 .frame(width: 3, height: 34)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -319,21 +335,21 @@ struct MenuBarBatteryLineView: View {
     }
 }
 
-private struct MenuBarCompactRowSurface: View {
+struct MenuBarCompactRowSurface: View {
     let colorScheme: ColorScheme
     let accent: Color
     var cornerRadius: CGFloat = 9
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(Color.primary.opacity(colorScheme == .dark ? 0.050 : 0.030))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                accent.opacity(colorScheme == .dark ? 0.14 : 0.09),
-                                Color.white.opacity(colorScheme == .dark ? 0.08 : 0.14),
+                                accent.opacity(colorScheme == .dark ? 0.055 : 0.035),
+                                Color.white.opacity(colorScheme == .dark ? 0.025 : 0.070),
                                 .clear
                             ],
                             startPoint: .topLeading,
@@ -343,13 +359,12 @@ private struct MenuBarCompactRowSurface: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(colorScheme == .dark ? Color.white.opacity(0.17) : Color.white.opacity(0.48), lineWidth: 0.65)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.065 : 0.055), lineWidth: 0.65)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(colorScheme == .dark ? Color.black.opacity(0.20) : Color.black.opacity(0.04), lineWidth: 0.45)
+                    .stroke(colorScheme == .dark ? Color.black.opacity(0.12) : Color.white.opacity(0.12), lineWidth: 0.35)
             )
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.06), radius: 6, y: 2)
-            .shadow(color: .white.opacity(colorScheme == .dark ? 0.0 : 0.14), radius: 2, x: -1, y: -1)
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.05 : 0.02), radius: 3, y: 1)
     }
 }

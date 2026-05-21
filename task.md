@@ -150,7 +150,7 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - [x] Performance redesign
 - [x] Network redesign
 - [x] Settings redesign
-- [ ] Menu bar helper redesign
+- [x] Menu bar helper redesign
 - [ ] Light/dark/compact manual review
 - [ ] Final build/test
 
@@ -191,7 +191,11 @@ Calm Liquid Glass redesign without reducing functionality, diagnostics, removal 
 - Settings keeps permissions, Full Disk Access diagnostics, high-risk settings, appearance, scanning defaults, diagnostics, and recovery controls; section icons and nested rows are calmer.
 
 ## Menu Bar Changes
-- Pending.
+- Calmed the menu bar shell background by reducing cyan/indigo wash, border contrast, and shadow strength while keeping the existing compact `430` point width.
+- Calmed menu bar hero, top-consumers, recommendation, quick-actions, and telemetry surfaces with lower accent opacity and flatter nested rows.
+- Kept Smart Scan as the only prominent menu bar CTA; the duplicate Smart Scan quick action remains visible but uses secondary styling to avoid competing primary buttons.
+- Reduced menu bar health ring, metric icon badge, sparkline, progress bar, and row-accent saturation.
+- Kept Storage, Memory, Battery, CPU, Top Consumers, Recommendation, Quick Actions, Telemetry, Open DRay, More, and Quit Completely available.
 
 ## Manual Visual QA
 
