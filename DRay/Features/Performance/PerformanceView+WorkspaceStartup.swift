@@ -23,14 +23,14 @@ extension PerformanceView {
                 Button(t("Выбрать heavy", "Select Heavy")) {
                     selectedPaths = Set(startupEntries.filter { startupImpactLevel(for: $0) == .high }.map { $0.url.path })
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(startupEntries.isEmpty)
 
                 Button(t("Сбросить", "Clear")) {
                     selectedPaths.removeAll()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selectedPaths.isEmpty)
             }

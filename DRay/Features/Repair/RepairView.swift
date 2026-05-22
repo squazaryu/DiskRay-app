@@ -149,7 +149,7 @@ struct RepairView: View {
                                 Button("Rescan Artifacts") {
                                     repairController.loadArtifacts(for: selectedApp)
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(DRaySecondaryButtonStyle())
                                 Button("Repair") {
                                     requestRepairFlow()
                                 }
@@ -318,13 +318,13 @@ struct RepairView: View {
                 Button("Rescan Apps") {
                     uninstallerController.loadInstalledApps()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
 
                 if let selectedApp {
                     Button("Rescan Artifacts") {
                         repairController.loadArtifacts(for: selectedApp)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                 }
             }
             .padding(.horizontal, layoutMetrics.cardSpacing)
@@ -411,7 +411,7 @@ struct RepairView: View {
             }
             .frame(minWidth: 132, alignment: .leading)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(DRaySecondaryButtonStyle())
         .controlSize(.small)
     }
 
@@ -509,7 +509,7 @@ struct RepairView: View {
                         }
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
             ForEach(session.rollbackItems.prefix(8)) { item in
@@ -526,7 +526,7 @@ struct RepairView: View {
                             }
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }

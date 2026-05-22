@@ -54,7 +54,7 @@ extension PerformanceView {
                 miniStat(title: t("Review", "Review"), value: "\(startupReviewCount)", tint: .orange)
             }
             Button(t("Управлять", "Manage")) { workspaceTab = .startup }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -87,7 +87,7 @@ extension PerformanceView {
                 }
             }
             Button(t("Открыть нагрузку", "Open System Load")) { workspaceTab = .systemLoad }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -146,7 +146,7 @@ extension PerformanceView {
             DRaySparklineView(values: networkTrendValues, tint: .teal, lineWidth: 1.8)
                 .frame(height: 52)
             Button(t("Тест сети", "Run Network Test")) { workspaceTab = .network }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)

@@ -17,7 +17,7 @@ extension PerformanceView {
                 Button(t("Обновить", "Refresh")) {
                     model.loadBatteryEnergyReport(force: true)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.performance.isBatteryEnergyLoading)
             }

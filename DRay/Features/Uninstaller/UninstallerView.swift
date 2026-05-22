@@ -286,12 +286,12 @@ struct UninstallerView: View {
                     Button("Rescan Apps") {
                         model.loadInstalledApps()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
 
                     Button("Open App Repair") {
                         model.openSection(.repair)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
 
                     if let selectedApp {
                         Button("Uninstall Selected", role: .destructive) {
@@ -314,12 +314,12 @@ struct UninstallerView: View {
                     Button("Scan Remaining") {
                         beginRemainingOperation(.scan)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
 
                     Button("Deep Sweep") {
                         beginRemainingOperation(.deepSweep)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
 
                     Button("Clean All Remaining", role: .destructive) {
                         let result = model.cleanAllRemainingRecords()
@@ -427,7 +427,7 @@ struct UninstallerView: View {
                     Button("Uninstall", role: .destructive) {
                         showUninstallPreview = true
                     }
-                    .buttonStyle(DRayPrimaryButtonStyle())
+                    .buttonStyle(DRayDangerButtonStyle())
                 }
                 .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
 
@@ -777,7 +777,7 @@ struct UninstallerView: View {
                     model.removeRemainingRecord(record)
                     remainingActionMessage = "Removed \(record.appName) from remaining list."
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRayDangerButtonStyle())
             }
         }
         .padding(10)
@@ -1073,7 +1073,7 @@ struct UninstallerView: View {
                         model.loadRemnants(for: selectedApp)
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
             ForEach(session.rollbackItems.prefix(8)) { item in
@@ -1088,7 +1088,7 @@ struct UninstallerView: View {
                             model.loadRemnants(for: selectedApp)
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }
@@ -1120,7 +1120,7 @@ struct UninstallerView: View {
                     let isRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
                     model.runVerifyPass(for: app, isAppRunning: isRunning)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 
@@ -1177,7 +1177,7 @@ struct UninstallerView: View {
                                 Button("Reveal") {
                                     NSWorkspace.shared.activateFileViewerSelecting([url])
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(DRaySecondaryButtonStyle())
                                 .controlSize(.mini)
                             }
                         }
@@ -1221,7 +1221,7 @@ struct UninstallerView: View {
                 Button("Reveal") {
                     NSWorkspace.shared.activateFileViewerSelecting([issue.url])
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.mini)
             }
         }

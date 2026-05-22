@@ -630,7 +630,7 @@ struct SmartCareView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
             .controlSize(.small)
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
         }
     }
 
@@ -675,7 +675,7 @@ struct SmartCareView: View {
                     Label("More", systemImage: "ellipsis.circle")
                 }
                 .controlSize(.small)
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -737,7 +737,7 @@ struct SmartCareView: View {
                 selectedItemPaths.removeAll()
                 model.selectRecommendedSmartCategories()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(model.smartCare.categories.isEmpty)
 
@@ -777,7 +777,7 @@ struct SmartCareView: View {
             }
             .frame(minWidth: 126, alignment: .leading)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(DRaySecondaryButtonStyle())
         .controlSize(.small)
     }
 
@@ -990,7 +990,7 @@ struct SmartCareView: View {
             Button(expandedCategories.contains(category.id) ? "Hide" : "Preview") {
                 toggleExpanded(category)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
         }
         .padding(.vertical, 2)

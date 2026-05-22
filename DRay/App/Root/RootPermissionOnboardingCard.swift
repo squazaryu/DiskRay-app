@@ -28,7 +28,7 @@ struct RootPermissionOnboardingCard: View {
                         model.permissionBlockingMessage = "Finish permissions setup before hiding onboarding."
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 

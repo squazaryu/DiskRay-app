@@ -87,7 +87,7 @@ struct BubbleMapView: View {
                     } label: {
                         Label(t(.bubbleBack), systemImage: "chevron.left")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .disabled(navigation.isEmpty)
 
                     Menu {
@@ -100,7 +100,7 @@ struct BubbleMapView: View {
                         Label(current.name == "/" ? t(.bubbleRootName) : current.name, systemImage: "folder")
                             .lineLimit(1)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .frame(maxWidth: 180, alignment: .leading)
 
                     Text(current.url.path)

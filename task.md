@@ -398,6 +398,8 @@ Screenshots captured:
 - `/tmp/dray-uiqa2/contact-dark-en.png`: Overview, Smart Care, Search, Uninstaller, Performance, Settings, Space Lens in dark/English pass.
 - `/tmp/dray-uiqa2/settings-fixed2-light.png`: Settings after the adaptive board crash fix.
 - `/tmp/dray-uiqa-final/menubar-open.png`: Menu bar helper normal popover state.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-dark-system.png`: menu bar helper in true macOS dark appearance.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-metrics-equal-no-graphs.png`: menu bar helper after equal-size metric cards and graph removal.
 
 Finding fixed during QA:
 - Settings crashed during launch/layout in the adaptive board. The root cause was unstable generic `@ViewBuilder` column composition across adaptive branches. Reworked Settings board rendering to use explicit card slots and a guarded width fallback; Settings now renders in the QA bundle.
@@ -408,7 +410,7 @@ Finding fixed during QA:
 
 ### Dark mode
 - [x] Main app checked
-- [ ] Menu bar checked
+- [x] Menu bar checked
 
 ### Compact layout
 - [x] Overview
@@ -428,6 +430,7 @@ Finding fixed during QA:
 - Added `ViewThatFits` fallbacks to the permission onboarding banner so steps/actions wrap cleanly in compact windows.
 - Added `MenuBarSoftButtonStyle` with primary/secondary/danger tones and removed remaining system prominent/bordered menu bar buttons.
 - Neutralized menu bar popover shell/card surfaces so desktop wallpaper color no longer creates a blue wash through heavy `.thinMaterial`.
+- Made menu bar Storage/Memory/Battery/CPU metric cards equal height and removed their sparkline/progress micrographs so the tiles read as compact controls instead of mini charts.
 
 ### Files touched in this pass
 - `DRay/App/GlassTheme.swift`
@@ -454,11 +457,36 @@ Finding fixed during QA:
 - `/tmp/dray-ui-refactor-qa/screens/compact-dark-overview-after.png`: compact Overview in forced dark app appearance; permission onboarding wraps cleanly and primary actions are no longer saturated blue.
 - `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-neutral-after.png`: live menu bar helper popover from the temporary QA helper; installed helper was restored afterward.
 - `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-dark-forced.png`: attempted process-local `-AppleInterfaceStyle Dark` helper launch. Cocoa did not switch the popover to dark while the system global appearance was Light, so true dark menu bar QA still requires switching macOS appearance or testing on a dark-system session.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-dark-system.png`: true dark-system menu bar pass after temporarily switching macOS appearance, then restoring the original appearance.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-metrics-equal-no-graphs.png`: follow-up menu bar metric cards pass; Storage/Memory/Battery/CPU tiles are equal-sized and no longer render charts/progress lines.
 
 ### Validation
 - `swift build`: passed.
 - `swift test`: passed, 115 tests.
 - `git diff --check`: passed before final staging.
+- Follow-up metric cards pass `swift build`: passed.
+- Follow-up metric cards pass `swift test`: passed, 115 tests.
+- Production `/Applications/DRay.app` menu bar launch agent was restored after temporary helper QA.
+
+## Follow-up Menu Bar Metric Cards Pass
+
+### Visual QA Agent Findings
+- Menu bar metric request: PASS.
+- Storage/Memory/Battery/CPU cards are fixed to the same height and no longer accept or render sparkline/progress inputs.
+- Secondary actions remain subdued through `MenuBarSoftButtonStyle` and updated DRay button hierarchy.
+- Destructive actions reviewed by the read-only QA agent remain styled as danger where expected.
+
+### Changed
+- Removed menu bar metric sparkline/progress helpers from `DRayMenuBarHelper/MenuBarPopupCards.swift`.
+- Removed `cpuTrend`, `memoryTrend`, `appendTrend`, `diskUsedRatio`, and graph/progress arguments from `DRayMenuBarHelper/MenuBarPopupView.swift`.
+- Made shared DRay button styles control-size aware, including `.extraLarge`, so replacing system `.bordered` buttons does not inflate dense controls.
+- Converted remaining main-app `.bordered` buttons to calm secondary/danger styles where appropriate.
+
+### Preserved
+- Smart Scan remains the menu bar primary CTA.
+- Metric actions remain available: Free Up, Inspect, Details, Diagnose.
+- Top Consumers still keeps compact load markers because those are diagnostic ranking indicators, not the four metric card micrographs.
+- No deletion, Search, Network, permission, Remaining, or high-risk business logic was changed.
 
 ## Visual Guardrails QA
 - [x] Nested cards are mostly flat or near-flat in checked screens.
@@ -511,9 +539,11 @@ Finding fixed during QA:
 - Final `swift test`: passed, 115 tests.
 - Manual QA fix `swift build`: passed.
 - Manual QA fix `swift test`: passed, 115 tests.
+- Follow-up metric cards `swift build`: passed.
+- Follow-up metric cards `swift test`: passed, 115 tests.
 
 ## Backlog / Risks
 - Permission onboarding banner was softened after the Visual QA report: primary permission actions now use a calm accent-tinted style, permission steps use near-flat nested cards, and the banner container uses `calmGlass(.section)` instead of the heavier `glassSurface`.
-- Manual QA still not fully exhaustive: true dark-system menu bar popover, scan-running menu bar state, and compact sweep for Smart Care/Search/Uninstaller/Performance/Network remain best done in an interactive pass before merge.
+- Manual QA still not fully exhaustive: scan-running menu bar state and compact sweep for Smart Care/Search/Uninstaller/Performance/Network remain best done in an interactive pass before merge.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.

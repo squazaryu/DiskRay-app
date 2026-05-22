@@ -459,14 +459,16 @@ struct ClutterView: View {
                 guard let first = selectedPaths.sorted().first else { return }
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: first)])
             }
+            .buttonStyle(DRaySecondaryButtonStyle())
             Button(t("В корзину", "Move to Trash"), role: .destructive) {
                 requestDuplicateTrash(paths: selectedPaths.sorted())
             }
+            .buttonStyle(DRayDangerButtonStyle())
             Button(t("Очистить", "Clear")) {
                 selectedPaths.removeAll()
             }
+            .buttonStyle(DRaySecondaryButtonStyle())
         }
-        .buttonStyle(.bordered)
         .controlSize(.small)
         .glassSurface(cornerRadius: 14, strokeOpacity: 0.1, shadowOpacity: 0.04, padding: layoutMetrics.cardSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -488,7 +490,7 @@ struct ClutterView: View {
                 Button(t("Очистить", "Clear")) {
                     cleanupDiagnostics.removeAll()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 

@@ -898,13 +898,14 @@ struct MinimalGlassButtonStyle: ButtonStyle {
 struct DRayPrimaryButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.caption.weight(.semibold))
+            .font(metrics.font)
             .lineLimit(1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, metrics.horizontalPadding)
+            .padding(.vertical, metrics.verticalPadding)
             .background(
                 Capsule(style: .continuous)
                     .fill(fillColor(isPressed: configuration.isPressed))
@@ -929,40 +930,125 @@ struct DRayPrimaryButtonStyle: ButtonStyle {
         ? Color.accentColor.opacity(colorScheme == .dark ? 0.26 : 0.22)
         : Color.primary.opacity(colorScheme == .dark ? 0.060 : 0.045)
     }
+
+    private var metrics: DRayButtonMetrics {
+        DRayButtonMetrics(controlSize: controlSize)
+    }
 }
 
 struct DRaySecondaryButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .font(metrics.font)
+            .lineLimit(1)
+            .padding(.horizontal, metrics.horizontalPadding)
+            .padding(.vertical, metrics.verticalPadding)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.080 : 0.045))
+                    .fill(fillColor(isPressed: configuration.isPressed))
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.070), lineWidth: 0.8)
+                    .strokeBorder(borderColor, lineWidth: 0.8)
             )
-            .foregroundStyle(.primary)
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .opacity(configuration.isPressed ? 0.90 : 1)
+    }
+
+    private func fillColor(isPressed: Bool) -> Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.030 : 0.022)
+        }
+        return Color.primary.opacity((colorScheme == .dark ? 0.050 : 0.038) + (isPressed ? 0.030 : 0))
+    }
+
+    private var borderColor: Color {
+        isEnabled
+        ? Color.primary.opacity(colorScheme == .dark ? 0.085 : 0.065)
+        : Color.primary.opacity(colorScheme == .dark ? 0.055 : 0.042)
+    }
+
+    private var metrics: DRayButtonMetrics {
+        DRayButtonMetrics(controlSize: controlSize)
     }
 }
 
 struct DRayDangerButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .font(metrics.font)
+            .lineLimit(1)
+            .padding(.horizontal, metrics.horizontalPadding)
+            .padding(.vertical, metrics.verticalPadding)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.red.opacity(configuration.isPressed ? 0.16 : 0.10))
+                    .fill(fillColor(isPressed: configuration.isPressed))
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .strokeBorder(Color.red.opacity(0.24), lineWidth: 0.8)
+                    .strokeBorder(borderColor, lineWidth: 0.8)
             )
-            .foregroundStyle(.red)
+            .foregroundStyle(isEnabled ? Color.red : Color.secondary)
+            .opacity(configuration.isPressed ? 0.90 : 1)
+    }
+
+    private func fillColor(isPressed: Bool) -> Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.030 : 0.022)
+        }
+        return Color.red.opacity((colorScheme == .dark ? 0.105 : 0.080) + (isPressed ? 0.035 : 0))
+    }
+
+    private var borderColor: Color {
+        isEnabled
+        ? Color.red.opacity(colorScheme == .dark ? 0.26 : 0.22)
+        : Color.primary.opacity(colorScheme == .dark ? 0.055 : 0.042)
+    }
+
+    private var metrics: DRayButtonMetrics {
+        DRayButtonMetrics(controlSize: controlSize)
+    }
+}
+
+private struct DRayButtonMetrics {
+    let font: Font
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+
+    init(controlSize: ControlSize) {
+        switch controlSize {
+        case .mini:
+            font = .system(size: 10, weight: .semibold)
+            horizontalPadding = 7
+            verticalPadding = 3
+        case .small:
+            font = .system(size: 11, weight: .semibold)
+            horizontalPadding = 9
+            verticalPadding = 5
+        case .regular:
+            font = .caption.weight(.semibold)
+            horizontalPadding = 12
+            verticalPadding = 7
+        case .large:
+            font = .callout.weight(.semibold)
+            horizontalPadding = 14
+            verticalPadding = 8
+        case .extraLarge:
+            font = .callout.weight(.semibold)
+            horizontalPadding = 16
+            verticalPadding = 9
+        @unknown default:
+            font = .caption.weight(.semibold)
+            horizontalPadding = 12
+            verticalPadding = 7
+        }
     }
 }

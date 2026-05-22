@@ -93,7 +93,7 @@ extension SettingsView {
                 .frame(maxWidth: .infinity)
                 .lineLimit(1)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(DRaySecondaryButtonStyle())
         .controlSize(.small)
     }
 

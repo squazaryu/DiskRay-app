@@ -15,8 +15,6 @@ struct MenuBarPopupView: View {
     @State private var pendingReliefAction: ReliefAction?
     @State private var showReliefConfirm = false
     @State private var batteryAutoRefreshTask: Task<Void, Never>?
-    @State private var cpuTrend: [Double] = []
-    @State private var memoryTrend: [Double] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -61,10 +59,6 @@ struct MenuBarPopupView: View {
             if !showBatteryDetails {
                 suppressBatteryDetailsOpenUntil = Date().addingTimeInterval(0.45)
             }
-        }
-        .onReceive(monitor.$snapshot) { snapshot in
-            appendTrend(snapshot.cpuLoadPercent, to: &cpuTrend)
-            appendTrend(snapshot.memoryPressurePercent, to: &memoryTrend)
         }
         .overlay(alignment: .bottom) {
             if let message = model.reliefResultMessage {
@@ -178,7 +172,6 @@ struct MenuBarPopupView: View {
                 subtitle: diskUsePercentText.replacingOccurrences(of: " · ", with: ""),
                 icon: "internaldrive",
                 tint: calmStorageTint,
-                progress: diskUsedRatio,
                 actionTitle: "Free Up"
             ) {
                 model.open(section: .spaceLens, action: .runSpaceLensScan)
@@ -190,8 +183,6 @@ struct MenuBarPopupView: View {
                 subtitle: "Pressure \(Int(monitor.snapshot.memoryPressurePercent))%",
                 icon: "memorychip",
                 tint: calmMemoryTint,
-                progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
-                sparkline: memoryTrend,
                 actionTitle: "Inspect"
             ) {
                 model.open(section: .performance, action: .runPerformanceScan)
@@ -203,7 +194,6 @@ struct MenuBarPopupView: View {
                 subtitle: batteryStateText,
                 icon: "battery.75percent",
                 tint: calmBatteryTint,
-                progress: monitor.snapshot.batteryLevelPercent.map { Double($0) / 100.0 },
                 actionTitle: "Details"
             ) {
                 openBatteryDetails()
@@ -215,8 +205,6 @@ struct MenuBarPopupView: View {
                 subtitle: "User \(Int(monitor.snapshot.cpuUserPercent))% · System \(Int(monitor.snapshot.cpuSystemPercent))%",
                 icon: "waveform.path.ecg",
                 tint: calmCPUTint,
-                progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
-                sparkline: cpuTrend,
                 actionTitle: "Diagnose"
             ) {
                 model.open(section: .performance, action: .runPerformanceScan)
@@ -608,13 +596,6 @@ struct MenuBarPopupView: View {
         return " · \(percent)% used"
     }
 
-    private var diskUsedRatio: Double {
-        let total = monitor.snapshot.diskTotalBytes
-        let free = monitor.snapshot.diskFreeBytes
-        guard total > 0 else { return 0 }
-        return Double(max(0, total - free)) / Double(total)
-    }
-
     private var diskFreeRatio: Double {
         let total = monitor.snapshot.diskTotalBytes
         guard total > 0 else { return 0 }
@@ -768,13 +749,6 @@ struct MenuBarPopupView: View {
         batteryAutoRefreshTask = nil
     }
 
-    private func appendTrend(_ value: Double, to series: inout [Double], limit: Int = 28) {
-        guard value.isFinite else { return }
-        series.append(value)
-        if series.count > limit {
-            series.removeFirst(series.count - limit)
-        }
-    }
 }
 
 extension Notification.Name {

@@ -32,71 +32,12 @@ struct MenuBarMiniRing: View {
     }
 }
 
-struct MenuBarSparklineView: View {
-    let values: [Double]
-    var tint: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let points = normalizedPoints(size: proxy.size)
-            ZStack {
-                fillPath(points: points, size: proxy.size)
-                    .fill(tint.opacity(0.035))
-                linePath(points: points)
-                    .stroke(tint.opacity(0.46), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
-            }
-        }
-    }
-
-    private func normalizedPoints(size: CGSize) -> [CGPoint] {
-        let series = values.count > 1 ? values : [0.2, 0.45, 0.34, 0.62, 0.49, 0.72, 0.58]
-        let minValue = series.min() ?? 0
-        let maxValue = series.max() ?? 1
-        let range = max(maxValue - minValue, 0.01)
-        let step = size.width / CGFloat(max(series.count - 1, 1))
-        return series.enumerated().map { index, value in
-            let normalized = (value - minValue) / range
-            return CGPoint(
-                x: CGFloat(index) * step,
-                y: size.height - CGFloat(normalized) * size.height * 0.72 - size.height * 0.14
-            )
-        }
-    }
-
-    private func linePath(points: [CGPoint]) -> Path {
-        var path = Path()
-        guard let first = points.first else { return path }
-        path.move(to: first)
-        for index in points.indices.dropFirst() {
-            let previous = points[index - 1]
-            let current = points[index]
-            let midX = (previous.x + current.x) / 2
-            path.addCurve(
-                to: current,
-                control1: CGPoint(x: midX, y: previous.y),
-                control2: CGPoint(x: midX, y: current.y)
-            )
-        }
-        return path
-    }
-
-    private func fillPath(points: [CGPoint], size: CGSize) -> Path {
-        var path = linePath(points: points)
-        path.addLine(to: CGPoint(x: size.width, y: size.height))
-        path.addLine(to: CGPoint(x: 0, y: size.height))
-        path.closeSubpath()
-        return path
-    }
-}
-
 struct MenuBarMetricTileCard: View {
     let title: String
     let value: String
     let subtitle: String
     let icon: String
     var tint: Color
-    var progress: Double?
-    var sparkline: [Double] = []
     var actionTitle: String?
     var action: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
@@ -132,13 +73,9 @@ struct MenuBarMetricTileCard: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.82)
 
-            if !sparkline.isEmpty {
-                MenuBarSparklineView(values: sparkline, tint: tint)
-                    .frame(height: 19)
-            } else if let progress {
-                MenuBarProgressBar(value: progress, tint: tint, height: 5)
-            }
+            Spacer(minLength: 0)
 
             if let actionTitle, let action {
                 HStack {
@@ -149,28 +86,9 @@ struct MenuBarMetricTileCard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 92, maxHeight: 92, alignment: .topLeading)
         .padding(8)
         .background(MenuBarCompactRowSurface(colorScheme: colorScheme, accent: tint, cornerRadius: 14))
-    }
-}
-
-struct MenuBarProgressBar: View {
-    let value: Double
-    var tint: Color
-    var height: CGFloat = 5
-
-    var body: some View {
-        GeometryReader { proxy in
-            let clamped = min(1, max(0, value))
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.12))
-                Capsule()
-                    .fill(tint.opacity(0.44))
-                    .frame(width: max(height, proxy.size.width * clamped))
-            }
-        }
-        .frame(height: height)
     }
 }
 

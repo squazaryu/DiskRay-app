@@ -191,7 +191,7 @@ extension PerformanceView {
                     networkConnectionsMonitor.refreshNow()
                     networkGeolocationMonitor.refreshPublicProfile(force: true)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
                 Toggle(
@@ -214,7 +214,7 @@ extension PerformanceView {
                         selectedNetworkServiceID = nil
                         selectedNetworkProgramID = nil
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }
@@ -225,7 +225,7 @@ extension PerformanceView {
                         networkConnectionsMonitor.refreshNow()
                         networkGeolocationMonitor.refreshPublicProfile(force: true)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
 
                     Button(t("Скорость", "Speed Test")) {
@@ -249,7 +249,7 @@ extension PerformanceView {
                         selectedNetworkServiceID = nil
                         selectedNetworkProgramID = nil
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                 }
             }
@@ -804,7 +804,7 @@ extension PerformanceView {
                 Button(t("Обновить", "Refresh")) {
                     networkGeolocationMonitor.refreshPublicProfile(force: true)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 
@@ -872,12 +872,12 @@ extension PerformanceView {
                         networkLatencyMonitor.pause()
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 Button(t("Обновить", "Refresh")) {
                     networkLatencyMonitor.refreshNow()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 

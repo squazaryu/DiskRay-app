@@ -104,7 +104,7 @@ struct SpaceLensView: View {
                     .disabled(model.isLoading)
 
                 Button(model.localized(.spaceLensRescan)) { model.rescan() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DRaySecondaryButtonStyle())
                     .controlSize(.small)
                     .disabled(model.lastScannedTarget == nil || model.isLoading)
             }
@@ -209,7 +209,7 @@ struct SpaceLensView: View {
                     Label(t("Режим выбора", "Select Mode"), systemImage: "checkmark.circle")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
                 Button {
@@ -218,7 +218,7 @@ struct SpaceLensView: View {
                     Label(t("Открывать папки", "Open Folders"), systemImage: "folder")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
                 Button(role: .destructive) {
@@ -227,7 +227,7 @@ struct SpaceLensView: View {
                     Label(model.localized(.spaceLensMoveToTrash), systemImage: "trash")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRayDangerButtonStyle())
                 .controlSize(.small)
                 .disabled(selectedNodes.isEmpty)
             }
@@ -375,11 +375,11 @@ struct SpaceLensView: View {
                     .foregroundStyle(.secondary)
             }
             Button(model.localized(.settingsGrantFolder)) { onChooseFolder() }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
             Button(model.localized(.settingsOpenFullDisk)) { model.permissions.openFullDiskAccessSettings() }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
             Button(model.localized(.settingsRestore)) { model.restorePermissions() }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
         }
     }
 
@@ -555,16 +555,19 @@ struct SpaceLensView: View {
                             guard let first = selectedNodes.first else { return }
                             model.openItem(first)
                         }
+                        .buttonStyle(DRaySecondaryButtonStyle())
                         Button(model.localized(.spaceLensReveal)) {
                             guard let first = selectedNodes.first else { return }
                             model.revealInFinder(first)
                         }
+                        .buttonStyle(DRaySecondaryButtonStyle())
                         Button(model.localized(.spaceLensMoveToTrash), role: .destructive) {
                             requestTrashConfirmation(for: selectedNodes, clearSelection: true)
                         }
+                        .buttonStyle(DRayDangerButtonStyle())
                         Button(model.localized(.spaceLensClear)) { selectedPaths.removeAll() }
+                            .buttonStyle(DRaySecondaryButtonStyle())
                     }
-                    .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }

@@ -16,7 +16,7 @@ struct SettingsView: View {
                     model.refreshPermissionsAsync()
                     model.refreshLaunchAtLoginStatus()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 

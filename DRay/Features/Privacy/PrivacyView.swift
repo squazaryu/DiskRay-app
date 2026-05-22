@@ -225,21 +225,21 @@ struct PrivacyView: View {
                 Button("Select Low Risk") {
                     model.selectRecommended(includeMediumRisk: false)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.state.categories.isEmpty)
 
                 Button("Select Recommended") {
                     model.selectRecommended(includeMediumRisk: true)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.state.categories.isEmpty)
 
                 Button("Clear") {
                     model.clearSelection()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selectedCount == 0)
             }
@@ -270,7 +270,7 @@ struct PrivacyView: View {
                 pendingCleanMode = .safeLowRisk
                 showConfirm = true
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(model.state.categories.isEmpty)
 
@@ -278,7 +278,7 @@ struct PrivacyView: View {
                 pendingCleanMode = .recommended
                 showConfirm = true
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
             .disabled(model.state.categories.isEmpty)
         }
@@ -367,7 +367,7 @@ struct PrivacyView: View {
             Button(expanded.contains(row.id) ? "Hide" : "Preview") {
                 if expanded.contains(row.id) { expanded.remove(row.id) } else { expanded.insert(row.id) }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
         }
         .padding(.vertical, 2)

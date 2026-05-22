@@ -116,14 +116,14 @@ struct HealthPopupView: View {
                 model.selectedSection = .performance
                 dismiss()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
 
             Button("Open Privacy") {
                 model.selectedSection = .privacy
                 dismiss()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
 
             Button("Export Report") {
@@ -131,7 +131,7 @@ struct HealthPopupView: View {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
 
             Spacer()
@@ -139,7 +139,7 @@ struct HealthPopupView: View {
             Button("Close") {
                 dismiss()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
         }
         .padding(.horizontal, 8)

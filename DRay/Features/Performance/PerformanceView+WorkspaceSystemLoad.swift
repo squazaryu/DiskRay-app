@@ -16,7 +16,7 @@ extension PerformanceView {
                     pendingReliefAction = .cpu
                     showReliefConfirm = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(cpuReliefCandidates.isEmpty)
 
@@ -24,7 +24,7 @@ extension PerformanceView {
                     pendingReliefAction = .memory
                     showReliefConfirm = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(memoryReliefCandidates.isEmpty)
 
@@ -38,7 +38,7 @@ extension PerformanceView {
                         "Restored \(adjustedText)\nFailed \(failedText)\nSkipped \(skippedText)"
                     )
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.performance.activeLoadReliefAdjustments == 0)
             }

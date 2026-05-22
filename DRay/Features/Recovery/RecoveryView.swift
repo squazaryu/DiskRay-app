@@ -78,7 +78,7 @@ struct RecoveryView: View {
                 Button(t("Rollback", "Rollback")) {
                     workspaceTab = .rollback
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
             case .recentlyDeleted:
@@ -92,7 +92,7 @@ struct RecoveryView: View {
                 Button(t("Выбрать всё", "Select All")) {
                     selected = Set(model.recentlyDeleted.map(\.id))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.recentlyDeleted.isEmpty)
 
@@ -100,7 +100,7 @@ struct RecoveryView: View {
                 Button(t("Очистить применённые", "Clear Applied")) {
                     clearAppliedRollbackSessions()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.quickActionRollbackSessions.allSatisfy(\.canRollback))
             }
@@ -121,7 +121,7 @@ struct RecoveryView: View {
                 Button(t("Открыть Rollback", "Open Rollback")) {
                     workspaceTab = .rollback
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
             case .recentlyDeleted:
@@ -135,14 +135,14 @@ struct RecoveryView: View {
                 Button(t("Выбрать всё", "Select All")) {
                     selected = Set(model.recentlyDeleted.map(\.id))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.recentlyDeleted.isEmpty)
 
                 Button(t("Снять выбор", "Clear Selection")) {
                     selected.removeAll()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selected.isEmpty)
 
@@ -150,14 +150,14 @@ struct RecoveryView: View {
                 Button(t("Очистить применённые", "Clear Applied")) {
                     clearAppliedRollbackSessions()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.quickActionRollbackSessions.allSatisfy(\.canRollback))
 
                 Button(t("Показать активные", "Show Active")) {
                     workspaceTab = .overview
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
 
@@ -647,14 +647,14 @@ struct RecoveryView: View {
                         )
                     )
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
                 Button(t("Убрать", "Remove")) {
                     model.removeDeletedHistoryItem(item)
                     selected.remove(item.id)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
             }
         }
@@ -758,7 +758,7 @@ struct RecoveryView: View {
             Button(t("Убрать", "Remove")) {
                 model.removeQuickActionRollbackSession(session)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DRaySecondaryButtonStyle())
             .controlSize(.small)
         }
         .padding(.horizontal, 10)
