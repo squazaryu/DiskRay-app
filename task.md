@@ -488,6 +488,70 @@ Finding fixed during QA:
 - Top Consumers still keeps compact load markers because those are diagnostic ranking indicators, not the four metric card micrographs.
 - No deletion, Search, Network, permission, Remaining, or high-risk business logic was changed.
 
+## Manual UI QA Pass 2026-05-22
+
+### Environment
+- Branch: `2.2.0-ui-refactor`.
+- QA bundle: `/tmp/dray-ui-manual-qa/DRay.app`.
+- Installed `/Applications/DRay.app` was not replaced.
+- Production menu bar helper was restored after temporary helper checks.
+- macOS appearance was temporarily switched for dark-mode screenshots and then restored.
+- Temporary QA bundle TCC prompts were dismissed/reset where possible; no cleanup/destructive actions were executed.
+
+### Screenshots
+- Light/full-size:
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-overview.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-smart-care.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-clutter.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-uninstaller.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-repair.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-space-lens.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-search.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-privacy.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-recovery.png`
+  - `/tmp/dray-ui-manual-qa/screens/light-qapass-settings.png`
+- Dark/full-size:
+  - `/tmp/dray-ui-manual-qa/screens/dark-overview.png`
+  - `/tmp/dray-ui-manual-qa/screens/dark-smart-care.png`
+  - `/tmp/dray-ui-manual-qa/screens/dark-search.png`
+  - `/tmp/dray-ui-manual-qa/screens/dark-uninstaller.png`
+  - `/tmp/dray-ui-manual-qa/screens/dark-settings.png`
+- Compact:
+  - `/tmp/dray-ui-manual-qa/screens/compact-overview.png`
+  - `/tmp/dray-ui-manual-qa/screens/compact-smart-care.png`
+  - `/tmp/dray-ui-manual-qa/screens/compact-search.png`
+  - `/tmp/dray-ui-manual-qa/screens/compact-uninstaller.png`
+  - `/tmp/dray-ui-manual-qa/screens/compact-settings.png`
+- Menu bar:
+  - `/tmp/dray-ui-manual-qa/screens/menubar-light-normal.png`
+  - `/tmp/dray-ui-manual-qa/screens/menubar-dark-normal.png`
+  - `/tmp/dray-ui-manual-qa/screens/menubar-light-after-smart-scan.png`
+
+### Pass/fail
+- Main app visual delta: PASS.
+- Menu bar visual delta: PASS.
+- Calm Liquid Glass direction: PASS.
+- Compact layout: PASS for Overview/Search/Settings; partial for Smart Care/Uninstaller because only first viewport was checked.
+- Functionality preserved: PASS at code/build level; no business logic was changed in this pass.
+
+### Findings
+- Menu bar Storage/Memory/Battery/CPU cards are equal-sized and graph-free in light and dark screenshots.
+- Menu bar dark mode is coherent: no blue wash, quiet cards, readable controls, Smart Scan remains the only strong CTA.
+- Compact Overview no longer shows overly compressed metric modules; the 2-column metric layout remains readable.
+- Search filters remain visible in full-size and compact layouts.
+- Uninstaller keeps removal controls, risk/remnant context, and destructive actions visible.
+- Settings Full Disk Access diagnostics remain explicit and readable.
+
+### Limitations
+- The temporary QA bundle uses a different path/bundle context, so macOS does not grant it the same Full Disk Access as the installed app. Performance and Smart Scan launch-action screenshots are therefore blocked by permission dialogs in this QA environment.
+- Scan-running menu bar state could not be captured honestly because Smart Scan from the temporary helper was blocked by Full Disk Access. The normal and post-click menu bar states were captured, but no running-progress state was confirmed.
+- Network workspace was not separately opened in Performance because the temporary bundle permission gate blocked clean Performance navigation.
+
+### Visual backlog from QA
+- Selected segmented controls still use a fairly saturated system blue in Search, Uninstaller, Space Lens, Settings, and Smart Care tabs. This is functional and consistent, but could be softened in a future shared segmented-control pass.
+- Overview/Performance main metric cards still include sparklines/progress lines. That was not part of the menu bar metric-card request, but can be revisited if the same "no mini graphs" direction should apply globally.
+- Permission setup banner dominates temporary QA screenshots when Full Disk Access is missing. It is readable and actionable, but still consumes significant vertical space in compact windows.
+
 ## Visual Guardrails QA
 - [x] Nested cards are mostly flat or near-flat in checked screens.
 - [x] Heavy blur is limited to major surfaces in checked screens.
@@ -511,6 +575,7 @@ Finding fixed during QA:
 - [x] Top Consumers remain readable.
 - [x] Telemetry is quiet and readable.
 - [x] Quit Completely remains available.
+- [x] Manual 2026-05-22 pass: menu bar metric cards checked in light/dark and compact main app screenshots captured.
 
 ## Functionality Preservation QA
 - [x] Force Remove still visible/available where expected at code level; no removal pipeline behavior was changed in this UI refactor.
@@ -541,9 +606,10 @@ Finding fixed during QA:
 - Manual QA fix `swift test`: passed, 115 tests.
 - Follow-up metric cards `swift build`: passed.
 - Follow-up metric cards `swift test`: passed, 115 tests.
+- Manual UI QA 2026-05-22: screenshot-based pass completed; no code changes required from this pass.
 
 ## Backlog / Risks
 - Permission onboarding banner was softened after the Visual QA report: primary permission actions now use a calm accent-tinted style, permission steps use near-flat nested cards, and the banner container uses `calmGlass(.section)` instead of the heavier `glassSurface`.
-- Manual QA still not fully exhaustive: scan-running menu bar state and compact sweep for Smart Care/Search/Uninstaller/Performance/Network remain best done in an interactive pass before merge.
+- Manual QA still not fully exhaustive: scan-running menu bar state and clean Performance/Network sweep require a signed/installed build with Full Disk Access, not the temporary QA bundle.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.
