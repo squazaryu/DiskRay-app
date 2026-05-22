@@ -7,14 +7,20 @@ struct RootPermissionOnboardingCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Setup Required")
-                        .font(.headline)
-                    Text("Grant DRay access once to enable scan, cleanup, uninstall and repair modules.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 10) {
+                    DRayQuietIconBadge(systemName: "lock.shield", tone: .warning, size: 30)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Setup Required")
+                            .font(.headline)
+                        Text("Grant DRay access once to enable scan, cleanup, uninstall and repair modules.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+
                 Spacer()
+
                 Button("Hide") {
                     if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
                         model.permissions.markOnboardingCompleted()
@@ -49,22 +55,22 @@ struct RootPermissionOnboardingCard: View {
                 Button("Grant Folder Access") {
                     onChooseFolder()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(RootPermissionPrimaryButtonStyle())
 
                 Button("Open Full Disk Access") {
                     model.permissions.openFullDiskAccessSettings()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
 
                 Button("Refresh Status") {
                     model.refreshPermissionsAsync()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
 
                 Button("Restore") {
                     model.restorePermissions()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(DRaySecondaryButtonStyle())
 
                 Spacer()
 
@@ -76,7 +82,7 @@ struct RootPermissionOnboardingCard: View {
                         model.permissionBlockingMessage = "Setup is incomplete. Grant both Folder Access and Full Disk Access."
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(RootPermissionPrimaryButtonStyle())
                 .disabled(!(model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess))
             }
         }
@@ -85,8 +91,11 @@ struct RootPermissionOnboardingCard: View {
     private func permissionStep(title: String, granted: Bool, details: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: granted ? "checkmark.seal.fill" : "xmark.seal.fill")
-                    .foregroundStyle(granted ? Color.green : Color.orange)
+                DRayQuietIconBadge(
+                    systemName: granted ? "checkmark.seal.fill" : "xmark.seal.fill",
+                    tone: granted ? .success : .warning,
+                    size: 22
+                )
                 Text(title)
                     .font(.subheadline.weight(.semibold))
             }
@@ -96,6 +105,39 @@ struct RootPermissionOnboardingCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .calmGlass(.nestedCard, cornerRadius: 12)
+    }
+}
+
+private struct RootPermissionPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(primaryFill(configuration: configuration))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(primaryBorder, lineWidth: 0.8)
+            )
+            .opacity(configuration.isPressed ? 0.86 : 1.0)
+    }
+
+    private func primaryFill(configuration: Configuration) -> Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.038 : 0.030)
+        }
+        return Color.accentColor.opacity(configuration.isPressed ? 0.135 : 0.105)
+    }
+
+    private var primaryBorder: Color {
+        isEnabled ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.07)
     }
 }

@@ -48,7 +48,8 @@ struct RootView: View {
                                 model: model,
                                 onChooseFolder: { isFolderPickerPresented = true }
                             )
-                                .glassSurface(cornerRadius: 16, strokeOpacity: 0.14, shadowOpacity: 0.08, padding: 12)
+                                .padding(12)
+                                .calmGlass(.section, cornerRadius: 16)
                         }
 
                         RootSectionRouter(

@@ -473,6 +473,7 @@ Finding fixed during QA:
 - Manual QA fix `swift test`: passed, 115 tests.
 
 ## Backlog / Risks
+- Permission onboarding banner was softened after the Visual QA report: primary permission actions now use a calm accent-tinted style, permission steps use near-flat nested cards, and the banner container uses `calmGlass(.section)` instead of the heavier `glassSurface`.
 - Manual QA still not fully exhaustive: dark menu bar popover, scan-running menu bar state, and full compact sweep for every module remain best done in an interactive pass before merge.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.
