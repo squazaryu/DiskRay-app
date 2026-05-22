@@ -4,14 +4,19 @@ struct MenuBarMiniRing: View {
     let icon: String
     var tint: Color
     var size: CGFloat = 76
+    var progress: Double = 0.98
     @Environment(\.colorScheme) private var colorScheme
+
+    private var clampedProgress: Double {
+        min(max(progress, 0.08), 1)
+    }
 
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.07), lineWidth: 12)
             Circle()
-                .trim(from: 0.08, to: 0.88)
+                .trim(from: 0.005, to: 0.005 + (0.98 * clampedProgress))
                 .stroke(
                     tint.opacity(colorScheme == .dark ? 0.58 : 0.48),
                     style: StrokeStyle(lineWidth: 6, lineCap: .round)

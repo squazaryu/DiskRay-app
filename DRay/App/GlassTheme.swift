@@ -645,13 +645,18 @@ struct DRayLiquidStatusRing: View {
     let icon: String
     var tint: Color = .blue
     var size: CGFloat = 132
+    var progress: Double = 0.98
+
+    private var clampedProgress: Double {
+        min(max(progress, 0.08), 1)
+    }
 
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.primary.opacity(0.055), lineWidth: 14)
             Circle()
-                .trim(from: 0.08, to: 0.88)
+                .trim(from: 0.005, to: 0.005 + (0.98 * clampedProgress))
                 .stroke(
                     tint.opacity(0.48),
                     style: StrokeStyle(lineWidth: 7, lineCap: .round)

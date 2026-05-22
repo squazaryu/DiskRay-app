@@ -223,7 +223,12 @@ struct OverviewView: View {
 
     private var heroStatusBlock: some View {
         HStack(spacing: density == .compact ? 12 : 16) {
-            DRayLiquidStatusRing(icon: healthIcon, tint: healthColor, size: density == .compact ? 102 : 120)
+            DRayLiquidStatusRing(
+                icon: healthIcon,
+                tint: healthColor,
+                size: density == .compact ? 102 : 120,
+                progress: healthRingProgress
+            )
 
             VStack(alignment: .leading, spacing: density == .compact ? 6 : 8) {
                 Text(t("СОСТОЯНИЕ СИСТЕМЫ", "SYSTEM HEALTH"))
@@ -514,6 +519,16 @@ struct OverviewView: View {
         if healthScore >= 0.76 { return .accentColor }
         if healthScore >= 0.54 { return .orange }
         return .red
+    }
+
+    private var healthRingProgress: Double {
+        if healthScore >= 0.76 {
+            return max(healthScore, 0.965)
+        }
+        if healthScore >= 0.54 {
+            return min(max(healthScore, 0.58), 0.72)
+        }
+        return min(max(healthScore, 0.18), 0.42)
     }
 
     private var focusSection: AppSection {

@@ -552,6 +552,88 @@ Finding fixed during QA:
 - Overview/Performance main metric cards still include sparklines/progress lines. That was not part of the menu bar metric-card request, but can be revisited if the same "no mini graphs" direction should apply globally.
 - Permission setup banner dominates temporary QA screenshots when Full Disk Access is missing. It is readable and actionable, but still consumes significant vertical space in compact windows.
 
+## Network Map / Scroll Audit
+
+### Map implementation
+- Files:
+  - `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
+- Current Map style:
+  - SwiftUI `Map(initialPosition:)` with `.standard(elevation: .realistic)`.
+  - Map content is clipped but not visually muted, so the native map looks brighter than surrounding calm cards.
+- Current overlays/annotations:
+  - Local Mac annotation uses a laptop icon with accent fill.
+  - Remote host annotations use colored circles from `endpointTint`.
+  - Connection lines use `MapPolyline` with host tint and opacity.
+- Current visual issue:
+  - The map still reads as a vivid embedded MapKit component instead of an integrated diagnostic surface.
+  - Endpoint pins and route lines are readable but still more saturated than the Calm Liquid Glass pass.
+
+### Nested scroll zones found
+- File: `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
+- Component: `networkMapSummaryCard`
+- Problem:
+  - A vertical `ScrollView` lives inside the Live Map side summary card with a fixed max height, creating a small nested scrollbar inside an already scrollable page.
+- Proposed fix:
+  - Replace the inner scroll with a normal `VStack`, show top remote hosts/processes, and let the page own vertical scrolling.
+- File: `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
+- Component: `networkListCard`
+- Problem:
+  - Hosts/Services/Programs cards use inner vertical `ScrollView` with `frame(minHeight:maxHeight:)`, producing dashboard cards with small scrollbars.
+- Proposed fix:
+  - Render `prefix(6)` diagnostic rows directly in the card and show a quiet `Showing top 6 of N` footer for long lists.
+
+### Constraints
+- Keep Network functionality.
+- Avoid nested vertical scroll unless absolutely necessary.
+- Keep compact layout usable.
+- Do not change Network diagnostics logic, sampling, geolocation, port scanning, WOL, or speed-test behavior.
+
+## Network Map / Scroll Visual QA
+
+### Screenshots
+- Live Map full-size: `/tmp/dray-network-scroll-qa/network-live-map-final-window.png`
+- Network Overview full-size: `/tmp/dray-network-scroll-qa/network-overview-window.png`
+- Network Tools full-size: `/tmp/dray-network-scroll-qa/network-tools-window.png`
+- Live Map compact/window crop: `/tmp/dray-network-scroll-qa/network-live-map-compact-window.png`
+- Overview ring check: `/tmp/dray-network-scroll-qa/overview-ring-final-window.png`
+
+### Live Map
+- [x] Map is less saturated.
+- [x] Map is visually integrated with Calm Liquid Glass.
+- [x] Markers are readable but not neon.
+- [x] Route/connection lines are muted.
+- [x] Map card border/background matches the rest of the app.
+- [x] Live Map remains functional.
+
+### Scroll behavior
+- [x] No strange nested vertical scrollbars in Network Overview.
+- [x] No strange nested vertical scrollbars in Live Map side panels.
+- [x] No strange nested vertical scrollbars in Network Tools.
+- [x] Main page scroll remains smooth.
+- [x] Compact window layout checked.
+- [x] Full-size window layout checked.
+
+### Functionality preserved
+- [x] Network hosts/services/programs still visible.
+- [x] Public IP card still visible.
+- [x] Latency still visible.
+- [x] Port scanner still usable.
+- [x] Wake-on-LAN still usable.
+- [x] Speed test still visible.
+
+### Implementation notes
+- Live Map now uses flat MapKit styling with POI/traffic removed, lower saturation/contrast, a subtle window-background veil, and a calm border.
+- Endpoint markers and routes were muted; selected endpoints still have visible accent emphasis.
+- `networkMapSummaryCard` no longer owns a vertical `ScrollView`.
+- Hosts/Services/Programs cards render top rows directly in the page flow and show a quiet `Showing top N of M` footer.
+
+## Ring Indicator Semantics QA
+- [x] System Health ring matches Excellent/Good/Fair/Poor-style status semantics; Overview maps local `Excellent` to a near-full visual ring and lower statuses to partial category progress.
+- [x] Menu Bar health ring uses the same visual semantics: `Good` is near-full, `Fair` is partial, attention state is low.
+- [x] Numeric rings show numeric score when progress is not category-based; Smart Care/Network/Recovery donut charts keep center numeric values.
+- [x] Excellent does not appear visually incomplete.
+- [x] Smart Care donut/ring remains meaningful and not misleading.
+
 ## Visual Guardrails QA
 - [x] Nested cards are mostly flat or near-flat in checked screens.
 - [x] Heavy blur is limited to major surfaces in checked screens.
@@ -607,6 +689,10 @@ Finding fixed during QA:
 - Follow-up metric cards `swift build`: passed.
 - Follow-up metric cards `swift test`: passed, 115 tests.
 - Manual UI QA 2026-05-22: screenshot-based pass completed; no code changes required from this pass.
+- Network map / scroll pass `swift build`: passed.
+- Network map / scroll pass `swift test`: passed, 115 tests.
+- Network map / scroll pass `git diff --check`: passed.
+- Installed current branch to `/Applications/DRay.app` as `2.1.3 (1)` for visual QA; no release package, tag, or version bump was created.
 
 ## Backlog / Risks
 - Permission onboarding banner was softened after the Visual QA report: primary permission actions now use a calm accent-tinted style, permission steps use near-flat nested cards, and the banner container uses `calmGlass(.section)` instead of the heavier `glassSurface`.

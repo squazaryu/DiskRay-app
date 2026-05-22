@@ -116,7 +116,12 @@ struct MenuBarPopupView: View {
             Button {
                 showHealthDetails.toggle()
             } label: {
-                MenuBarMiniRing(icon: healthTitle == "Good" ? "checkmark" : "exclamationmark", tint: healthColor, size: 68)
+                MenuBarMiniRing(
+                    icon: healthTitle == "Good" ? "checkmark" : "exclamationmark",
+                    tint: healthColor,
+                    size: 68,
+                    progress: healthRingProgress
+                )
             }
             .buttonStyle(.plain)
             .contentShape(Circle())
@@ -649,6 +654,17 @@ struct MenuBarPopupView: View {
         case "Good": return .green
         case "Fair": return .orange
         default: return .red
+        }
+    }
+
+    private var healthRingProgress: Double {
+        switch healthTitle {
+        case "Good":
+            return 0.98
+        case "Fair":
+            return 0.62
+        default:
+            return 0.32
         }
     }
 
