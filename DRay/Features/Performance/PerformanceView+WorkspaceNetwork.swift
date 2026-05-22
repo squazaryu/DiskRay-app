@@ -417,15 +417,19 @@ extension PerformanceView {
                         Annotation(t("Этот Mac", "This Mac"), coordinate: local) {
                             VStack(spacing: 4) {
                                 Image(systemName: "laptopcomputer")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(Color.accentColor.opacity(0.68))
-                                    .padding(7)
-                                    .background(Color.primary.opacity(0.045), in: Circle())
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.accentColor.opacity(0.62))
+                                    .padding(6)
+                                    .background(Color.primary.opacity(0.055), in: Circle())
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(Color.white.opacity(0.50), lineWidth: 0.8)
+                                    )
                                 Text(t("Этот Mac", "This Mac"))
                                     .font(.caption2.weight(.semibold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .background(Color.primary.opacity(0.055), in: Capsule())
                             }
                         }
                     }
@@ -437,18 +441,19 @@ extension PerformanceView {
                                 selectedNetworkServiceID = nil
                                 selectedNetworkProgramID = nil
                             } label: {
+                                let isSelected = row.host == selectedNetworkHostID
                                 ZStack {
                                     Circle()
-                                        .fill(endpointTint(for: row.host))
+                                        .fill(isSelected ? Color.accentColor.opacity(0.58) : endpointTint(for: row.host).opacity(0.34))
                                         .frame(
-                                            width: row.host == selectedNetworkHostID ? 18 : 14,
-                                            height: row.host == selectedNetworkHostID ? 18 : 14
+                                            width: isSelected ? 10 : 7,
+                                            height: isSelected ? 10 : 7
                                         )
                                     Circle()
-                                        .fill(Color.white.opacity(0.92))
+                                        .strokeBorder(Color.white.opacity(0.65), lineWidth: 1)
                                         .frame(
-                                            width: row.host == selectedNetworkHostID ? 6 : 4,
-                                            height: row.host == selectedNetworkHostID ? 6 : 4
+                                            width: isSelected ? 12 : 9,
+                                            height: isSelected ? 12 : 9
                                         )
                                 }
                                 .padding(4)
@@ -461,18 +466,45 @@ extension PerformanceView {
 
                     if let local = localNetworkHubCoordinate {
                         ForEach(geolocatedHostRows.prefix(12)) { row in
+                            let isSelected = row.host == selectedNetworkHostID
                             MapPolyline(coordinates: [local, row.coordinate])
                                 .stroke(
-                                    endpointTint(for: row.host).opacity(row.host == selectedNetworkHostID ? 0.42 : 0.16),
-                                    lineWidth: row.host == selectedNetworkHostID ? 1.7 : 0.8
+                                    (isSelected ? Color.accentColor : endpointTint(for: row.host))
+                                        .opacity(isSelected ? 0.34 : 0.12),
+                                    style: StrokeStyle(lineWidth: isSelected ? 1.35 : 0.7, lineCap: .round, lineJoin: .round)
                                 )
                         }
                     }
                 }
                 .id(networkMapIdentity)
-                .mapStyle(.standard(elevation: .realistic))
+                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
+                .saturation(0.52)
+                .contrast(0.86)
+                .brightness(-0.010)
                 .frame(minHeight: 260, maxHeight: 340)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    Color(nsColor: .windowBackgroundColor)
+                        .opacity(0.055)
+                        .allowsHitTesting(false)
+                )
+                .overlay(alignment: .top) {
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .windowBackgroundColor).opacity(0.18),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 44)
+                    .allowsHitTesting(false)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        .allowsHitTesting(false)
+                )
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(t("Недостаточно данных для карты.", "Not enough data to render map."))
@@ -531,8 +563,7 @@ extension PerformanceView {
     }
 
     private var networkMapSummaryCard: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             performanceCardTitle(t("Сводка", "Summary"), icon: "list.bullet.rectangle", tint: .blue)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -722,11 +753,9 @@ extension PerformanceView {
                 }
             }
 
-                Spacer(minLength: 0)
-            }
         }
         .padding(layoutMetrics.cardSpacing)
-        .frame(minHeight: 240, idealHeight: 390, maxHeight: 560, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
     }
 
@@ -1473,44 +1502,58 @@ extension PerformanceView {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
             } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(rows) { row in
-                            Button {
-                                onSelect(row)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    DRayIconBadge(icon: row.icon, tint: .blue, size: 24)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(row.title)
-                                            .font(.subheadline.weight(.semibold))
-                                            .lineLimit(1)
-                                        if !row.subtitle.isEmpty {
-                                            Text(row.subtitle)
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    Spacer()
-                                    Text(row.value)
+                let visibleRows = Array(rows.prefix(6))
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(visibleRows) { row in
+                        Button {
+                            onSelect(row)
+                        } label: {
+                            HStack(spacing: 10) {
+                                DRayIconBadge(icon: row.icon, tint: .blue, size: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.title)
                                         .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .monospacedDigit()
+                                        .lineLimit(1)
+                                    if !row.subtitle.isEmpty {
+                                        Text(row.subtitle)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                 }
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 7)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(row.id == selectedRowID ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.05))
-                                )
+                                Spacer()
+                                Text(row.value)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(row.id == selectedRowID ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.045))
+                            )
+                            .overlay(alignment: .leading) {
+                                if row.id == selectedRowID {
+                                    Capsule()
+                                        .fill(Color.accentColor.opacity(0.68))
+                                        .frame(width: 3)
+                                        .padding(.vertical, 6)
+                                }
+                            }
                         }
+                        .buttonStyle(.plain)
+                    }
+
+                    if rows.count > visibleRows.count {
+                        Text(t("Показаны первые \(visibleRows.count) из \(rows.count)", "Showing top \(visibleRows.count) of \(rows.count)"))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 2)
                     }
                 }
-                .frame(minHeight: 160, maxHeight: 260)
             }
         }
         .padding(layoutMetrics.cardSpacing)
