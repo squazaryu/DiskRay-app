@@ -16,7 +16,7 @@ extension PerformanceView {
                 Button(t("Отключить выбранные", "Disable Selected")) {
                     requestStartupCleanup()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selectedEntries.isEmpty)
 

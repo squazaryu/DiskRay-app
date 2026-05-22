@@ -411,14 +411,54 @@ Finding fixed during QA:
 - [ ] Menu bar checked
 
 ### Compact layout
-- [ ] Overview
+- [x] Overview
 - [ ] Smart Care
 - [ ] Search
 - [ ] Uninstaller
 - [ ] Performance
 - [ ] Network
 - [x] Settings
-- [ ] Menu bar
+- [x] Menu bar
+
+## Follow-up UI Polish Pass
+
+### Changed
+- Softened the shared `DRayPrimaryButtonStyle` so primary actions are accent-tinted instead of saturated blue filled buttons.
+- Replaced remaining `.borderedProminent` usage in the main app target with `DRayPrimaryButtonStyle()`.
+- Added `ViewThatFits` fallbacks to the permission onboarding banner so steps/actions wrap cleanly in compact windows.
+- Added `MenuBarSoftButtonStyle` with primary/secondary/danger tones and removed remaining system prominent/bordered menu bar buttons.
+- Neutralized menu bar popover shell/card surfaces so desktop wallpaper color no longer creates a blue wash through heavy `.thinMaterial`.
+
+### Files touched in this pass
+- `DRay/App/GlassTheme.swift`
+- `DRay/App/Root/RootPermissionOnboardingCard.swift`
+- `DRay/Features/Clutter/ClutterView.swift`
+- `DRay/Features/Health/HealthPopupView.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceNetwork.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceOverview.swift`
+- `DRay/Features/Performance/PerformanceView+WorkspaceStartup.swift`
+- `DRay/Features/Privacy/PrivacyView.swift`
+- `DRay/Features/Recovery/RecoveryView.swift`
+- `DRay/Features/Repair/RepairView.swift`
+- `DRay/Features/SmartCare/SmartCareView.swift`
+- `DRay/Features/SpaceLens/BubbleMapView.swift`
+- `DRay/Features/SpaceLens/SpaceLensView.swift`
+- `DRay/Features/Uninstaller/UninstallerView.swift`
+- `DRayMenuBarHelper/BatteryDetailsSheetView.swift`
+- `DRayMenuBarHelper/MenuBarHealthDetailsPopover.swift`
+- `DRayMenuBarHelper/MenuBarPopupCards.swift`
+- `DRayMenuBarHelper/MenuBarPopupOverlays.swift`
+- `DRayMenuBarHelper/MenuBarPopupView.swift`
+
+### QA evidence
+- `/tmp/dray-ui-refactor-qa/screens/compact-dark-overview-after.png`: compact Overview in forced dark app appearance; permission onboarding wraps cleanly and primary actions are no longer saturated blue.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-neutral-after.png`: live menu bar helper popover from the temporary QA helper; installed helper was restored afterward.
+- `/tmp/dray-ui-refactor-qa/screens/menu-bar-popover-dark-forced.png`: attempted process-local `-AppleInterfaceStyle Dark` helper launch. Cocoa did not switch the popover to dark while the system global appearance was Light, so true dark menu bar QA still requires switching macOS appearance or testing on a dark-system session.
+
+### Validation
+- `swift build`: passed.
+- `swift test`: passed, 115 tests.
+- `git diff --check`: passed before final staging.
 
 ## Visual Guardrails QA
 - [x] Nested cards are mostly flat or near-flat in checked screens.
@@ -474,6 +514,6 @@ Finding fixed during QA:
 
 ## Backlog / Risks
 - Permission onboarding banner was softened after the Visual QA report: primary permission actions now use a calm accent-tinted style, permission steps use near-flat nested cards, and the banner container uses `calmGlass(.section)` instead of the heavier `glassSurface`.
-- Manual QA still not fully exhaustive: dark menu bar popover, scan-running menu bar state, and full compact sweep for every module remain best done in an interactive pass before merge.
+- Manual QA still not fully exhaustive: true dark-system menu bar popover, scan-running menu bar state, and compact sweep for Smart Care/Search/Uninstaller/Performance/Network remain best done in an interactive pass before merge.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.

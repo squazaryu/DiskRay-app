@@ -163,8 +163,7 @@ struct MenuBarPopupView: View {
                 Label("Smart Scan", systemImage: "wand.and.sparkles")
                     .frame(minWidth: 94)
             }
-            .font(.system(size: 11, weight: .semibold))
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(MenuBarSoftButtonStyle(tone: .primary))
             .controlSize(.small)
         }
         .padding(12)
@@ -235,8 +234,7 @@ struct MenuBarPopupView: View {
                 Button("Performance") {
                     model.open(section: .performance, action: .runPerformanceScan)
                 }
-                .font(popupButtonFont)
-                .buttonStyle(.bordered)
+                .buttonStyle(MenuBarSoftButtonStyle())
                 .controlSize(.small)
             }
             if monitor.snapshot.topCPUConsumers.isEmpty {
@@ -262,18 +260,16 @@ struct MenuBarPopupView: View {
                     showReliefConfirm = true
                 }
                 .disabled(cpuReliefCandidates.isEmpty)
-                .font(popupButtonFont)
                 .controlSize(.small)
-                .buttonStyle(.bordered)
+                .buttonStyle(MenuBarSoftButtonStyle())
 
                 Button("Reduce Memory") {
                     pendingReliefAction = .memory
                     showReliefConfirm = true
                 }
                 .disabled(memoryReliefCandidates.isEmpty)
-                .font(popupButtonFont)
                 .controlSize(.small)
-                .buttonStyle(.bordered)
+                .buttonStyle(MenuBarSoftButtonStyle())
 
                 Spacer()
 
@@ -281,9 +277,8 @@ struct MenuBarPopupView: View {
                     model.restorePriorities()
                 }
                 .disabled(!model.canRestorePriorities)
-                .font(popupButtonFont)
                 .controlSize(.small)
-                .buttonStyle(.bordered)
+                .buttonStyle(MenuBarSoftButtonStyle())
             }
         }
         .padding(10)
@@ -305,8 +300,7 @@ struct MenuBarPopupView: View {
             Button(recommendationActionTitle) {
                 recommendationAction()
             }
-            .font(popupButtonFont)
-            .buttonStyle(.bordered)
+            .buttonStyle(MenuBarSoftButtonStyle())
             .controlSize(.small)
         }
         .padding(9)
@@ -323,25 +317,19 @@ struct MenuBarPopupView: View {
                 Button("Smart Scan") {
                     model.open(section: .smartCare, action: .runUnifiedScan)
                 }
-                .font(popupButtonFont)
-                .buttonStyle(.bordered)
-                .tint(.secondary)
+                .buttonStyle(MenuBarSoftButtonStyle())
                 .controlSize(.small)
 
                 Button("Open DRay") {
                     model.openMain()
                 }
-                .font(popupButtonFont)
-                .buttonStyle(.bordered)
-                .tint(.secondary)
+                .buttonStyle(MenuBarSoftButtonStyle())
                 .controlSize(.small)
 
                 Button("Quit Completely") {
                     model.quitCompletely()
                 }
-                .font(popupButtonFont)
-                .buttonStyle(.bordered)
-                .tint(quietDangerTint)
+                .buttonStyle(MenuBarSoftButtonStyle(tone: .danger))
                 .controlSize(.small)
 
                 Spacer(minLength: 4)
@@ -363,8 +351,7 @@ struct MenuBarPopupView: View {
                         .font(popupButtonFont)
                 }
                 .controlSize(.small)
-                .buttonStyle(.bordered)
-                .tint(.secondary)
+                .buttonStyle(MenuBarSoftButtonStyle())
             }
         }
         .padding(9)
@@ -434,21 +421,19 @@ struct MenuBarPopupView: View {
         Color.secondary
     }
 
-    private var quietDangerTint: Color {
-        Color(red: 0.58, green: 0.30, blue: 0.28)
-    }
-
     private var shellBackground: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.thinMaterial)
+                .fill(.regularMaterial)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(shellNeutralFill)
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24),
-                            Color.white.opacity(colorScheme == .dark ? 0.018 : 0.055),
-                            Color.black.opacity(colorScheme == .dark ? 0.075 : 0.025)
+                            Color.white.opacity(colorScheme == .dark ? 0.050 : 0.065),
+                            Color.white.opacity(colorScheme == .dark ? 0.010 : 0.025),
+                            Color.black.opacity(colorScheme == .dark ? 0.055 : 0.018)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -459,15 +444,15 @@ struct MenuBarPopupView: View {
 
     private func cardBackground(accent: Color, cornerRadius: CGFloat = 10) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.thinMaterial)
+            .fill(cardNeutralFill)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.025 : 0.095),
-                                accent.opacity(colorScheme == .dark ? 0.018 : 0.012),
-                                Color.white.opacity(colorScheme == .dark ? 0.006 : 0.025),
+                                Color.white.opacity(colorScheme == .dark ? 0.020 : 0.050),
+                                accent.opacity(colorScheme == .dark ? 0.014 : 0.008),
+                                Color.white.opacity(colorScheme == .dark ? 0.004 : 0.016),
                                 Color.clear
                             ],
                             startPoint: .topLeading,
@@ -483,6 +468,18 @@ struct MenuBarPopupView: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.10), lineWidth: 0.35)
             )
+    }
+
+    private var shellNeutralFill: Color {
+        colorScheme == .dark
+        ? Color(red: 0.095, green: 0.100, blue: 0.115).opacity(0.92)
+        : Color(red: 0.925, green: 0.935, blue: 0.955).opacity(0.90)
+    }
+
+    private var cardNeutralFill: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.046)
+        : Color.white.opacity(0.46)
     }
 
     private var borderColor: Color {

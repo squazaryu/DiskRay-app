@@ -835,7 +835,7 @@ extension PerformanceView {
                     Button(t("Копировать IP", "Copy IP")) {
                         copyPublicIPToClipboard(profile.ip)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .controlSize(.small)
                     Spacer()
                     Text(t("Обновлено \(relativeTime(profile.updatedAt))", "Updated \(relativeTime(profile.updatedAt))"))
@@ -974,7 +974,7 @@ extension PerformanceView {
                     Button(t("Скан", "Scan")) {
                         startPortScan()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .controlSize(.small)
                     .disabled(isPortScannerRunning)
                 }
@@ -1011,7 +1011,7 @@ extension PerformanceView {
                         Button(t("Скан", "Scan")) {
                             startPortScan()
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(DRayPrimaryButtonStyle())
                         .controlSize(.small)
                         .disabled(isPortScannerRunning)
                     }
@@ -1108,7 +1108,7 @@ extension PerformanceView {
             Button(t("Send magic packet", "Send magic packet")) {
                 sendWakeOnLANPacket()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayPrimaryButtonStyle())
             .controlSize(.small)
 
             if let status = wakeOnLANStatusMessage, !status.isEmpty {
@@ -1137,7 +1137,7 @@ extension PerformanceView {
                 Button(t("Запустить тест скорости", "Run speed test")) {
                     model.runNetworkSpeedTest()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.performance.isNetworkSpeedTestRunning)
             }

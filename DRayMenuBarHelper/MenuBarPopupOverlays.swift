@@ -24,11 +24,11 @@ struct ReliefConfirmOverlayView: View {
                 HStack {
                     Spacer()
                     Button("Cancel", action: onCancel)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(MenuBarSoftButtonStyle())
                         .controlSize(.small)
 
                     Button(actionTitle, action: onConfirm)
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(MenuBarSoftButtonStyle(tone: .primary))
                         .controlSize(.small)
                 }
             }
@@ -63,7 +63,7 @@ struct ReliefResultBannerView: View {
             HStack {
                 Spacer()
                 Button("OK", action: onDismiss)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(MenuBarSoftButtonStyle())
                     .controlSize(.small)
             }
         }

@@ -427,7 +427,7 @@ struct UninstallerView: View {
                     Button("Uninstall", role: .destructive) {
                         showUninstallPreview = true
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                 }
                 .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
 

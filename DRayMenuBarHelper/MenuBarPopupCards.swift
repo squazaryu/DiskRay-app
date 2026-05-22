@@ -144,9 +144,7 @@ struct MenuBarMetricTileCard: View {
                 HStack {
                     Spacer()
                     Button(actionTitle, action: action)
-                        .font(.system(size: 11, weight: .semibold))
-                        .buttonStyle(.bordered)
-                        .tint(.secondary)
+                        .buttonStyle(MenuBarSoftButtonStyle())
                         .controlSize(.small)
                 }
             }
@@ -272,10 +270,8 @@ struct MenuBarMetricLineView: View {
             Spacer(minLength: 6)
 
             Button(actionTitle, action: action)
-                .font(.system(size: 12, weight: .semibold))
                 .controlSize(.small)
-                .buttonStyle(.bordered)
-                .tint(.secondary)
+                .buttonStyle(MenuBarSoftButtonStyle())
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -329,10 +325,8 @@ struct MenuBarBatteryLineView: View {
             Spacer(minLength: 6)
 
             Button("Details", action: onDetails)
-                .font(.system(size: 12, weight: .semibold))
                 .controlSize(.small)
-                .buttonStyle(.bordered)
-                .tint(.secondary)
+                .buttonStyle(MenuBarSoftButtonStyle())
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -360,14 +354,14 @@ struct MenuBarCompactRowSurface: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.primary.opacity(colorScheme == .dark ? 0.040 : 0.024))
+            .fill(colorScheme == .dark ? Color.white.opacity(0.040) : Color.white.opacity(0.30))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.018 : 0.050),
-                                accent.opacity(colorScheme == .dark ? 0.016 : 0.010),
+                                Color.white.opacity(colorScheme == .dark ? 0.018 : 0.034),
+                                accent.opacity(colorScheme == .dark ? 0.014 : 0.006),
                                 .clear
                             ],
                             startPoint: .topLeading,
@@ -383,5 +377,79 @@ struct MenuBarCompactRowSurface: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.08), lineWidth: 0.30)
             )
+    }
+}
+
+struct MenuBarSoftButtonStyle: ButtonStyle {
+    enum Tone {
+        case primary
+        case secondary
+        case danger
+    }
+
+    var tone: Tone = .secondary
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .foregroundStyle(foreground)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(fillColor(isPressed: configuration.isPressed))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 0.7)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.84 : 1) : 0.50)
+    }
+
+    private var foreground: Color {
+        guard isEnabled else { return .secondary }
+        switch tone {
+        case .primary:
+            return .primary
+        case .secondary:
+            return .primary
+        case .danger:
+            return Color(red: 0.68, green: 0.28, blue: 0.25)
+        }
+    }
+
+    private func fillColor(isPressed: Bool) -> Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.034 : 0.026)
+        }
+
+        let pressedBoost = isPressed ? 0.035 : 0
+        switch tone {
+        case .primary:
+            return Color.accentColor.opacity((colorScheme == .dark ? 0.145 : 0.105) + pressedBoost)
+        case .secondary:
+            return Color.primary.opacity((colorScheme == .dark ? 0.052 : 0.040) + pressedBoost)
+        case .danger:
+            return Color.red.opacity((colorScheme == .dark ? 0.105 : 0.080) + pressedBoost)
+        }
+    }
+
+    private var borderColor: Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.060 : 0.045)
+        }
+
+        switch tone {
+        case .primary:
+            return Color.accentColor.opacity(colorScheme == .dark ? 0.26 : 0.22)
+        case .secondary:
+            return Color.primary.opacity(colorScheme == .dark ? 0.085 : 0.065)
+        case .danger:
+            return Color.red.opacity(colorScheme == .dark ? 0.24 : 0.20)
+        }
     }
 }

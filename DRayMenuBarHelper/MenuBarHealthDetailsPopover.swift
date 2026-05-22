@@ -36,7 +36,7 @@ struct MenuBarHealthDetailsPopoverView: View {
             HStack {
                 Spacer()
                 Button("Open Performance", action: onOpenPerformance)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(MenuBarSoftButtonStyle())
                     .controlSize(.small)
             }
         }

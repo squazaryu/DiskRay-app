@@ -72,7 +72,7 @@ struct RecoveryView: View {
                 Button(t("Удалённые", "Recently Deleted")) {
                     workspaceTab = .recentlyDeleted
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
 
                 Button(t("Rollback", "Rollback")) {
@@ -85,7 +85,7 @@ struct RecoveryView: View {
                 Button(t("Восстановить выбранные", "Restore Selected")) {
                     restoreSelectedItems()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selected.isEmpty)
 
@@ -115,7 +115,7 @@ struct RecoveryView: View {
                 Button(t("Открыть удалённые", "Open Recently Deleted")) {
                     workspaceTab = .recentlyDeleted
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
 
                 Button(t("Открыть Rollback", "Open Rollback")) {
@@ -128,7 +128,7 @@ struct RecoveryView: View {
                 Button(t("Восстановить выбранные", "Restore Selected")) {
                     restoreSelectedItems()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(selected.isEmpty)
 
@@ -633,7 +633,7 @@ struct RecoveryView: View {
                         resultMessage = t("Элемент восстановлен.", "Item restored.")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
 
                 Button(t("Показать", "Reveal")) {
@@ -746,7 +746,7 @@ struct RecoveryView: View {
                         rollbackMessage = summary
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
             } else {
                 GlassPillBadge(

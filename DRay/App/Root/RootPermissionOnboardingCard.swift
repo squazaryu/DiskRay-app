@@ -32,18 +32,7 @@ struct RootPermissionOnboardingCard: View {
                 .controlSize(.small)
             }
 
-            HStack(spacing: 10) {
-                permissionStep(
-                    title: "Folder Access",
-                    granted: model.permissions.hasFolderPermission,
-                    details: "Required for selected scan target."
-                )
-                permissionStep(
-                    title: "Full Disk Access",
-                    granted: model.permissions.hasFullDiskAccess,
-                    details: "Required for full scan, privacy, uninstaller and repair."
-                )
-            }
+            permissionSteps
 
             if let hint = model.permissions.permissionHint, !hint.isEmpty {
                 Text(hint)
@@ -51,41 +40,107 @@ struct RootPermissionOnboardingCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
-                Button("Grant Folder Access") {
-                    onChooseFolder()
-                }
-                .buttonStyle(RootPermissionPrimaryButtonStyle())
+            permissionActions
+        }
+    }
 
-                Button("Open Full Disk Access") {
-                    model.permissions.openFullDiskAccessSettings()
-                }
-                .buttonStyle(DRaySecondaryButtonStyle())
+    private var permissionSteps: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                folderAccessStep
+                fullDiskAccessStep
+            }
 
-                Button("Refresh Status") {
-                    model.refreshPermissionsAsync()
-                }
-                .buttonStyle(DRaySecondaryButtonStyle())
-
-                Button("Restore") {
-                    model.restorePermissions()
-                }
-                .buttonStyle(DRaySecondaryButtonStyle())
-
-                Spacer()
-
-                Button("Finish Setup") {
-                    model.refreshPermissions()
-                    if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
-                        model.permissions.markOnboardingCompleted()
-                    } else {
-                        model.permissionBlockingMessage = "Setup is incomplete. Grant both Folder Access and Full Disk Access."
-                    }
-                }
-                .buttonStyle(RootPermissionPrimaryButtonStyle())
-                .disabled(!(model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess))
+            VStack(alignment: .leading, spacing: 8) {
+                folderAccessStep
+                fullDiskAccessStep
             }
         }
+    }
+
+    private var permissionActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                grantFolderAccessButton
+                openFullDiskAccessButton
+                refreshStatusButton
+                restoreButton
+                Spacer()
+                finishSetupButton
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    grantFolderAccessButton
+                    openFullDiskAccessButton
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 8) {
+                    refreshStatusButton
+                    restoreButton
+                    Spacer(minLength: 0)
+                    finishSetupButton
+                }
+            }
+        }
+    }
+
+    private var folderAccessStep: some View {
+        permissionStep(
+            title: "Folder Access",
+            granted: model.permissions.hasFolderPermission,
+            details: "Required for selected scan target."
+        )
+    }
+
+    private var fullDiskAccessStep: some View {
+        permissionStep(
+            title: "Full Disk Access",
+            granted: model.permissions.hasFullDiskAccess,
+            details: "Required for full scan, privacy, uninstaller and repair."
+        )
+    }
+
+    private var grantFolderAccessButton: some View {
+        Button("Grant Folder Access") {
+            onChooseFolder()
+        }
+        .buttonStyle(RootPermissionPrimaryButtonStyle())
+    }
+
+    private var openFullDiskAccessButton: some View {
+        Button("Open Full Disk Access") {
+            model.permissions.openFullDiskAccessSettings()
+        }
+        .buttonStyle(DRaySecondaryButtonStyle())
+    }
+
+    private var refreshStatusButton: some View {
+        Button("Refresh Status") {
+            model.refreshPermissionsAsync()
+        }
+        .buttonStyle(DRaySecondaryButtonStyle())
+    }
+
+    private var restoreButton: some View {
+        Button("Restore") {
+            model.restorePermissions()
+        }
+        .buttonStyle(DRaySecondaryButtonStyle())
+    }
+
+    private var finishSetupButton: some View {
+        Button("Finish Setup") {
+            model.refreshPermissions()
+            if model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess {
+                model.permissions.markOnboardingCompleted()
+            } else {
+                model.permissionBlockingMessage = "Setup is incomplete. Grant both Folder Access and Full Disk Access."
+            }
+        }
+        .buttonStyle(RootPermissionPrimaryButtonStyle())
+        .disabled(!(model.permissions.hasFolderPermission && model.permissions.hasFullDiskAccess))
     }
 
     private func permissionStep(title: String, granted: Bool, details: String) -> some View {

@@ -647,7 +647,7 @@ struct SmartCareView: View {
                     selectedItemPaths.removeAll()
                     model.runSmartScan()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.smartCare.isCleanupRunning || model.smartCare.isScanRunning || model.isUnifiedScanRunning)
 
@@ -744,7 +744,7 @@ struct SmartCareView: View {
             Button("Clean Selection") {
                 cleanSelection()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayPrimaryButtonStyle())
             .controlSize(.small)
             .disabled(model.smartCare.isCleanupRunning || selectedCategoryCount == 0 && selectedItemPaths.isEmpty)
         }

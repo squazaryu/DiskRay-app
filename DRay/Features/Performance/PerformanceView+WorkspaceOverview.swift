@@ -106,7 +106,7 @@ extension PerformanceView {
                 .foregroundStyle(.secondary)
                 .lineLimit(4)
             Button(insightActionTitle) { workspaceTab = insightTarget }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)

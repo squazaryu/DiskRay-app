@@ -14,10 +14,10 @@ struct BatteryDetailsSheetView: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 Button("Refresh") { onRefresh() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MenuBarSoftButtonStyle())
                     .controlSize(.small)
                 Button("Close") { onClose() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MenuBarSoftButtonStyle())
                     .controlSize(.small)
             }
 
@@ -82,7 +82,7 @@ struct BatteryDetailsSheetView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Button("Retry") { onRefresh() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(MenuBarSoftButtonStyle())
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }

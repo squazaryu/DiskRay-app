@@ -99,7 +99,7 @@ struct SpaceLensView: View {
                 targetPicker
 
                 Button(model.localized(.spaceLensScan)) { model.scanSelected() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .controlSize(.small)
                     .disabled(model.isLoading)
 
@@ -244,7 +244,7 @@ struct SpaceLensView: View {
                 targetPicker
 
                 Button(model.localized(.spaceLensScan)) { model.scanSelected() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .controlSize(.small)
                     .disabled(model.isLoading)
 
@@ -526,7 +526,7 @@ struct SpaceLensView: View {
             HStack(spacing: 12) {
                 targetPicker
                 Button(model.localized(.spaceLensScan)) { model.scanSelected() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .disabled(model.isLoading)
             }
 

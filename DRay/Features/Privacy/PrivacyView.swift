@@ -218,7 +218,7 @@ struct PrivacyView: View {
                 Button("Scan Privacy Traces") {
                     model.runScan()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.state.isScanRunning)
 
@@ -262,7 +262,7 @@ struct PrivacyView: View {
                 pendingCleanMode = .selected
                 showConfirm = true
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayPrimaryButtonStyle())
             .controlSize(.small)
             .disabled(selectedCount == 0)
 

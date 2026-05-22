@@ -79,7 +79,7 @@ struct BubbleMapView: View {
                     } label: {
                         Label(t(.bubbleRoot), systemImage: "house")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DRayPrimaryButtonStyle())
                     .tint(accentColor)
 
                     Button {

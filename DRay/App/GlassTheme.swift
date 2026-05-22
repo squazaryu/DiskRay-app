@@ -896,17 +896,38 @@ struct MinimalGlassButtonStyle: ButtonStyle {
 }
 
 struct DRayPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.caption.weight(.semibold))
+            .lineLimit(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.accentColor.opacity(configuration.isPressed ? 0.70 : 0.88))
+                    .fill(fillColor(isPressed: configuration.isPressed))
             )
-            .foregroundStyle(.white)
-            .opacity(configuration.isPressed ? 0.90 : 1)
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 0.8)
+            )
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+    }
+
+    private func fillColor(isPressed: Bool) -> Color {
+        guard isEnabled else {
+            return Color.primary.opacity(colorScheme == .dark ? 0.034 : 0.026)
+        }
+        return Color.accentColor.opacity((colorScheme == .dark ? 0.145 : 0.105) + (isPressed ? 0.035 : 0))
+    }
+
+    private var borderColor: Color {
+        isEnabled
+        ? Color.accentColor.opacity(colorScheme == .dark ? 0.26 : 0.22)
+        : Color.primary.opacity(colorScheme == .dark ? 0.060 : 0.045)
     }
 }
 

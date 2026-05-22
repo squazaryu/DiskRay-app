@@ -109,7 +109,7 @@ struct HealthPopupView: View {
             Button("Run Full Smart Scan") {
                 model.runUnifiedScan()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DRayPrimaryButtonStyle())
             .controlSize(.small)
 
             Button("Open Performance") {

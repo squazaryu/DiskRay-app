@@ -134,7 +134,7 @@ struct ClutterView: View {
                     selectedPaths.removeAll()
                     model.scanDuplicatesInSelectedTarget()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DRayPrimaryButtonStyle())
                 .controlSize(.small)
                 .disabled(model.isDuplicateScanRunning)
 

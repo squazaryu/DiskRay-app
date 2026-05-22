@@ -153,7 +153,7 @@ struct RepairView: View {
                                 Button("Repair") {
                                     requestRepairFlow()
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(DRayPrimaryButtonStyle())
                                 .disabled(repairArtifacts.isEmpty || isRepairLoading)
                             }
                             .glassSurface(cornerRadius: 14, strokeOpacity: 0.05, shadowOpacity: 0.03, padding: layoutMetrics.cardSpacing)
