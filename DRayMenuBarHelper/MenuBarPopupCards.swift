@@ -48,50 +48,37 @@ struct MenuBarMetricTileCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tint.opacity(colorScheme == .dark ? 0.74 : 0.64))
-                    .frame(width: 21, height: 21)
-                    .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Color.primary.opacity(colorScheme == .dark ? 0.045 : 0.030))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.070 : 0.055), lineWidth: 0.7)
-                    )
+        HStack(alignment: .center, spacing: 8) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(colorScheme == .dark ? 0.56 : 0.42))
+                .frame(width: 3, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Spacer(minLength: 0)
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.70)
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
 
-            Text(value)
-                .font(.system(size: 15, weight: .semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.70)
-
-            Text(subtitle)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-
-            Spacer(minLength: 0)
+            Spacer(minLength: 6)
 
             if let actionTitle, let action {
-                HStack {
-                    Spacer()
-                    Button(actionTitle, action: action)
-                        .buttonStyle(MenuBarSoftButtonStyle())
-                        .controlSize(.small)
-                }
+                Button(actionTitle, action: action)
+                    .buttonStyle(MenuBarSoftButtonStyle())
+                    .controlSize(.small)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 92, maxHeight: 92, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 76, maxHeight: 76, alignment: .leading)
         .padding(8)
         .background(MenuBarCompactRowSurface(colorScheme: colorScheme, accent: tint, cornerRadius: 14))
     }
@@ -106,8 +93,9 @@ struct MenuBarRankedConsumerRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            MenuBarConsumerLoadMarker(value: progress, tint: tint)
-                .frame(width: 4)
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.46))
+                .frame(width: 3, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)

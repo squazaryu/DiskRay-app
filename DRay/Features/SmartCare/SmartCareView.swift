@@ -103,67 +103,60 @@ struct SmartCareView: View {
 
     private var smartCareHero: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 18) {
+            HStack(alignment: .center, spacing: 16) {
                 smartCareHeroIdentity
 
                 Spacer(minLength: 10)
 
-                DRayDonutChartView(
-                    segments: smartCategorySegments,
-                    centerTitle: smartPotentialSize,
-                    centerSubtitle: "potential",
-                    lineWidth: 16
-                )
-                .frame(width: 132, height: 132)
+                smartCareHeroMetrics
+                    .frame(width: 380)
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 smartCareHeroIdentity
-
-                DRayDonutChartView(
-                    segments: smartCategorySegments,
-                    centerTitle: smartPotentialSize,
-                    centerSubtitle: "potential",
-                    lineWidth: 14
-                )
-                .frame(width: 112, height: 112)
-                .frame(maxWidth: .infinity, alignment: .center)
+                smartCareHeroMetrics
             }
         }
-        .padding(14)
-        .calmGlass(.section, cornerRadius: 22)
+        .padding(12)
+        .calmGlass(.section, cornerRadius: 18)
     }
 
     private var smartCareHeroIdentity: some View {
-        HStack(alignment: .center, spacing: 18) {
-            DRayLiquidStatusRing(
-                icon: model.smartCare.isScanRunning ? "magnifyingglass" : "heart",
-                tint: .blue,
-                size: 100
-            )
-
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.64))
+                    .frame(width: 8, height: 8)
                 Text(model.smartCare.isScanRunning ? "SMART CARE SCAN" : "SMART CARE")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
-                Text(model.smartCare.isScanRunning ? "Scanning your Mac..." : smartCareStatusTitle)
-                    .font(.system(size: 26, weight: .semibold))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.84)
-                Text(model.smartCare.isScanRunning ? "DRay is checking cleanup categories and safe recommendations." : smartCareStatusSubtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
+            }
+            Text(model.smartCare.isScanRunning ? "Scanning your Mac..." : smartCareStatusTitle)
+                .font(.system(size: 24, weight: .semibold))
+                .lineLimit(2)
+                .minimumScaleFactor(0.84)
+            Text(model.smartCare.isScanRunning ? "DRay is checking cleanup categories and safe recommendations." : smartCareStatusSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        smartCareHeroBadges
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        smartCareHeroBadges
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    smartCareHeroBadges
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    smartCareHeroBadges
                 }
             }
+        }
+        .frame(maxWidth: 460, alignment: .leading)
+    }
+
+    private var smartCareHeroMetrics: some View {
+        HStack(spacing: 8) {
+            heroMetric(title: "Potential", value: smartPotentialSize, tint: .accentColor)
+            heroMetric(title: "Categories", value: "\(model.smartCare.categories.count)", tint: .blue)
+            heroMetric(title: "Selected", value: "\(selectedCategoryCount)", tint: selectedCategoryCount > 0 ? .green : .secondary)
         }
     }
 
@@ -359,11 +352,9 @@ struct SmartCareView: View {
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    DRayIconBadge(
-                        icon: categoryIcon(for: category),
-                        tint: riskColor(category.result.riskLevel),
-                        size: 32
-                    )
+                    Circle()
+                        .fill(riskColor(category.result.riskLevel).opacity(0.58))
+                        .frame(width: 8, height: 8)
                     Spacer()
                     GlassPillBadge(title: category.result.isSafeByDefault ? "Ready" : riskTitle(category.result.riskLevel), tint: riskColor(category.result.riskLevel))
                 }
@@ -380,14 +371,13 @@ struct SmartCareView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                DRayProgressBar(value: categoryShare(category), tint: riskColor(category.result.riskLevel), height: 6)
                 Text(category.result.recommendationReason)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
             .padding(10)
             .calmGlass(.nestedCard, cornerRadius: 14)
         }

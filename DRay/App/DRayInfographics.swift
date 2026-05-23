@@ -153,18 +153,18 @@ struct DRayRankedBarRow: View {
     var icon: String = "app"
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .center, spacing: 9) {
             Text("\(rank)")
-                .font(.caption.weight(.bold))
+                .font(.caption.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(tint)
-                .frame(width: 22, height: 22)
-                .background(Color.primary.opacity(0.040), in: Circle())
-                .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, alignment: .trailing)
 
-            DRayIconBadge(icon: icon, tint: tint, size: 26)
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.54))
+                .frame(width: 3, height: subtitle.isEmpty ? 22 : 30)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(title)
                         .font(.caption.weight(.semibold))
@@ -175,7 +175,6 @@ struct DRayRankedBarRow: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
-                DRayProgressBar(value: progress, tint: tint, height: 5)
                 if !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption2)

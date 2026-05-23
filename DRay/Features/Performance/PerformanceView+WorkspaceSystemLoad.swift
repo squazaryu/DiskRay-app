@@ -85,21 +85,24 @@ extension PerformanceView {
             HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                 VStack(alignment: .leading, spacing: 10) {
                     performanceCardTitle(t("Pressure Trend", "Pressure Trend"), icon: "waveform.path.ecg", tint: .blue)
-                    ZStack {
-                        DRaySparklineView(values: cpuTrend, tint: .blue, lineWidth: 1.9)
-                        DRaySparklineView(values: memoryTrend, tint: .purple, lineWidth: 1.9)
-                    }
-                    .frame(height: 118)
                     HStack(spacing: 10) {
-                        performanceLegendDot("CPU \(Int(monitor.snapshot.cpuLoadPercent))%", tint: .blue)
-                        performanceLegendDot(t("Память \(Int(monitor.snapshot.memoryPressurePercent))%", "Memory \(Int(monitor.snapshot.memoryPressurePercent))%"), tint: .purple)
-                        Spacer()
-                        Text(t("Live sample", "Live sample"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        DRayCompactInfoTile(
+                            title: "CPU",
+                            value: "\(Int(monitor.snapshot.cpuLoadPercent))%",
+                            subtitle: t("live sample", "live sample"),
+                            icon: "cpu",
+                            tint: .blue
+                        )
+                        DRayCompactInfoTile(
+                            title: t("Память", "Memory"),
+                            value: "\(Int(monitor.snapshot.memoryPressurePercent))%",
+                            subtitle: ByteCountFormatter.string(fromByteCount: monitor.snapshot.memoryUsedBytes, countStyle: .memory),
+                            icon: "memorychip",
+                            tint: .purple
+                        )
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
 

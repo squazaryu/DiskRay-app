@@ -549,35 +549,30 @@ struct DRayMetricTile: View {
     var progress: Double?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing - 4) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(tint.opacity(0.78))
-                    .frame(width: 24, height: 24)
-                    .background(Color.primary.opacity(colorScheme == .dark ? 0.046 : 0.030), in: Circle())
-                    .overlay(Circle().stroke(Color.primary.opacity(0.055), lineWidth: 0.7))
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(colorScheme == .dark ? 0.58 : 0.46))
+                .frame(width: 3, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            Text(value)
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if let progress {
-                DRayProgressBar(value: progress, tint: tint)
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: layoutMetrics.metricTileMinHeight, alignment: .topLeading)
-        .padding(layoutMetrics.cardSpacing)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, max(7, layoutMetrics.cardSpacing - 4))
         .calmGlass(.card, cornerRadius: 14)
     }
 }
@@ -773,19 +768,18 @@ struct DRayCompactInfoTile: View {
     var progress: Double?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 7) {
-                DRayIconBadge(icon: icon, tint: tint, size: 24)
+        HStack(alignment: .center, spacing: 9) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.54))
+                .frame(width: 3, height: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(value)
-                    .font(.system(size: layoutMetrics.dashboardTileMinHeight < 110 ? 18 : 21, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -794,13 +788,10 @@ struct DRayCompactInfoTile: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-
-            if let progress {
-                DRayProgressBar(value: progress, tint: tint, height: 5)
-            }
         }
-        .frame(maxWidth: .infinity, minHeight: layoutMetrics.dashboardTileMinHeight < 110 ? 72 : 84, alignment: .topLeading)
-        .padding(layoutMetrics.cardSpacing)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, max(7, layoutMetrics.cardSpacing - 4))
         .calmGlass(.nestedCard, cornerRadius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)

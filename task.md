@@ -711,3 +711,19 @@ Finding fixed during QA:
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Global Text-First Density Pass
+- Extended the Overview-style text-first treatment across shared cards and ranked rows.
+- Updated `DRayCompactInfoTile`, `DRayMetricTile`, and `DRayRankedBarRow` to remove large icon badges, progress bars, and graph-like row indicators.
+- Reworked Smart Care hero/category cards to use text metrics instead of the status ring/donut/category progress bars.
+- Reworked Search query scope card to use text summary instead of icon/progress treatment.
+- Reworked Recovery hero and overview protection card to use text status/metrics instead of ring/donut visuals.
+- Reworked Space Lens storage summary to use text summary and ranked rows instead of donut/progress visuals.
+- Reworked remaining Performance overview/system/network cards to use live text metrics instead of sparklines/donut visuals.
+- Reworked menu bar health/metric/consumer rows to match compact text-first density.
+- Preserved operational controls and flows: Smart Care scan/clean, Search filters/results, Recovery restore/rollback, Space Lens actions, Performance relief/network tools, menu bar Smart Scan/Open actions.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check

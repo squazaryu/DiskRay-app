@@ -113,27 +113,9 @@ struct MenuBarPopupView: View {
 
     private var healthHeroCard: some View {
         HStack(spacing: 14) {
-            Button {
-                showHealthDetails.toggle()
-            } label: {
-                MenuBarMiniRing(
-                    icon: healthTitle == "Good" ? "checkmark" : "exclamationmark",
-                    tint: healthColor,
-                    size: 68,
-                    progress: healthRingProgress
-                )
-            }
-            .buttonStyle(.plain)
-            .contentShape(Circle())
-            .popover(isPresented: $showHealthDetails, arrowEdge: .top) {
-                MenuBarHealthDetailsPopoverView(
-                    issues: healthIssues,
-                    onOpenPerformance: {
-                        model.open(section: .performance, action: .runPerformanceScan)
-                    }
-                )
-            }
-            .help("Health Details")
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(healthColor.opacity(colorScheme == .dark ? 0.60 : 0.48))
+                .frame(width: 3, height: 46)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Mac Health")
@@ -155,6 +137,21 @@ struct MenuBarPopupView: View {
             }
 
             Spacer(minLength: 8)
+
+            Button("Details") {
+                showHealthDetails.toggle()
+            }
+            .buttonStyle(MenuBarSoftButtonStyle())
+            .controlSize(.small)
+            .popover(isPresented: $showHealthDetails, arrowEdge: .top) {
+                MenuBarHealthDetailsPopoverView(
+                    issues: healthIssues,
+                    onOpenPerformance: {
+                        model.open(section: .performance, action: .runPerformanceScan)
+                    }
+                )
+            }
+            .help("Health Details")
 
             Button {
                 model.open(section: .smartCare, action: .runUnifiedScan)

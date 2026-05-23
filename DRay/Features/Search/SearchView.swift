@@ -141,18 +141,23 @@ struct SearchView: View {
             HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        DRayIconBadge(icon: "line.3.horizontal.decrease.circle", tint: .blue, size: 30)
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.58))
+                            .frame(width: 8, height: 8)
                         Text(t("Search Scope", "Search Scope"))
                             .font(.headline)
                         Spacer()
+                        Text("\(model.search.results.count) \(t("найдено", "found"))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
                     }
                     Text(model.activeScopePath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                    DRayProgressBar(value: model.search.results.isEmpty ? 0.08 : min(1, Double(model.search.results.count) / 200), tint: .blue, height: 6)
                 }
-                .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .calmGlass(.card, cornerRadius: 18)
 
@@ -173,7 +178,7 @@ struct SearchView: View {
                     ) { workspaceTab = .results }
                 }
                 .frame(width: 330, alignment: .topLeading)
-                .frame(minHeight: 120, alignment: .topLeading)
+                .frame(minHeight: 92, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .calmGlass(.card, cornerRadius: 18)
             }

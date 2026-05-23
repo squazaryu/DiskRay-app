@@ -291,15 +291,12 @@ extension PerformanceView {
                 .labelsHidden()
             }
 
-            DRayDonutChartView(
-                segments: networkDonutSegments,
-                centerTitle: networkTotalTitle,
-                centerSubtitle: t("всего", "total"),
-                lineWidth: 18
-            )
-            .frame(height: 140)
-
             VStack(alignment: .leading, spacing: 5) {
+                networkLegendRow(
+                    title: t("Всего", "Total"),
+                    value: networkTotalTitle,
+                    tint: .accentColor
+                )
                 networkLegendRow(
                     title: t("Входящий", "Incoming"),
                     value: networkLegendIncoming,

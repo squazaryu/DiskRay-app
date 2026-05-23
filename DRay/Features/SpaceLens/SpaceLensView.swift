@@ -138,35 +138,26 @@ struct SpaceLensView: View {
         sectionCard(title: t("Сводка хранилища", "Storage Summary")) {
             if let root = model.root {
                 VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .center, spacing: layoutMetrics.cardSpacing) {
-                                DRayDonutChartView(
-                            segments: storageSegments(for: root),
-                            centerTitle: root.formattedSize,
-                            centerSubtitle: t("занято", "used"),
-                            lineWidth: 16
+                    HStack {
+                        Text(model.selectedTarget.name)
+                            .font(.subheadline.weight(.semibold))
+                        Spacer(minLength: 0)
+                        Text(root.formattedSize)
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                        GlassPillBadge(title: t("Скан готов", "Scan ready"), tint: .green)
+                    }
+
+                    ForEach(Array(root.largestChildren.prefix(5).enumerated()), id: \.element.id) { index, node in
+                        DRayRankedBarRow(
+                            rank: index + 1,
+                            title: node.name,
+                            subtitle: node.url.deletingLastPathComponent().path,
+                            value: node.formattedSize,
+                            progress: root.sizeInBytes > 0 ? Double(node.sizeInBytes) / Double(root.sizeInBytes) : 0,
+                            tint: storagePalette[index % storagePalette.count],
+                            icon: node.isDirectory ? "folder.fill" : "doc.fill"
                         )
-                        .frame(width: density == .compact ? 112 : 132, height: density == .compact ? 112 : 132)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label(model.selectedTarget.name, systemImage: "internaldrive")
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer(minLength: 0)
-                                GlassPillBadge(title: t("Скан готов", "Scan ready"), tint: .green)
-                            }
-
-                            ForEach(Array(root.largestChildren.prefix(5).enumerated()), id: \.element.id) { index, node in
-                                DRayRankedBarRow(
-                                    rank: index + 1,
-                                    title: node.name,
-                                    subtitle: node.url.deletingLastPathComponent().path,
-                                    value: node.formattedSize,
-                                    progress: root.sizeInBytes > 0 ? Double(node.sizeInBytes) / Double(root.sizeInBytes) : 0,
-                                    tint: storagePalette[index % storagePalette.count],
-                                    icon: node.isDirectory ? "folder.fill" : "doc.fill"
-                                )
-                            }
-                        }
                     }
 
                     Text(model.selectedTargetPath)
@@ -177,15 +168,13 @@ struct SpaceLensView: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Label(model.selectedTarget.name, systemImage: "internaldrive")
+                        Text(model.selectedTarget.name)
                             .font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(t("Не просканировано", "Not scanned"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
-
-                    DRayProgressBar(value: storageSummaryProgress, tint: .blue, height: 7)
 
                     Text(model.selectedTargetPath)
                         .font(.caption2)

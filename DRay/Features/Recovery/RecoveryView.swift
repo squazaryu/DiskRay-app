@@ -249,21 +249,22 @@ struct RecoveryView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(t("Состояние защиты", "Protection State"))
                     .font(.headline)
-                DRayDonutChartView(
-                    segments: recoverySegments,
-                    centerTitle: recoveryStatusTitle,
-                    centerSubtitle: t("статус", "status"),
-                    lineWidth: 18
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 148)
-                HStack(spacing: 8) {
-                    recoveryTinyMetric(title: t("Удалённые", "Deleted"), value: "\(model.recentlyDeleted.count)", tint: .blue)
-                    recoveryTinyMetric(title: "Rollback", value: "\(model.quickActionRollbackSessions.count)", tint: .purple)
+                Text(recoveryStatusTitle)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(2)
+                Text(recoveryStatusSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        recoveryTinyMetric(title: t("Удалённые", "Deleted"), value: "\(model.recentlyDeleted.count)", tint: .blue)
+                        recoveryTinyMetric(title: "Rollback", value: "\(model.quickActionRollbackSessions.count)", tint: .purple)
+                    }
                     recoveryTinyMetric(title: t("Готово", "Ready"), value: "\(rollbackReadyCount)", tint: .green)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 236, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
             .padding(12)
             .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
 
@@ -296,7 +297,7 @@ struct RecoveryView: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 236, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
             .padding(12)
             .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
 
@@ -329,25 +330,28 @@ struct RecoveryView: View {
                 }
                 .disabled(model.quickActionRollbackSessions.allSatisfy(\.canRollback))
             }
-            .frame(maxWidth: .infinity, minHeight: 236, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
             .padding(12)
             .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.04, padding: 0)
         }
     }
 
     private var recoveryHeroCard: some View {
-        HStack(spacing: 22) {
-            DRayLiquidStatusRing(icon: "checkmark.shield", tint: .blue, size: 108)
-
+        HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(t("СТАТУС ВОССТАНОВЛЕНИЯ", "RECOVERY STATUS"))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.blue)
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.blue.opacity(0.58))
+                        .frame(width: 8, height: 8)
+                    Text(t("СТАТУС ВОССТАНОВЛЕНИЯ", "RECOVERY STATUS"))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
                 Text(recoveryStatusTitle)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .lineLimit(1)
                 Text(recoveryStatusSubtitle)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
@@ -373,8 +377,8 @@ struct RecoveryView: View {
             }
             .frame(width: 220)
         }
-        .padding(14)
-        .glassSurface(cornerRadius: 22, strokeOpacity: 0.11, shadowOpacity: 0.08, padding: 0)
+        .padding(12)
+        .calmGlass(.section, cornerRadius: 18)
     }
 
     private func protectionRow(title: String, value: String, tint: Color) -> some View {

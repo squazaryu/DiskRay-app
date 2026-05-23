@@ -117,19 +117,14 @@ extension PerformanceView {
     private var loadTrendCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             cardTitle(t("Тренд нагрузки", "System Load"), icon: "waveform.path.ecg", tint: .purple)
-            ZStack {
-                DRaySparklineView(values: cpuTrend, tint: .blue, lineWidth: 1.8)
-                DRaySparklineView(values: memoryTrend, tint: .purple, lineWidth: 1.8)
-            }
-            .frame(height: 92)
             HStack(spacing: 10) {
-                legendDot("CPU", tint: .blue)
-                legendDot(t("Память", "Memory"), tint: .purple)
-                Spacer()
-                Text("Now")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                miniStat(title: "CPU", value: "\(Int(monitor.snapshot.cpuLoadPercent))%", tint: .blue)
+                miniStat(title: t("Память", "Memory"), value: "\(Int(monitor.snapshot.memoryPressurePercent))%", tint: .purple)
             }
+            Text(t("Live sample without historical graph noise.", "Live sample without historical graph noise."))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
@@ -143,8 +138,6 @@ extension PerformanceView {
                 miniStat(title: "Down", value: networkDownText, tint: .blue)
                 miniStat(title: "Up", value: networkUpText, tint: .teal)
             }
-            DRaySparklineView(values: networkTrendValues, tint: .teal, lineWidth: 1.8)
-                .frame(height: 52)
             Button(t("Тест сети", "Run Network Test")) { workspaceTab = .network }
                 .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
@@ -243,7 +236,6 @@ extension PerformanceView {
             icon: "cpu",
             tint: .blue,
             progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
-            sparkline: cpuTrend,
             action: { workspaceTab = .systemLoad }
         )
         DRayDashboardMetricTile(
@@ -253,7 +245,6 @@ extension PerformanceView {
             icon: "memorychip",
             tint: .purple,
             progress: min(1, monitor.snapshot.memoryPressurePercent / 100),
-            sparkline: memoryTrend,
             action: { workspaceTab = .systemLoad }
         )
         DRayDashboardMetricTile(
