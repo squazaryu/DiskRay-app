@@ -62,49 +62,43 @@ extension PerformanceView {
     }
 
     func batteryConsumerRow(_ consumer: EnergyConsumerSnapshot, totalShare: Double) -> some View {
-        let normalized = (consumer.estimatedDrainShare / totalShare) * 100
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                DRayIconBadge(icon: consumer.preventingSleep ? "moon.zzz.fill" : "app.fill", tint: consumer.preventingSleep ? .red : .orange, size: 24)
-                Text(consumer.displayName)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-                Text(t(
-                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%",
-                    "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%"
-                ))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.orange)
-            }
+        HStack(alignment: .top, spacing: 9) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill((consumer.preventingSleep ? Color.red : Color.orange).opacity(0.54))
+                .frame(width: 3, height: 34)
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule()
-                        .fill(Color.orange.opacity(0.76))
-                        .frame(width: max(7, geo.size.width * CGFloat(min(max(normalized, 0), 100) / 100)))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(consumer.displayName)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text(t(
+                        "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%",
+                        "Estimated Drain Share \(String(format: "%.1f", consumer.estimatedDrainShare))%"
+                    ))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
                 }
-            }
-            .frame(height: 6)
 
-            HStack(spacing: 8) {
-                StatusChip(title: "CPU \(Int(consumer.cpuPercent))%", tint: .blue)
-                StatusChip(title: "MEM \(Int(consumer.memoryMB)) MB", tint: .teal)
-                StatusChip(title: "EI \(String(format: "%.1f", consumer.currentEnergyImpact))", tint: .purple)
-                if let wh = consumer.estimatedPower12hWh {
-                    StatusChip(title: "12h \(String(format: "%.2f", wh)) Wh", tint: .orange)
+                HStack(spacing: 8) {
+                    StatusChip(title: "CPU \(Int(consumer.cpuPercent))%", tint: .blue)
+                    StatusChip(title: "MEM \(Int(consumer.memoryMB)) MB", tint: .teal)
+                    StatusChip(title: "EI \(String(format: "%.1f", consumer.currentEnergyImpact))", tint: .purple)
+                    if let wh = consumer.estimatedPower12hWh {
+                        StatusChip(title: "12h \(String(format: "%.2f", wh)) Wh", tint: .orange)
+                    }
+                    if consumer.preventingSleep {
+                        StatusChip(title: "Sleep Block", tint: .red)
+                    }
+                    if let gpu = consumer.highPowerGPUUsage {
+                        StatusChip(title: gpu ? "GPU High" : "GPU Normal", tint: gpu ? .orange : .green)
+                    }
+                    if let appNap = consumer.appNapStatus {
+                        StatusChip(title: appNap ? "App Nap On" : "App Nap Off", tint: appNap ? .green : .blue)
+                    }
+                    Spacer(minLength: 0)
                 }
-                if consumer.preventingSleep {
-                    StatusChip(title: "Sleep Block", tint: .red)
-                }
-                if let gpu = consumer.highPowerGPUUsage {
-                    StatusChip(title: gpu ? "GPU High" : "GPU Normal", tint: gpu ? .orange : .green)
-                }
-                if let appNap = consumer.appNapStatus {
-                    StatusChip(title: appNap ? "App Nap On" : "App Nap Off", tint: appNap ? .green : .blue)
-                }
-                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 9)
@@ -142,18 +136,6 @@ extension PerformanceView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            GeometryReader { geo in
-                let width = maxStartupEntrySize > 0 ? geo.size.width * CGFloat(Double(entry.sizeInBytes) / Double(maxStartupEntrySize)) : 0
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(impact.color.opacity(0.72))
-                        .frame(width: max(6, width))
-                }
-            }
-            .frame(height: 6)
 
             HStack {
                 Spacer()

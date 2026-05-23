@@ -324,47 +324,40 @@ extension PerformanceView {
                 Text(t("Скорость трафика", "Traffic rate"))
                     .font(.headline)
                 Spacer()
-                performanceLegendDot(t("Входящий", "Incoming"), tint: .accentColor)
-                performanceLegendDot(t("Исходящий", "Outgoing"), tint: .green)
             }
 
-            NetworkTrafficDualChart(
-                incoming: networkRateHistory.map(\.incoming),
-                outgoing: networkRateHistory.map(\.outgoing),
-                incomingTint: .accentColor,
-                outgoingTint: .green
-            )
-            .frame(height: 240)
-            .calmGlass(.nestedCard, cornerRadius: 14)
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(t("Входящий", "Incoming"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(currentIncomingRateLabel)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Color.accentColor.opacity(0.76))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(t("Исходящий", "Outgoing"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(currentOutgoingRateLabel)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.green)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+            HStack(spacing: 10) {
+                networkRateMetric(title: t("Входящий", "Incoming"), value: currentIncomingRateLabel, tint: .accentColor)
+                networkRateMetric(title: t("Исходящий", "Outgoing"), value: currentOutgoingRateLabel, tint: .green)
+                networkRateMetric(title: t("История", "History"), value: "\(networkRateHistory.count)", tint: .secondary)
             }
         }
         .padding(layoutMetrics.cardSpacing)
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
+    }
+
+    private func networkRateMetric(title: String, value: String, tint: Color) -> some View {
+        HStack(spacing: 9) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.54))
+                .frame(width: 3, height: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
     private var networkConnectionSummaryCard: some View {
@@ -467,8 +460,8 @@ extension PerformanceView {
                             MapPolyline(coordinates: [local, row.coordinate])
                                 .stroke(
                                     (isSelected ? Color.accentColor : endpointTint(for: row.host))
-                                        .opacity(isSelected ? 0.34 : 0.12),
-                                    style: StrokeStyle(lineWidth: isSelected ? 1.35 : 0.7, lineCap: .round, lineJoin: .round)
+                                        .opacity(isSelected ? 0.62 : 0.36),
+                                    style: StrokeStyle(lineWidth: isSelected ? 1.8 : 1.15, lineCap: .round, lineJoin: .round)
                                 )
                         }
                     }

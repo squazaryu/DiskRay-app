@@ -77,35 +77,34 @@ extension PerformanceView {
             HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
                 VStack(alignment: .leading, spacing: 10) {
                     performanceCardTitle(t("Burden Scale", "Burden Scale"), icon: "speedometer", tint: severityColor(for: startupBurdenValue))
-                DiagnosticBurdenBar(
-                    value: startupBurdenValue,
+                    DiagnosticBurdenBar(
+                        value: startupBurdenValue,
                         label: t("Launch Burden", "Launch Burden"),
-                    detail: t("Комбинирует количество и размер startup-компонентов", "Combines count and footprint of startup components")
-                )
-                    .frame(height: 56)
+                        detail: t("Комбинирует количество и размер startup-компонентов", "Combines count and footprint of startup components")
+                    )
 
                     HStack(spacing: 8) {
-                    RankedShareBar(
-                        title: t("Low", "Low"),
-                        subtitle: t("Низкий impact", "Low impact"),
-                        percentage: startupImpactDistribution.low,
-                        accent: .green
-                    )
-                    RankedShareBar(
-                        title: t("Review", "Review"),
-                        subtitle: t("Проверить вручную", "Manual review"),
-                        percentage: startupImpactDistribution.review,
-                        accent: .orange
-                    )
-                    RankedShareBar(
-                        title: t("High", "High"),
-                        subtitle: t("Высокий impact", "High impact"),
-                        percentage: startupImpactDistribution.high,
-                        accent: .red
-                    )
+                        RankedShareBar(
+                            title: t("Low", "Low"),
+                            subtitle: t("Низкий impact", "Low impact"),
+                            percentage: startupImpactDistribution.low,
+                            accent: .green
+                        )
+                        RankedShareBar(
+                            title: t("Review", "Review"),
+                            subtitle: t("Проверить вручную", "Manual review"),
+                            percentage: startupImpactDistribution.review,
+                            accent: .orange
+                        )
+                        RankedShareBar(
+                            title: t("High", "High"),
+                            subtitle: t("Высокий impact", "High impact"),
+                            percentage: startupImpactDistribution.high,
+                            accent: .red
+                        )
+                    }
                 }
-                }
-                .frame(maxWidth: .infinity, minHeight: 164, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: 118, alignment: .topLeading)
                 .padding(layoutMetrics.cardSpacing)
                 .glassSurface(cornerRadius: 18, strokeOpacity: 0.08, shadowOpacity: 0.05, padding: 0)
 

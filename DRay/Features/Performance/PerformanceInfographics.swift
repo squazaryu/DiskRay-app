@@ -18,31 +18,26 @@ struct DiagnosticBurdenBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.56))
+                .frame(width: 3, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.caption.weight(.semibold))
-                Spacer()
-                Text("\(Int(clampedValue))%")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.08))
-                    Capsule()
-                        .fill(tint.opacity(0.46))
-                        .frame(width: max(8, geo.size.width * (clampedValue / 100)))
-                }
-            }
-            .frame(height: 8)
+            Spacer(minLength: 8)
 
-            Text(detail)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Text("\(Int(clampedValue))%")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .monospacedDigit()
         }
     }
 }
@@ -58,31 +53,27 @@ struct RankedShareBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 9) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(accent.opacity(0.52))
+                .frame(width: 3, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                Spacer()
-                Text("\(Int(clampedPercentage))%")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(accent)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(accent.opacity(0.44))
-                        .frame(width: max(6, geo.size.width * (clampedPercentage / 100)))
-                }
-            }
-            .frame(height: 7)
+            Spacer(minLength: 8)
+
+            Text("\(Int(clampedPercentage))%")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(accent)
+                .monospacedDigit()
         }
         .padding(8)
         .calmGlass(.nestedCard, cornerRadius: 10)

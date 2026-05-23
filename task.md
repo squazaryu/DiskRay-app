@@ -727,3 +727,15 @@ Finding fixed during QA:
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Performance Text-First Follow-up
+- Battery & Energy: removed remaining per-consumer progress bars; rows now use text metrics and a small semantic strip.
+- Startup: replaced burden/proportion bars and startup item size bars with text-first diagnostics; reduced burden card height.
+- Network Overview: replaced the tall traffic chart with compact incoming/outgoing/history metrics.
+- Network Live Map: restored visible connection routes with stronger muted opacity and line width, without returning to neon styling.
+- Preserved Performance diagnostics logic, Battery estimates, Startup selection/disable actions, Network Overview, Live Map and Tools behavior.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check
