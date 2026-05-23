@@ -5,9 +5,6 @@ struct OverviewView: View {
     @Environment(\.drayLayoutMetrics) private var layoutMetrics
     @Environment(\.drayInterfaceDensity) private var density
     @StateObject private var monitor = LiveSystemMetricsMonitor(updateInterval: 1.2, heavySamplePeriod: 5.0)
-    @State private var healthTrend: [Double] = []
-    @State private var cpuTrend: [Double] = []
-    @State private var memoryTrend: [Double] = []
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -46,11 +43,6 @@ struct OverviewView: View {
         .onDisappear {
             monitor.stop()
         }
-        .onReceive(monitor.$snapshot) { snapshot in
-            appendTrend(healthScore * 100, to: &healthTrend, limit: 32)
-            appendTrend(snapshot.cpuLoadPercent, to: &cpuTrend, limit: 32)
-            appendTrend(snapshot.memoryPressurePercent, to: &memoryTrend, limit: 32)
-        }
     }
 
     private var heroCard: some View {
@@ -66,18 +58,18 @@ struct OverviewView: View {
                 heroTrendBlock
             }
         }
-        .padding(layoutMetrics.cardSpacing + 2)
-        .calmGlass(.section, cornerRadius: 22)
+        .padding(max(10, layoutMetrics.cardSpacing))
+        .calmGlass(.section, cornerRadius: 18)
     }
 
     private var metricGrid: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: layoutMetrics.cardSpacing) {
-                metricTiles(minWidth: 250)
+                metricTiles(minWidth: 190)
             }
 
             LazyVGrid(
-                columns: [GridItem(.flexible(minimum: 260), spacing: layoutMetrics.cardSpacing), GridItem(.flexible(minimum: 260), spacing: layoutMetrics.cardSpacing)],
+                columns: [GridItem(.flexible(minimum: 210), spacing: layoutMetrics.cardSpacing), GridItem(.flexible(minimum: 210), spacing: layoutMetrics.cardSpacing)],
                 alignment: .leading,
                 spacing: layoutMetrics.cardSpacing
             ) {
@@ -85,7 +77,7 @@ struct OverviewView: View {
             }
 
             LazyVGrid(
-                columns: [GridItem(.flexible(minimum: 240), spacing: layoutMetrics.cardSpacing)],
+                columns: [GridItem(.flexible(minimum: 190), spacing: layoutMetrics.cardSpacing)],
                 alignment: .leading,
                 spacing: layoutMetrics.cardSpacing
             ) {
@@ -222,75 +214,53 @@ struct OverviewView: View {
     }
 
     private var heroStatusBlock: some View {
-        HStack(spacing: density == .compact ? 12 : 16) {
-            DRayLiquidStatusRing(
-                icon: healthIcon,
-                tint: healthColor,
-                size: density == .compact ? 102 : 120,
-                progress: healthRingProgress
-            )
-
-            VStack(alignment: .leading, spacing: density == .compact ? 6 : 8) {
+        VStack(alignment: .leading, spacing: density == .compact ? 7 : 9) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(healthColor.opacity(0.72))
+                    .frame(width: 8, height: 8)
                 Text(t("СОСТОЯНИЕ СИСТЕМЫ", "SYSTEM HEALTH"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(healthColor)
-                Text(healthTitle)
-                    .font(.system(size: density == .compact ? 30 : 34, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                Text(healthSubtitle)
-                    .font(.subheadline)
+                Text("· \(healthScoreText)")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    Button {
-                        rootModel.openSection(.smartCare)
-                    } label: {
-                        Label(t("Открыть Smart Care", "Open Smart Care"), systemImage: "sparkles")
-                    }
-                    .buttonStyle(DRaySecondaryButtonStyle())
-                    .controlSize(.small)
-
-                    Button {
-                        rootModel.openSection(focusSection)
-                    } label: {
-                        Label(focusActionTitle, systemImage: focusIcon)
-                    }
-                    .buttonStyle(DRaySecondaryButtonStyle())
-                    .controlSize(.small)
-                }
+                    .monospacedDigit()
             }
-            .frame(maxWidth: density == .compact ? 320 : 360, alignment: .leading)
+
+            Text(healthTitle)
+                .font(.system(size: density == .compact ? 24 : 26, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+            Text(healthSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            HStack(spacing: 8) {
+                Button {
+                    rootModel.openSection(.smartCare)
+                } label: {
+                    Label(t("Открыть Smart Care", "Open Smart Care"), systemImage: "sparkles")
+                }
+                .buttonStyle(DRaySecondaryButtonStyle())
+                .controlSize(.small)
+
+                Button {
+                    rootModel.openSection(focusSection)
+                } label: {
+                    Label(focusActionTitle, systemImage: focusIcon)
+                }
+                .buttonStyle(DRaySecondaryButtonStyle())
+                .controlSize(.small)
+            }
         }
+        .frame(maxWidth: density == .compact ? 360 : 440, alignment: .leading)
     }
 
     private var heroTrendBlock: some View {
-        VStack(alignment: .leading, spacing: density == .compact ? 7 : 10) {
-            DRaySparklineView(values: healthTrend, tint: healthColor, lineWidth: 2.1)
-                .frame(height: density == .compact ? 52 : 68)
-                .overlay(alignment: .bottom) {
-                    VStack(spacing: 18) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            Divider().opacity(0.16)
-                        }
-                    }
-                }
-            HStack {
-                Text(t("Тренд здоровья", "Health Trend"))
-                Spacer()
-                Text("Now \(Int(healthScore * 100))/100")
-                    .monospacedDigit()
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            if density == .compact {
-                compactHealthFormulaCard
-            } else {
-                healthFormulaCard
-            }
-        }
+        healthFormulaCard
     }
 
     @ViewBuilder
@@ -312,7 +282,6 @@ struct OverviewView: View {
             icon: "memorychip",
             tint: .purple,
             progress: memoryUsedRatio,
-            sparkline: memoryTrend,
             action: { rootModel.openSection(.performance) }
         )
         .frame(minWidth: minWidth)
@@ -333,7 +302,6 @@ struct OverviewView: View {
             icon: "waveform.path.ecg",
             tint: .orange,
             progress: min(1, monitor.snapshot.cpuLoadPercent / 100),
-            sparkline: cpuTrend,
             action: { rootModel.openSection(.performance) }
         )
         .frame(minWidth: minWidth)
@@ -371,27 +339,51 @@ struct OverviewView: View {
     }
 
     private func consumerRow(_ consumer: ProcessConsumer, rank: Int) -> some View {
-        DRayRankedBarRow(
-            rank: rank,
-            title: consumer.name,
-            subtitle: "MEM \(Int(consumer.memoryMB))MB · EI \(String(format: "%.1f", consumer.batteryImpactScore))",
-            value: "\(Int(consumer.cpuPercent))%",
-            progress: min(1, consumer.cpuPercent / max(100, maxTopCPU)),
-            tint: .blue,
-            icon: "app.fill"
-        )
+        HStack(spacing: 9) {
+            Text("\(rank)")
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 20, alignment: .trailing)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(consumer.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Text("MEM \(Int(consumer.memoryMB))MB · EI \(String(format: "%.1f", consumer.batteryImpactScore))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Text("\(Int(consumer.cpuPercent))%")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.vertical, 3)
     }
 
     private var healthFormulaCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(t("Как считается", "How it is calculated"))
-                .font(.caption.weight(.semibold))
-            healthFactorRow(title: "CPU", value: monitor.snapshot.cpuLoadPercent / 100, tint: .orange)
-            healthFactorRow(title: t("Память", "Memory"), value: monitor.snapshot.memoryPressurePercent / 100, tint: .purple)
-            healthFactorRow(title: t("Хранилище", "Storage"), value: diskUsedRatio, tint: .blue)
+            HStack {
+                Text(t("Индекс", "Index"))
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text(healthScoreText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(healthColor)
+                    .monospacedDigit()
+            }
+            healthFactorRow(title: "CPU", valueText: "\(Int(monitor.snapshot.cpuLoadPercent))%", tint: .orange)
+            healthFactorRow(title: t("Память", "Memory"), valueText: "\(Int(monitor.snapshot.memoryPressurePercent))%", tint: .purple)
+            healthFactorRow(title: t("Хранилище", "Storage"), valueText: "\(Int(diskUsedRatio * 100))%", tint: .blue)
             healthFactorRow(
                 title: t("Доступ", "Access"),
-                value: rootModel.permissions.hasFullDiskAccess ? 0.0 : 1.0,
+                valueText: rootModel.permissions.hasFullDiskAccess ? t("Вкл", "On") : t("Огр.", "Limited"),
                 tint: rootModel.permissions.hasFullDiskAccess ? .green : .orange
             )
             Text(t(
@@ -406,41 +398,20 @@ struct OverviewView: View {
         .calmGlass(.nestedCard, cornerRadius: 12)
     }
 
-    private var compactHealthFormulaCard: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(t("Индекс", "Index"))
-                    .font(.caption.weight(.semibold))
-                Spacer()
-                Text("CPU · MEM · DISK · ACCESS")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            DRayProgressBar(value: 1 - healthScore, tint: healthColor, height: 4)
-            Text(t(
-                "Показывает текущую нагрузку, память, диск и доступ.",
-                "Combines current load, memory, disk and access."
-            ))
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-        .padding(7)
-        .calmGlass(.nestedCard, cornerRadius: 10)
-    }
-
-    private func healthFactorRow(title: String, value: Double, tint: Color) -> some View {
+    private func healthFactorRow(title: String, valueText: String, tint: Color) -> some View {
         HStack(spacing: 8) {
+            Circle()
+                .fill(tint.opacity(0.60))
+                .frame(width: 6, height: 6)
             Text(title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 58, alignment: .leading)
-            DRayProgressBar(value: value, tint: tint, height: 4)
-            Text("\(Int(min(1, max(0, value)) * 100))")
+            Spacer(minLength: 8)
+            Text(valueText)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .frame(width: 26, alignment: .trailing)
         }
     }
 
@@ -453,14 +424,6 @@ struct OverviewView: View {
 
     private func t(_ ru: String, _ en: String) -> String {
         isRussian ? ru : en
-    }
-
-    private func appendTrend(_ value: Double, to series: inout [Double], limit: Int) {
-        guard value.isFinite else { return }
-        series.append(value)
-        if series.count > limit {
-            series.removeFirst(series.count - limit)
-        }
     }
 
     private var deviceName: String {
@@ -489,6 +452,10 @@ struct OverviewView: View {
         return max(0.08, min(1, 1 - cpuPenalty - memoryPenalty - diskPenalty - permissionPenalty))
     }
 
+    private var healthScoreText: String {
+        "\(Int(healthScore * 100))/100"
+    }
+
     private var healthTitle: String {
         if healthScore >= 0.76 { return t("Отлично", "Excellent") }
         if healthScore >= 0.54 { return t("Требует внимания", "Needs Attention") }
@@ -511,24 +478,10 @@ struct OverviewView: View {
         return t("Mac в хорошем состоянии. Можно запустить Smart Scan для свежей проверки.", "Your Mac is in good shape. Run Smart Scan for a fresh check.")
     }
 
-    private var healthIcon: String {
-        healthScore >= 0.54 ? "checkmark" : "exclamationmark"
-    }
-
     private var healthColor: Color {
         if healthScore >= 0.76 { return .accentColor }
         if healthScore >= 0.54 { return .orange }
         return .red
-    }
-
-    private var healthRingProgress: Double {
-        if healthScore >= 0.76 {
-            return max(healthScore, 0.965)
-        }
-        if healthScore >= 0.54 {
-            return min(max(healthScore, 0.58), 0.72)
-        }
-        return min(max(healthScore, 0.18), 0.42)
     }
 
     private var focusSection: AppSection {
@@ -660,10 +613,6 @@ struct OverviewView: View {
 
     private var topConsumers: [ProcessConsumer] {
         Array(monitor.snapshot.topCPUConsumers.prefix(5))
-    }
-
-    private var maxTopCPU: Double {
-        max(topConsumers.map(\.cpuPercent).max() ?? 100, 1)
     }
 
     private var smartCareActivityText: String {

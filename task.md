@@ -699,3 +699,15 @@ Finding fixed during QA:
 - Manual QA still not fully exhaustive: scan-running menu bar state and clean Performance/Network sweep require a signed/installed build with Full Disk Access, not the temporary QA bundle.
 - No release package, tag, version bump, or remote push was performed for this branch.
 - Changes are presentation-layer focused; no destructive operations were run and no real App Store app deletion was tested in this UI refactor pass.
+
+## Overview Text-First Density Pass
+- Replaced the shared dashboard metric tile with fixed-height text-first cards: no sparkline, no progress bar, no large icon badge; only a small semantic color strip remains.
+- Reduced dashboard metric tile heights for compact and adaptive density.
+- Reworked Overview hero into a text-first System Health + Index layout; removed the large status ring and health trend chart from the hero.
+- Replaced Overview Top Consumers bars with compact diagnostic text rows.
+- Preserved Overview actions, navigation targets, system health score, metrics, recommendations and activity rows.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check

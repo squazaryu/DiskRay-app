@@ -360,7 +360,7 @@ struct DRayLayoutMetrics {
                 rootPadding: 8,
                 sectionSpacing: 10,
                 cardSpacing: 9,
-                dashboardTileMinHeight: 96,
+                dashboardTileMinHeight: 74,
                 metricTileMinHeight: 92,
                 bottomStripVerticalPadding: 6,
                 controlStripHeight: 34
@@ -372,7 +372,7 @@ struct DRayLayoutMetrics {
                 rootPadding: 10,
                 sectionSpacing: 14,
                 cardSpacing: 12,
-                dashboardTileMinHeight: 118,
+                dashboardTileMinHeight: 84,
                 metricTileMinHeight: 116,
                 bottomStripVerticalPadding: 9,
                 controlStripHeight: 40

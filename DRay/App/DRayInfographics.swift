@@ -100,44 +100,46 @@ struct DRayDashboardMetricTile: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: max(6, layoutMetrics.cardSpacing - 3)) {
-            HStack(alignment: .top, spacing: 8) {
-                DRayIconBadge(icon: icon, tint: tint, size: 32)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(value)
-                        .font((layoutMetrics.dashboardTileMinHeight < 110 ? Font.title3 : Font.title2).weight(.semibold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                }
-                Spacer(minLength: 0)
-                if action != nil {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary.opacity(0.7))
-                }
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint.opacity(0.62))
+                .frame(width: 3, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Spacer(minLength: 8)
 
-            if !sparkline.isEmpty {
-                DRaySparklineView(values: sparkline, tint: tint, lineWidth: 1.7)
-                    .frame(height: layoutMetrics.dashboardTileMinHeight < 110 ? 24 : 34)
-            }
-
-            if let progress {
-                DRayProgressBar(value: progress, tint: tint, height: 6)
+            if action != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary.opacity(0.48))
             }
         }
-        .frame(maxWidth: .infinity, minHeight: layoutMetrics.dashboardTileMinHeight, alignment: .topLeading)
-        .padding(layoutMetrics.cardSpacing)
-        .calmGlass(.card, cornerRadius: 18)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: layoutMetrics.dashboardTileMinHeight,
+            maxHeight: layoutMetrics.dashboardTileMinHeight,
+            alignment: .leading
+        )
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, max(7, layoutMetrics.cardSpacing - 4))
+        .calmGlass(.card, cornerRadius: 16)
     }
 }
 
