@@ -58,8 +58,30 @@ struct EnergyModeServiceTests {
     }
 
     @Test
+    func rootRequiredSetRetriesWithAdministratorRunner() async {
+        let spy = EnergyModeCommandSpy(failSet: true, setFailureMessage: "'/usr/bin/pmset' must be run as root")
+        let elevated = EnergyModeElevatedSpy()
+        let service = EnergyModeService(
+            commandRunner: SystemCommandRunner { request in
+                await spy.run(request)
+            },
+            elevatedCommandRunner: { mode, source in
+                elevated.run(mode: mode, source: source)
+            }
+        )
+
+        let result = await service.setEnergyMode(.highPower, for: .charger)
+        let elevatedCalls = elevated.calls()
+
+        #expect(result.succeeded)
+        #expect(elevatedCalls == [
+            EnergyModeElevatedSpy.Call(mode: .highPower, source: .charger)
+        ])
+    }
+
+    @Test
     func failedSetReturnsReadableErrorAndRefreshesSettings() async {
-        let spy = EnergyModeCommandSpy(failSet: true)
+        let spy = EnergyModeCommandSpy(failSet: true, setFailureMessage: "pmset denied")
         let service = EnergyModeService(
             commandRunner: SystemCommandRunner { request in
                 await spy.run(request)
@@ -78,9 +100,11 @@ struct EnergyModeServiceTests {
 private actor EnergyModeCommandSpy {
     private var capturedRequests: [SystemCommandRequest] = []
     private let failSet: Bool
+    private let setFailureMessage: String
 
-    init(failSet: Bool = false) {
+    init(failSet: Bool = false, setFailureMessage: String = "pmset denied") {
         self.failSet = failSet
+        self.setFailureMessage = setFailureMessage
     }
 
     func run(_ request: SystemCommandRequest) -> SystemCommandResult {
@@ -91,7 +115,7 @@ private actor EnergyModeCommandSpy {
                 return SystemCommandResult(
                     exitCode: 1,
                     stdout: "",
-                    stderr: "pmset denied",
+                    stderr: setFailureMessage,
                     timedOut: false,
                     wasCancelled: false
                 )
@@ -138,5 +162,34 @@ private actor EnergyModeCommandSpy {
             timedOut: false,
             wasCancelled: false
         )
+    }
+}
+
+private final class EnergyModeElevatedSpy: @unchecked Sendable {
+    struct Call: Equatable {
+        let mode: MacEnergyMode
+        let source: MacEnergyPowerSource
+    }
+
+    private let lock = NSLock()
+    private var capturedCalls: [Call] = []
+
+    func run(mode: MacEnergyMode, source: MacEnergyPowerSource) -> SystemCommandResult {
+        lock.lock()
+        capturedCalls.append(Call(mode: mode, source: source))
+        lock.unlock()
+        return SystemCommandResult(
+            exitCode: 0,
+            stdout: "ok",
+            stderr: "",
+            timedOut: false,
+            wasCancelled: false
+        )
+    }
+
+    func calls() -> [Call] {
+        lock.lock()
+        defer { lock.unlock() }
+        return capturedCalls
     }
 }

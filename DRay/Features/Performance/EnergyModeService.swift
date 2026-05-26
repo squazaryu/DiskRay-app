@@ -6,11 +6,18 @@ protocol EnergyModeManaging: Sendable {
 }
 
 actor EnergyModeService: EnergyModeManaging {
+    typealias ElevatedCommandRunner = @Sendable (_ mode: MacEnergyMode, _ source: MacEnergyPowerSource) -> SystemCommandResult
+
     private let commandRunner: SystemCommandRunner
+    private let elevatedCommandRunner: ElevatedCommandRunner
     private let pmsetPath = "/usr/bin/pmset"
 
-    init(commandRunner: SystemCommandRunner = .live) {
+    init(
+        commandRunner: SystemCommandRunner = .live,
+        elevatedCommandRunner: @escaping ElevatedCommandRunner = EnergyModeService.runPmsetWithAdministratorAuthorization
+    ) {
         self.commandRunner = commandRunner
+        self.elevatedCommandRunner = elevatedCommandRunner
     }
 
     func loadEnergyModeSettings() async -> MacEnergyModeSettings {
@@ -51,11 +58,14 @@ actor EnergyModeService: EnergyModeManaging {
     }
 
     func setEnergyMode(_ mode: MacEnergyMode, for source: MacEnergyPowerSource) async -> MacEnergyModeUpdateResult {
-        let result = await commandRunner.run(
+        let directResult = await commandRunner.run(
             executablePath: pmsetPath,
             arguments: [source.pmsetArgument, "powermode", String(mode.rawValue)],
             timeoutSeconds: 5
         )
+        let result = shouldRetryWithAdministratorAuthorization(directResult)
+            ? elevatedCommandRunner(mode, source)
+            : directResult
         let settings = await loadEnergyModeSettings()
         let errorMessage = result.succeeded
             ? nil
@@ -140,5 +150,55 @@ actor EnergyModeService: EnergyModeManaging {
             return "\(prefix): \(stdout)"
         }
         return "\(prefix): pmset exited with code \(result.exitCode)."
+    }
+
+    private func shouldRetryWithAdministratorAuthorization(_ result: SystemCommandResult) -> Bool {
+        guard !result.succeeded, !result.timedOut, !result.wasCancelled else { return false }
+        let text = "\(result.stdout)\n\(result.stderr)".lowercased()
+        return text.contains("must be run as root")
+            || text.contains("operation not permitted")
+            || text.contains("not privileged")
+            || text.contains("authorization")
+    }
+
+    private nonisolated static func runPmsetWithAdministratorAuthorization(
+        mode: MacEnergyMode,
+        source: MacEnergyPowerSource
+    ) -> SystemCommandResult {
+        let script = """
+        do shell script "/usr/bin/pmset \(source.pmsetArgument) powermode \(mode.rawValue)" with administrator privileges
+        return "ok"
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let error = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            return SystemCommandResult(
+                exitCode: process.terminationStatus,
+                stdout: output,
+                stderr: error,
+                timedOut: false,
+                wasCancelled: false
+            )
+        } catch {
+            return SystemCommandResult(
+                exitCode: 1,
+                stdout: "",
+                stderr: error.localizedDescription,
+                timedOut: false,
+                wasCancelled: false
+            )
+        }
     }
 }

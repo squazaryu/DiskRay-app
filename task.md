@@ -809,3 +809,20 @@ Allow DRay to read and set macOS energy mode separately for Battery Power and AC
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Energy Mode Root Authorization Fix
+
+### Finding
+- Direct `pmset -b/-c powermode` can fail with `must be run as root` even though reads work without authorization.
+- `AuthorizationExecuteWithPrivileges` is unavailable to Swift on current macOS SDKs, so a direct Security.framework root execution path is not viable for this app shape.
+
+### Fix
+- [x] Keep direct `/usr/bin/pmset` as the first write attempt.
+- [x] Retry only root-required failures through a narrow administrator-authorized `pmset powermode` fallback.
+- [x] Keep read paths (`pmset -g custom`, `-g cap`, `-g batt`) direct and non-elevated.
+- [x] Add test coverage for root-required retry.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check
