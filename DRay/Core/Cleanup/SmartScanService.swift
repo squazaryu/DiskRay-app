@@ -10,8 +10,7 @@ actor SmartScanService: SmartCareServicing {
         XcodeDerivedDataAnalyzer(),
         IOSBackupsAnalyzer(),
         MailDownloadsAnalyzer(),
-        LanguageFilesAnalyzer(),
-        OrphanPreferencesAnalyzer()
+        LanguageFilesAnalyzer()
     ]) {
         self.analyzers = analyzers
     }

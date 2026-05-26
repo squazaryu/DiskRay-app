@@ -739,3 +739,15 @@ Finding fixed during QA:
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## P0 Smart Care Preference Safety Fix
+- Problem: generic Smart Care orphan preference cleanup could classify active `~/Library/Preferences/*.plist` files as removable, including macOS settings such as Dock, menu bar, keyboard, trackpad, wallpaper, shortcuts and login items.
+- Fix: removed `OrphanPreferencesAnalyzer` from default Smart Care analyzers and from the Smart Care analyzer options UI.
+- Fix: `PathSafetyPolicy` now treats `~/Library/Preferences` as manual-only user setting state, so safe cleanup skips it even if a preference plist reaches the cleanup pipeline.
+- Fix: the orphan preference enumerator now rejects critical macOS preference domains such as `com.apple.*`, `apple.*`, `.GlobalPreferences`, `GlobalPreferences` and `NSGlobalDomain`.
+- Preserved: Uninstaller/Remaining app-bound preference cleanup logic is unchanged; Force Remove, admin deletion and App Store app deletion behavior were not touched.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check

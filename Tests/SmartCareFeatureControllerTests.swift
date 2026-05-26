@@ -98,6 +98,17 @@ struct SmartCareFeatureControllerTests {
     }
 
     @Test
+    func analyzerOptionsDoNotExposeGenericOrphanPreferencesCleanup() {
+        let service = SmartCareControllerServiceStub(
+            scanResponses: [],
+            cleanResult: CleanupExecutionResult(moved: 0, failed: 0)
+        )
+        let controller = makeController(service: service)
+
+        #expect(!controller.smartAnalyzerOptions.contains { $0.key == "orphan_preferences" })
+    }
+
+    @Test
     func cleanSelectedUsesManualThresholdAndRefreshesState() async throws {
         let initial = SmartScanResult(
             categories: [makeCategory(key: "logs", safe: true, risk: .low, itemPath: "/tmp/logs.a")],

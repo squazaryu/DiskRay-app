@@ -84,6 +84,56 @@ struct SmartCareUseCaseTests {
         #expect(firstCategory.id == secondCategory.id)
     }
 
+    @Test
+    func smartCleanSkipsUserPreferencePaths() async {
+        let service = SmartScanService(analyzers: [])
+        let dockPlist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.apple.dock.plist")
+
+        let result = await service.clean(
+            items: [CleanupItem(url: dockPlist, sizeInBytes: 1)],
+            minSizeBytes: 0
+        )
+
+        #expect(result.moved == 0)
+        #expect(result.failed == 1)
+    }
+
+    @Test
+    func orphanPreferenceEnumeratorSkipsCriticalMacOSPreferenceDomains() throws {
+        let root = try makeTemporaryDirectory().appendingPathComponent("Preferences", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let criticalNames = [
+            "com.apple.dock.plist",
+            "com.apple.systemuiserver.plist",
+            "com.apple.symbolichotkeys.plist",
+            ".GlobalPreferences.plist"
+        ]
+        for name in criticalNames {
+            try Data("critical".utf8).write(to: root.appendingPathComponent(name))
+        }
+
+        let orphanName = "dev.draytests.definitely-missing-\(UUID().uuidString).plist"
+        try Data("orphan".utf8).write(to: root.appendingPathComponent(orphanName))
+
+        let items = CleanupFileEnumerator.collectOrphanPreferenceFiles(in: root, excludedPrefixes: [])
+        let names = Set(items.map(\.name))
+
+        for name in criticalNames {
+            #expect(!names.contains(name))
+        }
+        #expect(names.contains(orphanName))
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+        let url = root.appendingPathComponent("dray-smartcare-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     private func selectedKeys(in categories: [SmartCategoryState]) -> [String] {
         categories.filter(\.isSelected).map(\.id).sorted()
     }

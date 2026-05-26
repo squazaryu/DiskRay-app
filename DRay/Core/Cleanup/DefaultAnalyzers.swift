@@ -98,12 +98,12 @@ struct OrphanPreferencesAnalyzer: CleanupAnalyzer {
     let key = "orphan_preferences"
     let title = "Orphan Preferences"
     let description = "Preference files for apps not found in /Applications"
-    let isSafeByDefault = true
+    let isSafeByDefault = false
 
     func analyze(excludedPrefixes: [String]) async -> CleanupCategoryResult {
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
         let items = CleanupFileEnumerator.collectOrphanPreferenceFiles(in: root, excludedPrefixes: excludedPrefixes)
-        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .low, recommendationReason: "Preference remnants for removed apps are typically safe to clean.", confidenceScore: 0.82, explainability: "Bundle ID no longer present in /Applications.", items: items)
+        return CleanupCategoryResult(key: key, title: title, description: description, isSafeByDefault: isSafeByDefault, riskLevel: .high, recommendationReason: "Preference files can contain active macOS and app settings; use Remaining after uninstall for app-bound cleanup.", confidenceScore: 0.3, explainability: "Disabled from default Smart Care because generic preference cleanup can reset user/system settings.", items: items)
     }
 }
 
@@ -167,10 +167,23 @@ enum CleanupFileEnumerator {
             guard fileURL.pathExtension == "plist" else { continue }
             guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]), values.isDirectory != true else { continue }
             let bundleID = fileURL.deletingPathExtension().lastPathComponent
+            guard !isCriticalPreferenceDomain(bundleID) else { continue }
             guard !bundleID.isEmpty, !installed.contains(bundleID) else { continue }
             result.append(CleanupItem(url: fileURL, sizeInBytes: Int64(values.fileSize ?? 0), confidenceScore: 0.82, explainability: "Preference file bundle ID does not match installed applications."))
         }
         return result.sorted { $0.sizeInBytes > $1.sizeInBytes }
+    }
+
+    private static func isCriticalPreferenceDomain(_ domain: String) -> Bool {
+        let normalized = domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return true }
+        if normalized == ".globalpreferences" || normalized == "globalpreferences" || normalized == "nsglobaldomain" {
+            return true
+        }
+        if normalized.hasPrefix("com.apple.") || normalized.hasPrefix("apple.") {
+            return true
+        }
+        return false
     }
 
     private static func installedBundleIDs() -> Set<String> {

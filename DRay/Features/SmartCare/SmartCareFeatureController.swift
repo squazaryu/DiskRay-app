@@ -15,8 +15,7 @@ final class SmartCareFeatureController: ObservableObject {
         .init(key: "xcode_derived_data", title: "Xcode DerivedData", description: "Build artifacts"),
         .init(key: "ios_backups", title: "iOS Backups", description: "MobileSync local backups"),
         .init(key: "mail_downloads", title: "Mail Downloads", description: "Saved mail attachments"),
-        .init(key: "language_files", title: "Language Files", description: ".lproj localized resources"),
-        .init(key: "orphan_preferences", title: "Orphan Preferences", description: "Unused app preference files")
+        .init(key: "language_files", title: "Language Files", description: ".lproj localized resources")
     ]
 
     init(

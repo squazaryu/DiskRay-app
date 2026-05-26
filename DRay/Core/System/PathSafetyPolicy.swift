@@ -113,6 +113,15 @@ enum PathSafetyPolicy {
             )
         }
 
+        if isUserPreferencesPath(path) {
+            return PathSafetyAssessment(
+                path: path,
+                classification: .userData,
+                disposition: .manualOnly,
+                rationale: "Active user/macOS preference state; Smart Care must not remove it."
+            )
+        }
+
         if isHomePath(path), userCacheMarkers.contains(where: { path.contains($0) }) {
             return PathSafetyAssessment(
                 path: path,
@@ -185,5 +194,11 @@ enum PathSafetyPolicy {
     private static func isHomePath(_ path: String) -> Bool {
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         return path == home || path.hasPrefix(home + "/")
+    }
+
+    private static func isUserPreferencesPath(_ path: String) -> Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
+        let preferencesRoot = home + "/Library/Preferences"
+        return path == preferencesRoot || path.hasPrefix(preferencesRoot + "/")
     }
 }

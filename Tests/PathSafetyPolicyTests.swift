@@ -36,6 +36,24 @@ struct PathSafetyPolicyTests {
     }
 
     @Test
+    func classifiesUserPreferencesAsManualOnly() {
+        let dockPlist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.apple.dock.plist")
+        let appPlist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.example.demo.plist")
+
+        let dockAssessment = PathSafetyPolicy.assess(dockPlist.path)
+        let appAssessment = PathSafetyPolicy.assess(appPlist.path)
+
+        #expect(dockAssessment.classification == .userData)
+        #expect(dockAssessment.disposition == .manualOnly)
+        #expect(dockAssessment.shouldSkipForSafeCleanup)
+        #expect(appAssessment.classification == .userData)
+        #expect(appAssessment.disposition == .manualOnly)
+        #expect(appAssessment.shouldSkipForSafeCleanup)
+    }
+
+    @Test
     func classifiesSystemDaemonAndHelperPathsAsAdminSensitive() {
         let daemon = PathSafetyPolicy.assess("/Library/LaunchDaemons/com.example.demo.plist")
         let helper = PathSafetyPolicy.assess("/Library/PrivilegedHelperTools/com.example.demo")
