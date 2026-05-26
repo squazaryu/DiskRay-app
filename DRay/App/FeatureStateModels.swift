@@ -92,6 +92,10 @@ struct PerformanceFeatureState {
     var quickActionDelta: QuickActionDeltaReport?
     var batteryEnergyReport: BatteryEnergyReport?
     var isBatteryEnergyLoading = false
+    var energyModeSettings: MacEnergyModeSettings?
+    var isEnergyModeLoading = false
+    var isEnergyModeApplying = false
+    var energyModeMessage: String?
     var networkSpeedTestResult: NetworkSpeedTestResult?
     var isNetworkSpeedTestRunning = false
 }

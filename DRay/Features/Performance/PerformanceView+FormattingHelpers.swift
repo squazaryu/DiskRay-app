@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 extension PerformanceView {
     func optionalPercent(_ value: Int?) -> String {
@@ -60,5 +61,47 @@ extension PerformanceView {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    func energyModeTitle(_ mode: MacEnergyMode) -> String {
+        switch mode {
+        case .automatic:
+            return t("Автоматически", "Automatic")
+        case .lowPower:
+            return t("Экономия", "Low Power")
+        case .highPower:
+            return t("Высокая мощность", "High Power")
+        }
+    }
+
+    func energyModeDescription(_ mode: MacEnergyMode) -> String {
+        switch mode {
+        case .automatic:
+            return t("macOS балансирует производительность и расход.", "macOS balances performance and energy use.")
+        case .lowPower:
+            return t("Снижает расход энергии и тепловую нагрузку.", "Reduces energy use and thermal load.")
+        case .highPower:
+            return t("Максимизирует производительность, если режим поддерживается Mac.", "Maximizes performance when supported by this Mac.")
+        }
+    }
+
+    func energyPowerSourceTitle(_ source: MacEnergyPowerSource) -> String {
+        switch source {
+        case .battery:
+            return t("От батареи", "Battery Power")
+        case .charger:
+            return t("От зарядки", "Power Adapter")
+        }
+    }
+
+    func energyModeTint(_ mode: MacEnergyMode) -> Color {
+        switch mode {
+        case .automatic:
+            return .blue
+        case .lowPower:
+            return .green
+        case .highPower:
+            return .orange
+        }
     }
 }

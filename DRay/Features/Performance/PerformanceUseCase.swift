@@ -19,6 +19,7 @@ struct PerformanceUseCase {
     let processPriorityService: any ProcessPriorityServicing
     let batteryEnergyService: any BatteryEnergyReportBuilding
     let networkSpeedTestService: any NetworkSpeedTesting
+    let energyModeService: any EnergyModeManaging = EnergyModeService()
 
     var activeAdjustmentsCount: Int {
         processPriorityService.activeAdjustmentsCount
@@ -46,6 +47,14 @@ struct PerformanceUseCase {
 
     func loadBatteryEnergyReport() async -> BatteryEnergyReport {
         await batteryEnergyService.buildBatteryEnergyReport()
+    }
+
+    func loadEnergyModeSettings() async -> MacEnergyModeSettings {
+        await energyModeService.loadEnergyModeSettings()
+    }
+
+    func setEnergyMode(_ mode: MacEnergyMode, for source: MacEnergyPowerSource) async -> MacEnergyModeUpdateResult {
+        await energyModeService.setEnergyMode(mode, for: source)
     }
 
     func runNetworkSpeedTest() async -> NetworkSpeedTestResult {

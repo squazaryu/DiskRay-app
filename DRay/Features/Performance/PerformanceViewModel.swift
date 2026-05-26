@@ -43,6 +43,18 @@ final class PerformanceViewModel: ObservableObject {
         performanceController.loadBatteryEnergyReport(force: force)
     }
 
+    func loadEnergyModeSettings(force: Bool = false) {
+        performanceController.loadEnergyModeSettings(force: force)
+    }
+
+    func setEnergyMode(_ mode: MacEnergyMode, for source: MacEnergyPowerSource) {
+        performanceController.setEnergyMode(mode, for: source)
+    }
+
+    func clearEnergyModeMessage() {
+        performanceController.clearEnergyModeMessage()
+    }
+
     func runNetworkSpeedTest() {
         performanceController.runNetworkSpeedTest()
     }

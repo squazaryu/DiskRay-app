@@ -21,17 +21,21 @@ final class PerformanceFeatureController: ObservableObject {
         guard context?.allowProtectedModule("Performance Diagnostics") ?? false else { return }
         state.isScanRunning = true
         state.isBatteryEnergyLoading = true
+        state.isEnergyModeLoading = true
         Task { [weak self] in
             guard let self else { return }
             async let diagnosticsTask = useCase.runDiagnostics()
             async let batteryTask = useCase.loadBatteryEnergyReport()
-            let (report, batteryReport) = await (diagnosticsTask, batteryTask)
+            async let energyModeTask = useCase.loadEnergyModeSettings()
+            let (report, batteryReport, energyModeSettings) = await (diagnosticsTask, batteryTask, energyModeTask)
             await MainActor.run {
                 state.report = report
                 state.batteryEnergyReport = batteryReport
+                state.energyModeSettings = energyModeSettings
                 state.startupCleanupReport = nil
                 state.isScanRunning = false
                 state.isBatteryEnergyLoading = false
+                state.isEnergyModeLoading = false
                 context?.log(
                     category: "performance",
                     message: "Diagnostics done: startup entries \(report.startupEntries.count)"
@@ -73,6 +77,53 @@ final class PerformanceFeatureController: ObservableObject {
                 )
             }
         }
+    }
+
+    func loadEnergyModeSettings(force: Bool = false) {
+        if !force, state.energyModeSettings != nil { return }
+        guard !state.isEnergyModeLoading else { return }
+        state.isEnergyModeLoading = true
+        Task { [weak self] in
+            guard let self else { return }
+            let settings = await useCase.loadEnergyModeSettings()
+            await MainActor.run {
+                state.energyModeSettings = settings
+                state.isEnergyModeLoading = false
+                if let error = settings.errorMessage {
+                    state.energyModeMessage = error
+                    context?.log(category: "performance", message: "Energy mode read failed: \(error)")
+                } else {
+                    context?.log(category: "performance", message: "Energy mode settings loaded")
+                }
+            }
+        }
+    }
+
+    func setEnergyMode(_ mode: MacEnergyMode, for source: MacEnergyPowerSource) {
+        guard !state.isEnergyModeApplying else { return }
+        state.isEnergyModeApplying = true
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await useCase.setEnergyMode(mode, for: source)
+            await MainActor.run {
+                state.energyModeSettings = result.settings
+                state.isEnergyModeApplying = false
+                if let error = result.errorMessage {
+                    state.energyModeMessage = error
+                    context?.log(category: "performance", message: "Energy mode update failed: \(error)")
+                } else {
+                    state.energyModeMessage = "Energy mode updated."
+                    context?.log(
+                        category: "performance",
+                        message: "Energy mode updated: \(source.rawValue) -> \(mode.rawValue)"
+                    )
+                }
+            }
+        }
+    }
+
+    func clearEnergyModeMessage() {
+        state.energyModeMessage = nil
     }
 
     func runNetworkSpeedTest() {

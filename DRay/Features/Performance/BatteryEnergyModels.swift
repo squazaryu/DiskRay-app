@@ -39,3 +39,52 @@ struct BatteryEnergyReport: Sendable {
     let estimatedMetricExplanation: String
 }
 
+enum MacEnergyMode: Int, CaseIterable, Identifiable, Sendable, Hashable {
+    case automatic = 0
+    case lowPower = 1
+    case highPower = 2
+
+    var id: Int { rawValue }
+}
+
+enum MacEnergyPowerSource: String, CaseIterable, Identifiable, Sendable, Hashable {
+    case battery
+    case charger
+
+    var id: String { rawValue }
+
+    var pmsetArgument: String {
+        switch self {
+        case .battery: return "-b"
+        case .charger: return "-c"
+        }
+    }
+}
+
+struct MacEnergyModeSettings: Sendable, Equatable {
+    let generatedAt: Date
+    let batteryMode: MacEnergyMode?
+    let chargerMode: MacEnergyMode?
+    let supportsLowPowerMode: Bool
+    let supportsHighPowerMode: Bool
+    let currentPowerSource: MacEnergyPowerSource?
+    let errorMessage: String?
+
+    func mode(for source: MacEnergyPowerSource) -> MacEnergyMode? {
+        switch source {
+        case .battery: return batteryMode
+        case .charger: return chargerMode
+        }
+    }
+}
+
+struct MacEnergyModeUpdateResult: Sendable, Equatable {
+    let source: MacEnergyPowerSource
+    let requestedMode: MacEnergyMode
+    let settings: MacEnergyModeSettings
+    let errorMessage: String?
+
+    var succeeded: Bool {
+        errorMessage == nil
+    }
+}

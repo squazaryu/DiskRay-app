@@ -98,6 +98,16 @@ struct PerformanceView: View {
         } message: {
             Text(reliefResultMessage ?? "")
         }
+        .alert(t("Режим энергопотребления", "Energy Mode"), isPresented: Binding(
+            get: { model.performance.energyModeMessage != nil },
+            set: { if !$0 { model.clearEnergyModeMessage() } }
+        )) {
+            Button(t("ОК", "OK"), role: .cancel) {
+                model.clearEnergyModeMessage()
+            }
+        } message: {
+            Text(model.performance.energyModeMessage ?? "")
+        }
         .onAppear {
             restoreNetworkWorkspacePreferences()
             monitor.start()
@@ -109,6 +119,9 @@ struct PerformanceView: View {
             }
             if model.performance.batteryEnergyReport == nil {
                 model.loadBatteryEnergyReport()
+            }
+            if model.performance.energyModeSettings == nil {
+                model.loadEnergyModeSettings()
             }
         }
         .onDisappear {

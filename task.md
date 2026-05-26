@@ -787,3 +787,25 @@ Protect active macOS/user settings and system state from default or recommended 
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Battery Energy Mode Control
+
+### Goal
+Allow DRay to read and set macOS energy mode separately for Battery Power and AC Power without changing diagnostics or cleanup behavior.
+
+### Scope
+- [x] Add pmset-backed energy mode service.
+- [x] Surface Battery Power and AC Power modes in Battery & Energy.
+- [x] Keep existing battery diagnostics and estimated drain reporting intact.
+- [x] Add tests for parsing and command arguments.
+
+### Constraints
+- Do not change app version/release/tag.
+- Do not weaken cleanup/uninstaller/search/network behavior.
+- Use `pmset powermode` with `-b` and `-c` only for explicit user selection.
+- Show clear failure message if macOS denies or does not support the setting.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check
