@@ -751,3 +751,39 @@ Finding fixed during QA:
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Default Cleanup Safety Audit
+
+### Goal
+Protect active macOS/user settings and system state from default or recommended cleanup paths while preserving explicit Uninstaller/Remaining and high-risk/admin flows.
+
+### Audit scope
+- [x] Smart Care analyzers and cleanup execution.
+- [x] Privacy scan/recommended cleanup.
+- [x] Performance Startup recommendations and cleanup.
+- [x] Duplicate recommended selection and SafeFileOperation path gate.
+- [x] Search/Space Lens manual trash path gate.
+- [x] Repair/Uninstaller app-bound cleanup preservation.
+
+### Initial findings
+- Smart Care generic orphan preferences was already removed from default scan, but broader default/recommended flows still need a shared default-cleanup exclusion layer.
+- `PathSafetyPolicy.shouldSkipForSafeCleanup` protects admin/system paths, but recommended selection logic can still surface user settings/state paths before deletion.
+- Privacy `recent-docs` includes macOS state paths (`com.apple.sharedfilelist`, `com.apple.recentitems.plist`) and should not be selected by default/recommended cleanup.
+- Privacy medium-risk app profile paths under `~/Library/Application Support` should not be selected by recommended cleanup because they can contain active app state, not disposable cache.
+- Performance startup recommendations can select LaunchAgents/LaunchDaemons; recommendations should not auto-select Apple/system launch configuration.
+- Duplicate recommended cleanup should avoid selecting protected settings/state paths, even if manual trash remains available where policy permits it.
+
+### Protected-by-default classes
+- [x] User and system preferences.
+- [x] LaunchAgents / LaunchDaemons / StartupItems.
+- [x] Keychains and security identity stores.
+- [x] Apple/system Application Support state.
+- [x] Active app profile state under `~/Library/Application Support`.
+- [x] Containers / Group Containers / Application Scripts.
+- [x] Mail, Messages, Contacts, Calendar, Photos, Mobile Documents, MobileSync backups.
+- [x] Safari bookmarks/session state and other browser account/profile roots where relevant.
+
+### Validation
+- [x] swift build
+- [x] swift test
+- [x] git diff --check

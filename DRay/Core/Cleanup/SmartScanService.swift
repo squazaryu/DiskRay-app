@@ -84,7 +84,7 @@ actor SmartScanService: SmartCareServicing {
 
         for (index, item) in candidates.enumerated() {
             let path = item.url.path
-            if PathSafetyPolicy.shouldSkipForSafeCleanup(path) {
+            if PathSafetyPolicy.shouldSkipForDefaultCleanup(path) {
                 failed += 1
                 if let onProgress {
                     await onProgress(

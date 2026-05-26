@@ -61,6 +61,10 @@ final class PrivacyFeatureController: ObservableObject {
 
     func selectRecommended(includeMediumRisk: Bool) {
         for index in state.categories.indices {
+            guard isDefaultRecommendedCategory(state.categories[index].category) else {
+                state.categories[index].isSelected = false
+                continue
+            }
             switch state.categories[index].category.risk {
             case .low:
                 state.categories[index].isSelected = true
@@ -134,5 +138,10 @@ final class PrivacyFeatureController: ObservableObject {
             partial + category.category.totalBytes
         }
         return (items, bytes)
+    }
+
+    private func isDefaultRecommendedCategory(_ category: PrivacyCategory) -> Bool {
+        !category.artifacts.isEmpty
+            && !category.artifacts.contains { PathSafetyPolicy.shouldSkipForDefaultCleanup($0.url.path) }
     }
 }

@@ -596,7 +596,12 @@ struct ClutterView: View {
         let recommended = model.duplicateGroups.flatMap { group in
             Array(group.files.dropFirst().map { $0.url.path })
         }
-        selectedPaths = Set(recommended.filter { !model.isPathProtectedForManualCleanup($0) })
+        selectedPaths = Set(
+            recommended.filter {
+                !model.isPathProtectedForManualCleanup($0)
+                    && !model.isPathProtectedForDefaultCleanup($0)
+            }
+        )
     }
 
     private func requestDuplicateTrash(paths: [String]) {

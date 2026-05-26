@@ -221,10 +221,15 @@ extension PerformanceView {
     func handleRecommendationAction(_ action: PerformanceRecommendationAction) {
         switch action {
         case .selectAllStartup:
-            selectedPaths = Set(startupEntries.map { $0.url.path })
+            selectedPaths = Set(startupEntries.map { $0.url.path }.filter(isDefaultStartupSelectionAllowed))
             workspaceTab = .startup
         case .selectHeavyStartup:
-            selectedPaths = Set(startupEntries.filter { $0.sizeInBytes >= 100 * 1_048_576 }.map { $0.url.path })
+            selectedPaths = Set(
+                startupEntries
+                    .filter { $0.sizeInBytes >= 100 * 1_048_576 }
+                    .map { $0.url.path }
+                    .filter(isDefaultStartupSelectionAllowed)
+            )
             workspaceTab = .startup
         case .openSmartCare:
             model.openSection(.smartCare)
@@ -234,5 +239,9 @@ extension PerformanceView {
         case .none:
             break
         }
+    }
+
+    func isDefaultStartupSelectionAllowed(_ path: String) -> Bool {
+        !PathSafetyPolicy.shouldSkipForDefaultCleanup(path)
     }
 }

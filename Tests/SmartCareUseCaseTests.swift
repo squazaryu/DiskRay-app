@@ -100,6 +100,21 @@ struct SmartCareUseCaseTests {
     }
 
     @Test
+    func smartCleanSkipsApplicationSupportStatePaths() async {
+        let service = SmartScanService(analyzers: [])
+        let dockDatabase = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Dock/desktoppicture.db")
+
+        let result = await service.clean(
+            items: [CleanupItem(url: dockDatabase, sizeInBytes: 1)],
+            minSizeBytes: 0
+        )
+
+        #expect(result.moved == 0)
+        #expect(result.failed == 1)
+    }
+
+    @Test
     func orphanPreferenceEnumeratorSkipsCriticalMacOSPreferenceDomains() throws {
         let root = try makeTemporaryDirectory().appendingPathComponent("Preferences", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }

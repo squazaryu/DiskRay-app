@@ -797,6 +797,10 @@ final class RootViewModel: ObservableObject {
         safeFileOperations.isProtectedPath(path)
     }
 
+    func isPathProtectedForDefaultCleanup(_ path: String) -> Bool {
+        PathSafetyPolicy.shouldSkipForDefaultCleanup(path)
+    }
+
     private func applyInitialScanTarget() {
         selectedTarget = RootScanTargetCoordinator.initialTarget(
             defaultScanTarget: defaultScanTarget,

@@ -125,6 +125,9 @@ enum CleanupFileEnumerator {
             if excludedPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
                 continue
             }
+            if PathSafetyPolicy.shouldSkipForDefaultCleanup(path) {
+                continue
+            }
             guard let values = try? fileURL.resourceValues(forKeys: keys), values.isDirectory != true else { continue }
             guard let modified = values.contentModificationDate, modified < cutoff else { continue }
             let size = Int64(values.fileSize ?? 0)
@@ -145,6 +148,7 @@ enum CleanupFileEnumerator {
         for case let fileURL as URL in enumerator {
             let path = fileURL.path
             if excludedPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) { continue }
+            if PathSafetyPolicy.shouldSkipForDefaultCleanup(path) { continue }
             guard path.contains(".lproj/") else { continue }
             guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]), values.isDirectory != true else { continue }
             result.append(CleanupItem(url: fileURL, sizeInBytes: Int64(values.fileSize ?? 0), confidenceScore: 0.5, explainability: "Localized resource file matched by .lproj path pattern."))
@@ -164,6 +168,7 @@ enum CleanupFileEnumerator {
         for case let fileURL as URL in enumerator {
             let path = fileURL.path
             if excludedPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) { continue }
+            if PathSafetyPolicy.shouldSkipForDefaultCleanup(path) { continue }
             guard fileURL.pathExtension == "plist" else { continue }
             guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]), values.isDirectory != true else { continue }
             let bundleID = fileURL.deletingPathExtension().lastPathComponent

@@ -81,6 +81,10 @@ final class ClutterViewModel: ObservableObject {
         root.isPathProtectedForManualCleanup(path)
     }
 
+    func isPathProtectedForDefaultCleanup(_ path: String) -> Bool {
+        root.isPathProtectedForDefaultCleanup(path)
+    }
+
     func trashResultMessage(_ result: TrashOperationResult) -> String {
         root.trashResultMessage(result)
     }

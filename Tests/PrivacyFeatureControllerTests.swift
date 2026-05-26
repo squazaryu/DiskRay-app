@@ -90,6 +90,64 @@ struct PrivacyFeatureControllerTests {
         #expect(delta.beforeItems == 2)
         #expect(delta.afterItems == 1)
     }
+
+    @Test
+    func recommendedSelectionSkipsSystemStatePrivacyArtifacts() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let controller = PrivacyFeatureController(privacyService: PrivacyServiceStub())
+        controller.applyScanResult(
+            PrivacyScanReport(
+                generatedAt: Date(),
+                categories: [
+                    PrivacyCategory(
+                        id: "browser-cache",
+                        title: "Browser Cache",
+                        details: "Low risk cache",
+                        risk: .low,
+                        artifacts: [
+                            PrivacyArtifact(
+                                url: home.appendingPathComponent("Library/Caches/com.example.browser/cache.db"),
+                                sizeInBytes: 120
+                            )
+                        ]
+                    ),
+                    PrivacyCategory(
+                        id: "recent-docs",
+                        title: "Recent Documents",
+                        details: "macOS state",
+                        risk: .medium,
+                        artifacts: [
+                            PrivacyArtifact(
+                                url: home.appendingPathComponent("Library/Application Support/com.apple.sharedfilelist/com.apple.LSSharedFileList.ApplicationRecentDocuments"),
+                                sizeInBytes: 80
+                            ),
+                            PrivacyArtifact(
+                                url: home.appendingPathComponent("Library/Preferences/com.apple.recentitems.plist"),
+                                sizeInBytes: 40
+                            )
+                        ]
+                    ),
+                    PrivacyCategory(
+                        id: "messenger-state",
+                        title: "Messenger State",
+                        details: "Active app profile data",
+                        risk: .medium,
+                        artifacts: [
+                            PrivacyArtifact(
+                                url: home.appendingPathComponent("Library/Application Support/Telegram Desktop/tdata"),
+                                sizeInBytes: 320
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+
+        controller.selectRecommended(includeMediumRisk: true)
+
+        let selected = Set(controller.state.categories.filter(\.isSelected).map(\.id))
+        #expect(selected == ["browser-cache"])
+    }
 }
 
 private actor PrivacyServiceStub: PrivacyServicing {

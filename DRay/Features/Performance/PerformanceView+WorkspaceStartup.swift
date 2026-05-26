@@ -21,7 +21,12 @@ extension PerformanceView {
                 .disabled(selectedEntries.isEmpty)
 
                 Button(t("Выбрать heavy", "Select Heavy")) {
-                    selectedPaths = Set(startupEntries.filter { startupImpactLevel(for: $0) == .high }.map { $0.url.path })
+                    selectedPaths = Set(
+                        startupEntries
+                            .filter { startupImpactLevel(for: $0) == .high }
+                            .map { $0.url.path }
+                            .filter(isDefaultStartupSelectionAllowed)
+                    )
                 }
                 .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
@@ -126,7 +131,12 @@ extension PerformanceView {
                         tint: .red,
                         actionTitle: t("Select", "Select")
                     ) {
-                        selectedPaths = Set(startupEntries.filter { startupImpactLevel(for: $0) == .high }.map { $0.url.path })
+                        selectedPaths = Set(
+                            startupEntries
+                                .filter { startupImpactLevel(for: $0) == .high }
+                                .map { $0.url.path }
+                                .filter(isDefaultStartupSelectionAllowed)
+                        )
                     }
                     .disabled(startupEntries.isEmpty)
                 }
