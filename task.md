@@ -116,7 +116,7 @@ Scope: Force Remove / Uninstaller transparency, shared path safety, bounded comm
 Date: 2026-05-21
 Branch: 2.2.0-ui-refactor
 Scope: Calm Liquid Glass visual refactor for main app and menu bar helper without reducing functionality.
-Brief: /Users/tumowuh/Downloads/DRay_Calm_Liquid_Glass_Redesign_Prompt.md
+Brief: DRay_Calm_Liquid_Glass_Redesign_Prompt.md (local product brief)
 
 ## Goal
 Calm Liquid Glass redesign without reducing functionality, diagnostics, removal power, or operational clarity.
