@@ -52,6 +52,8 @@ struct UninstallPlanningUseCase {
                 }
             } else if isProtectedPath(path) {
                 reason = "System-protected path (SIP/TCC)."
+            } else if attemptedPaths.contains(path), PathSafetyPolicy.isUserPreferenceStatePath(path) {
+                reason = "Preference file remained after uninstall. DRay excludes preferences from default Smart Care, but Remaining can remove app-bound preferences intentionally."
             } else if !attemptedPaths.contains(path) {
                 reason = "Not selected for removal in uninstall scope."
             } else if !FileManager.default.isDeletableFile(atPath: path) {
@@ -146,6 +148,9 @@ struct UninstallPlanningUseCase {
         }
         if isProtectedPath(path) {
             return "System-protected path (SIP/TCC)."
+        }
+        if PathSafetyPolicy.isUserPreferenceStatePath(path) {
+            return "Preference file remained after uninstall. DRay excludes preferences from default Smart Care, but Remaining can remove app-bound preferences intentionally."
         }
         if isAppRunning {
             return "Application is still running and may recreate this item."

@@ -78,6 +78,9 @@ struct UninstallerView: View {
         if issues.contains(where: { RemainingFilter.protected.matches(issue: $0) }) {
             return "SIP/TCC protected paths should normally stay excluded unless you intentionally handle them outside DRay."
         }
+        if issues.contains(where: isPreferenceRemainingIssue) {
+            return "Preference leftovers are excluded from default cleanup, but Remaining can remove app-bound preference files when you intentionally clean them."
+        }
         return "Use Reveal/Copy Path from validation details if the item still fails, then retry after removing the blocking owner, ACL, or running helper."
     }
 
@@ -802,7 +805,7 @@ struct UninstallerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(issue.reason)
+                Text(displayedRemainingReason(for: issue))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -870,6 +873,13 @@ struct UninstallerView: View {
                 nextStep: "Protected by macOS. Keep excluded unless you intentionally remove it outside DRay."
             )
         }
+        if isPreferenceRemainingIssue(issue) {
+            return RemainingIssueClassification(
+                title: "Preferences",
+                tint: .orange,
+                nextStep: "App preference file. Default cleanup excludes preferences; Clean Remaining can remove it when this app is gone."
+            )
+        }
         if RemainingFilter.permissions.matches(issue: issue) {
             return RemainingIssueClassification(
                 title: "Permissions",
@@ -882,6 +892,19 @@ struct UninstallerView: View {
             tint: .secondary,
             nextStep: "Reveal the path, check whether a helper recreated it, then retry cleanup."
         )
+    }
+
+    private func isPreferenceRemainingIssue(_ issue: UninstallRemainingIssueRecord) -> Bool {
+        PathSafetyPolicy.isUserPreferenceStatePath(issue.path) && !PathSafetyPolicy.isProtected(issue.path)
+    }
+
+    private func displayedRemainingReason(for issue: UninstallRemainingIssueRecord) -> String {
+        let lower = issue.reason.lowercased()
+        if isPreferenceRemainingIssue(issue),
+           lower.contains("protected") || lower.contains("sip") || lower.contains("tcc") {
+            return "Preference file remains after uninstall. DRay keeps preferences out of default cleanup, but Remaining can remove app-bound preferences intentionally."
+        }
+        return issue.reason
     }
 
     private func summaryMetric(title: String, value: String) -> some View {
@@ -1373,10 +1396,12 @@ private enum RemainingFilter: Hashable {
             || lower.contains("privileged helper")
             || lowerPath.contains("/library/launchdaemons/")
             || lowerPath.contains("/library/privilegedhelpertools/")
-        let isProtected = lower.contains("sip")
-            || lower.contains("tcc")
-            || lower.contains("system-protected")
-            || lower.contains("protected")
+        let isProtected = lowerPath.isEmpty
+            ? (lower.contains("sip")
+                || lower.contains("tcc")
+                || lower.contains("system-protected")
+                || lower.contains("protected"))
+            : PathSafetyPolicy.isProtected(path)
         let isPermission = lower.contains("permission")
             || lower.contains("access denied")
             || lower.contains("not permitted")

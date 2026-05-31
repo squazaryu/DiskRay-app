@@ -176,7 +176,8 @@ enum PathSafetyPolicy {
     }
 
     static func isProtected(_ path: String) -> Bool {
-        assess(path).manualOnly
+        let assessment = assess(path)
+        return assessment.classification == .systemProtected && assessment.manualOnly
     }
 
     static func shouldSkipForSafeCleanup(_ path: String) -> Bool {
@@ -196,6 +197,10 @@ enum PathSafetyPolicy {
             return true
         }
         return false
+    }
+
+    static func isUserPreferenceStatePath(_ rawPath: String) -> Bool {
+        isUserPreferencesPath(standardizedPath(rawPath))
     }
 
     private static func standardizedPath(_ path: String) -> String {

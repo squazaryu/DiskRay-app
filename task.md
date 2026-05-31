@@ -826,3 +826,21 @@ Allow DRay to read and set macOS energy mode separately for Battery Power and AC
 - [x] swift build
 - [x] swift test
 - [x] git diff --check
+
+## Remaining Preferences Classification Fix
+
+### Finding
+- `~/Library/Preferences/*.plist` was intentionally marked `manualOnly` to keep Smart Care from deleting user/macOS settings by default.
+- Remaining/Uninstaller reused the same `manualOnly` signal as `SIP/TCC`, so ordinary app preference leftovers were shown as system-protected and skipped by Remaining cleanup.
+- The screenshot paths (`org.cindori.Sensei.plist`, `com.rileytestut.AltServer.plist`) are app preference plist leftovers, not necessarily Login Items. Login/background items usually appear as LaunchAgents, BackgroundTaskManagement data, or startup references.
+
+### Fix
+- [x] Keep user preferences excluded from default Smart Care cleanup.
+- [x] Stop treating user preference plist leftovers as `SystemPathProtection`.
+- [x] Show Remaining preference leftovers as `Preferences`, not `SIP/TCC`.
+- [x] Allow explicit Remaining cleanup to attempt deletion of app-bound preference leftovers.
+- [x] Keep real SIP/system paths protected.
+
+### Validation
+- [x] swift build
+- [x] swift test

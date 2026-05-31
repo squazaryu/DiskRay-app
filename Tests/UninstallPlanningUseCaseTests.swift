@@ -102,6 +102,45 @@ struct UninstallPlanningUseCaseTests {
     }
 
     @Test
+    func verifyReportDoesNotLabelUserPreferencesAsSIPTCC() {
+        let useCase = UninstallPlanningUseCase()
+        let app = InstalledApp(
+            name: "Demo",
+            bundleID: "com.example.demo",
+            appURL: URL(fileURLWithPath: "/Applications/Demo.app")
+        )
+        let preferenceURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.example.demo.plist")
+        let preview = [
+            UninstallPreviewItem(
+                url: preferenceURL,
+                type: .remnant,
+                sizeInBytes: 1024,
+                risk: .low,
+                reason: "Preference"
+            )
+        ]
+        let remaining = [
+            AppRemnant(url: preferenceURL, sizeInBytes: 1024)
+        ]
+
+        let report = useCase.buildVerifyReport(
+            app: app,
+            previewItems: preview,
+            validation: nil,
+            remaining: remaining,
+            isProtectedPath: SystemPathProtection.isProtected,
+            isAppRunning: false
+        )
+        let reason = report.remaining.first?.reason ?? ""
+
+        #expect(report.remainingCount == 1)
+        #expect(reason.contains("Preference file remained"))
+        #expect(!reason.contains("SIP/TCC"))
+        #expect(!reason.contains("system-protected"))
+    }
+
+    @Test
     func verifyReportIncludesStartupReferencesAndRemediationHint() {
         let useCase = UninstallPlanningUseCase()
         let app = InstalledApp(

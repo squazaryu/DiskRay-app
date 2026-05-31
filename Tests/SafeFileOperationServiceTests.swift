@@ -10,6 +10,11 @@ struct SafeFileOperationServiceTests {
         #expect(SystemPathProtection.isProtected("/usr/libexec"))
         #expect(!SystemPathProtection.isProtected("/Users/test/Documents"))
         #expect(!SystemPathProtection.isProtected("/Applications/MyApp.app"))
+
+        let appPreference = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.example.demo.plist")
+        #expect(!SystemPathProtection.isProtected(appPreference.path))
+        #expect(PathSafetyPolicy.shouldSkipForDefaultCleanup(appPreference.path))
     }
 
     @Test

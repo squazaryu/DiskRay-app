@@ -51,6 +51,8 @@ struct PathSafetyPolicyTests {
         #expect(appAssessment.classification == .userData)
         #expect(appAssessment.disposition == .manualOnly)
         #expect(appAssessment.shouldSkipForSafeCleanup)
+        #expect(!PathSafetyPolicy.isProtected(appPlist.path))
+        #expect(PathSafetyPolicy.isUserPreferenceStatePath(appPlist.path))
     }
 
     @Test
