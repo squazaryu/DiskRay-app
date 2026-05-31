@@ -104,11 +104,13 @@ struct UninstallerView: View {
         let daemon = allIssues.filter { RemainingFilter.daemon.matches(issue: $0) }.count
         let protected = allIssues.filter { RemainingFilter.protected.matches(issue: $0) }.count
         let permissions = allIssues.filter { RemainingFilter.permissions.matches(issue: $0) }.count
+        let preferences = allIssues.filter { RemainingFilter.preferences.matches(issue: $0) }.count
         let other = allIssues.filter { RemainingFilter.other.matches(issue: $0) }.count
         return [
             (title: "Daemons", count: daemon, tint: .red),
             (title: "SIP/TCC", count: protected, tint: .orange),
             (title: "Permissions", count: permissions, tint: .red),
+            (title: "Preferences", count: preferences, tint: .orange),
             (title: "Other", count: other, tint: .secondary)
         ]
     }
@@ -671,6 +673,7 @@ struct UninstallerView: View {
                     Text("Daemons").tag(RemainingFilter.daemon)
                     Text("SIP/TCC").tag(RemainingFilter.protected)
                     Text("Permissions").tag(RemainingFilter.permissions)
+                    Text("Preferences").tag(RemainingFilter.preferences)
                     Text("Other").tag(RemainingFilter.other)
                 }
                 .pickerStyle(.segmented)
@@ -873,18 +876,18 @@ struct UninstallerView: View {
                 nextStep: "Protected by macOS. Keep excluded unless you intentionally remove it outside DRay."
             )
         }
-        if isPreferenceRemainingIssue(issue) {
-            return RemainingIssueClassification(
-                title: "Preferences",
-                tint: .orange,
-                nextStep: "App preference file. Default cleanup excludes preferences; Clean Remaining can remove it when this app is gone."
-            )
-        }
         if RemainingFilter.permissions.matches(issue: issue) {
             return RemainingIssueClassification(
                 title: "Permissions",
                 tint: .red,
                 nextStep: "Grant Full Disk Access, check ownership/ACL, then retry Clean Remaining."
+            )
+        }
+        if isPreferenceRemainingIssue(issue) {
+            return RemainingIssueClassification(
+                title: "Preferences",
+                tint: .orange,
+                nextStep: "App preference file. Default cleanup excludes preferences; Clean Remaining can remove it when this app is gone."
             )
         }
         return RemainingIssueClassification(
@@ -1378,6 +1381,7 @@ private enum RemainingFilter: Hashable {
     case daemon
     case protected
     case permissions
+    case preferences
     case other
 
     func matches(issue: UninstallRemainingIssueRecord) -> Bool {
@@ -1406,6 +1410,9 @@ private enum RemainingFilter: Hashable {
             || lower.contains("access denied")
             || lower.contains("not permitted")
             || lower.contains("authorization")
+        let isPreference = !lowerPath.isEmpty
+            && !isProtected
+            && PathSafetyPolicy.isUserPreferenceStatePath(path)
         switch self {
         case .all:
             return true
@@ -1415,8 +1422,10 @@ private enum RemainingFilter: Hashable {
             return isProtected && !isDaemon
         case .permissions:
             return isPermission && !isDaemon && !isProtected
+        case .preferences:
+            return isPreference && !isDaemon && !isPermission
         case .other:
-            return !isDaemon && !isProtected && !isPermission
+            return !isDaemon && !isProtected && !isPermission && !isPreference
         }
     }
 }
