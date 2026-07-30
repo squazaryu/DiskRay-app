@@ -71,7 +71,8 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - First `main` CI run `30572691837` failed before build because toolchain verification incorrectly expected Swift at `Developer/usr/bin/swift`.
 - CI/release workflows now select full Xcode through `/Applications/Xcode.app` and verify Swift through `xcrun --find swift`; source and published artifact hashes are unchanged.
 - Successful retry `30573033124`: full-Xcode debug/release builds and all tests passed with Xcode 26.5.
-- The workflow now asserts Xcode 26.5 explicitly and uses `actions/checkout@v5` to avoid the Node.js 20 deprecation warning.
+- A later runner was provisioned with the older supported image during the rollout, so the workflow now accepts only documented Xcode 26.4.1 or 26.5 and prints the selected version before validation.
+- Workflows use `actions/checkout@v5` to avoid the Node.js 20 deprecation warning.
 
 ---
 
