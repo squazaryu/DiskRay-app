@@ -95,22 +95,22 @@ struct ClutterView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(
+            DRayStatusTile(
                 title: t("Группы", "Groups"),
                 value: "\(model.duplicateGroups.count)",
                 tint: .blue
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("К освобождению", "Reclaimable"),
                 value: ByteCountFormatter.string(fromByteCount: totalReclaimableBytes, countStyle: .file),
                 tint: .green
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("Выбрано", "Selected"),
                 value: "\(selectedPaths.count)",
                 tint: selectedPaths.isEmpty ? .secondary : .orange
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("Диагностика", "Diagnostics"),
                 value: "\(cleanupDiagnostics.count)",
                 tint: cleanupDiagnostics.isEmpty ? .secondary : .purple
@@ -698,40 +698,6 @@ struct ClutterView: View {
         isRussian ? ru : en
     }
 
-    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .lineLimit(1)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(layoutMetrics.cardSpacing)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, layoutMetrics.cardSpacing)
-        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
 }
 
 private struct CleanupDiagnosticRow: Identifiable {

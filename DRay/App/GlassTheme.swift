@@ -800,6 +800,61 @@ struct DRayCompactInfoTile: View {
     }
 }
 
+struct DRaySummaryMetricCard: View {
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
+    let title: String
+    let value: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, max(7, layoutMetrics.cardSpacing - 4))
+        .calmGlass(.nestedCard, cornerRadius: 10)
+    }
+}
+
+struct DRayStatusTile: View {
+    @Environment(\.drayLayoutMetrics) private var layoutMetrics
+    let title: String
+    let value: String
+    var tint: Color = .secondary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, layoutMetrics.cardSpacing)
+        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
+        .calmGlass(.nestedCard, cornerRadius: 10)
+    }
+}
+
 struct DRayQuietIconBadge: View {
     let systemName: String
     var tone: DRaySemanticTone = .neutral

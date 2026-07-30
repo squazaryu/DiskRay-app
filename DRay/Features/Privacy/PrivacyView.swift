@@ -289,24 +289,6 @@ struct PrivacyView: View {
         .padding(.top, 8)
     }
 
-    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .lineLimit(1)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(layoutMetrics.cardSpacing)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
     private var categoriesList: some View {
         List {
             Section("Transparency Report") {
@@ -439,21 +421,6 @@ struct PrivacyView: View {
         }
     }
 
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, layoutMetrics.cardSpacing)
-        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
 }
 
 private enum PrivacyWorkspaceTab: Hashable {

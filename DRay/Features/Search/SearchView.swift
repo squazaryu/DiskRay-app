@@ -1308,22 +1308,6 @@ struct SearchView: View {
         return first.name
     }
 
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, layoutMetrics.cardSpacing)
-        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .calmGlass(.nestedCard, cornerRadius: 10)
-    }
 }
 
 private enum SearchWorkspaceTab: Hashable {

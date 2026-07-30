@@ -348,10 +348,10 @@ struct RepairView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(title: "Apps", value: "\(filteredApps.count)", tint: .blue)
-            statusTile(title: "Artifacts", value: "\(repairArtifacts.count)", tint: .orange)
-            statusTile(title: "Selected", value: "\(selectedArtifacts.count)", tint: .green)
-            statusTile(title: "Rollback Sessions", value: "\(repairSessions.count)", tint: .purple)
+            DRayStatusTile(title: "Apps", value: "\(filteredApps.count)", tint: .blue)
+            DRayStatusTile(title: "Artifacts", value: "\(repairArtifacts.count)", tint: .orange)
+            DRayStatusTile(title: "Selected", value: "\(selectedArtifacts.count)", tint: .green)
+            DRayStatusTile(title: "Rollback Sessions", value: "\(repairSessions.count)", tint: .purple)
         }
         .padding(.horizontal, layoutMetrics.cardSpacing)
         .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
@@ -619,21 +619,6 @@ struct RepairView: View {
             .foregroundStyle(color)
     }
 
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, layoutMetrics.cardSpacing)
-        .padding(.vertical, layoutMetrics.bottomStripVerticalPadding)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
 }
 
 private enum RepairWorkspaceTab: Hashable {

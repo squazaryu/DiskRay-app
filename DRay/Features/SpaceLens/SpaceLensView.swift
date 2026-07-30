@@ -64,22 +64,22 @@ struct SpaceLensView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(
+            DRayStatusTile(
                 title: t("Цель", "Target"),
                 value: model.selectedTarget.name,
                 tint: .blue
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("Узлы", "Nodes"),
                 value: "\(max(nodeIndex.count - 1, 0))",
                 tint: .green
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("Выбрано", "Selected"),
                 value: "\(selectedPaths.count)",
                 tint: selectedPaths.isEmpty ? .secondary : .orange
             )
-            statusTile(
+            DRayStatusTile(
                 title: t("Tap Mode", "Tap Mode"),
                 value: bubbleTapModeTitle(bubbleTapMode),
                 tint: .purple
@@ -292,17 +292,17 @@ struct SpaceLensView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
                 HStack(spacing: 8) {
-                    summaryCard(
+                    DRaySummaryMetricCard(
                         title: t("Узлы", "Nodes"),
                         value: "\(max(nodeIndex.count - 1, 0))",
                         subtitle: t("Проиндексировано в дереве", "Indexed in tree")
                     )
-                    summaryCard(
+                    DRaySummaryMetricCard(
                         title: t("Выбрано", "Selected"),
                         value: "\(selectedPaths.count)",
                         subtitle: t("Элементов в выборке", "Items in selection")
                     )
-                    summaryCard(
+                    DRaySummaryMetricCard(
                         title: t("Размер выбора", "Selected Size"),
                         value: ByteCountFormatter.string(
                             fromByteCount: selectedNodes.reduce(Int64(0)) { $0 + $1.sizeInBytes },
@@ -690,40 +690,6 @@ struct SpaceLensView: View {
         }
     }
 
-    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .lineLimit(1)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
 }
 
 private func buildNodeIndex(root: FileNode) -> [String: FileNode] {

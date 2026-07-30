@@ -168,25 +168,6 @@ extension PerformanceView {
         .calmGlass(.card, cornerRadius: 10)
     }
 
-    func metricCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .calmGlass(.nestedCard, cornerRadius: 10)
-    }
-
     func quickActionDeltaPanel(_ delta: QuickActionDeltaReport) -> some View {
         HStack(spacing: 8) {
             StatusChip(title: t("Действие: \(delta.actionTitle)", "Action: \(delta.actionTitle)"), tint: .blue)

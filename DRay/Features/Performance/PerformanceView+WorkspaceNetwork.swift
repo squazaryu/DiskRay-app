@@ -513,34 +513,34 @@ extension PerformanceView {
 
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("TCP-подключения", "TCP connections"),
                         value: "\(networkConnectionsMonitor.snapshot.tcpConnections)",
                         subtitle: t("Текущий сэмпл", "Live sample")
                     )
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("Геолокированные endpoint-ы", "Geolocated endpoints"),
                         value: "\(geolocatedHostRows.count)",
                         subtitle: t("Топ хостов", "Top host list")
                     )
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("Неразрешённые хосты", "Unresolved hosts"),
                         value: "\(networkGeolocationMonitor.unresolvedHosts.count)",
                         subtitle: t("DNS/geo недоступны", "DNS/geo unavailable")
                     )
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("TCP-подключения", "TCP connections"),
                         value: "\(networkConnectionsMonitor.snapshot.tcpConnections)",
                         subtitle: t("Текущий сэмпл", "Live sample")
                     )
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("Геолокированные endpoint-ы", "Geolocated endpoints"),
                         value: "\(geolocatedHostRows.count)",
                         subtitle: t("Топ хостов", "Top host list")
                     )
-                    metricCard(
+                    DRaySummaryMetricCard(
                         title: t("Неразрешённые хосты", "Unresolved hosts"),
                         value: "\(networkGeolocationMonitor.unresolvedHosts.count)",
                         subtitle: t("DNS/geo недоступны", "DNS/geo unavailable")
@@ -1343,22 +1343,22 @@ extension PerformanceView {
     private func networkSpeedSummary(result: NetworkSpeedTestResult) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: layoutMetrics.cardSpacing) {
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Скачивание", "Download"),
                     value: optionalMbps(result.downlinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отдача", "Upload"),
                     value: optionalMbps(result.uplinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отклик", "Responsiveness"),
                     value: optionalMilliseconds(result.responsivenessMs),
                     subtitle: t("Меньше — лучше", "Lower is better")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: "Base RTT",
                     value: optionalMilliseconds(result.baseRTTMs),
                     subtitle: result.interfaceName ?? t("Интерфейс н/д", "Interface n/a")
@@ -1372,22 +1372,22 @@ extension PerformanceView {
                 ],
                 spacing: layoutMetrics.cardSpacing
             ) {
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Скачивание", "Download"),
                     value: optionalMbps(result.downlinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отдача", "Upload"),
                     value: optionalMbps(result.uplinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отклик", "Responsiveness"),
                     value: optionalMilliseconds(result.responsivenessMs),
                     subtitle: t("Меньше — лучше", "Lower is better")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: "Base RTT",
                     value: optionalMilliseconds(result.baseRTTMs),
                     subtitle: result.interfaceName ?? t("Интерфейс н/д", "Interface n/a")
@@ -1395,22 +1395,22 @@ extension PerformanceView {
             }
 
             VStack(alignment: .leading, spacing: layoutMetrics.cardSpacing) {
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Скачивание", "Download"),
                     value: optionalMbps(result.downlinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отдача", "Upload"),
                     value: optionalMbps(result.uplinkMbps),
                     subtitle: t("Последний тест скорости", "Latest speed test")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: t("Отклик", "Responsiveness"),
                     value: optionalMilliseconds(result.responsivenessMs),
                     subtitle: t("Меньше — лучше", "Lower is better")
                 )
-                metricCard(
+                DRaySummaryMetricCard(
                     title: "Base RTT",
                     value: optionalMilliseconds(result.baseRTTMs),
                     subtitle: result.interfaceName ?? t("Интерфейс н/д", "Interface n/a")

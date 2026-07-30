@@ -566,24 +566,6 @@ struct SmartCareView: View {
         )
     }
 
-    private func summaryCard(title: String, value: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .lineLimit(1)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .calmGlass(.nestedCard, cornerRadius: 10)
-    }
-
     private var header: some View {
         ModuleHeaderCard(
             title: "Smart Care",
@@ -690,22 +672,22 @@ struct SmartCareView: View {
 
     private var smartStatusStrip: some View {
         HStack(spacing: 8) {
-            statusTile(
+            DRayStatusTile(
                 title: "Categories",
                 value: "\(model.smartCare.categories.count)",
                 tint: .blue
             )
-            statusTile(
+            DRayStatusTile(
                 title: "Selected",
                 value: "\(selectedCategoryCount)",
                 tint: selectedCategoryCount > 0 ? .green : .secondary
             )
-            statusTile(
+            DRayStatusTile(
                 title: "Items",
                 value: "\(selectedItemPaths.count)",
                 tint: selectedItemPaths.isEmpty ? .secondary : .orange
             )
-            statusTile(
+            DRayStatusTile(
                 title: "Profile",
                 value: model.smartCare.profile.title,
                 tint: .purple
@@ -1203,21 +1185,6 @@ struct SmartCareView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func statusTile(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .calmGlass(.nestedCard, cornerRadius: 10)
-    }
 }
 
 private enum SmartCareWorkspaceTab: Hashable {

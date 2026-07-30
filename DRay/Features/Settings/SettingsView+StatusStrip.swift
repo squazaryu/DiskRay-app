@@ -28,22 +28,22 @@ extension SettingsView {
 
     @ViewBuilder
     private var settingsStatusTiles: some View {
-        statusTile(
+        DRayStatusTile(
             title: model.localized(.settingsPermissions),
             value: permissionsStatusTitle,
             tint: permissionsStatusTint
         )
-        statusTile(
+        DRayStatusTile(
             title: model.localized(.settingsAppearance),
             value: appearanceTitle(model.appAppearance),
             tint: .blue
         )
-        statusTile(
+        DRayStatusTile(
             title: model.localized(.settingsLanguage),
             value: languageTitle(model.appLanguage),
             tint: .teal
         )
-        statusTile(
+        DRayStatusTile(
             title: model.localized(.settingsVersion),
             value: model.appVersionDisplay,
             tint: .orange
