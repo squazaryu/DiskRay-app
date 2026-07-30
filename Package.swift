@@ -10,9 +10,7 @@ let package = Package(
         .executable(name: "DRay", targets: ["DRay"]),
         .executable(name: "DRayMenuBarHelper", targets: ["DRayMenuBarHelper"])
     ],
-    dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-testing.git", from: "0.7.0")
-    ],
+    dependencies: [],
     targets: [
         .executableTarget(
             name: "DRay",
@@ -24,10 +22,7 @@ let package = Package(
         ),
         .testTarget(
             name: "DRayTests",
-            dependencies: [
-                "DRay",
-                .product(name: "Testing", package: "swift-testing")
-            ],
+            dependencies: ["DRay"],
             path: "Tests"
         )
     ]
