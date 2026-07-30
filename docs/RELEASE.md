@@ -9,7 +9,7 @@
 
 Current release example:
 ```bash
-./scripts/package_release.sh 2.2.1 1
+./scripts/package_release.sh 2.2.2 1
 ```
 
 2. Optional signed + notarized release:
@@ -41,12 +41,12 @@ gh release create v2.0.0 \
 
 For the current channel:
 ```bash
-gh release create v2.2.1 \
-  dist/DRay-2.2.1.zip \
-  dist/DRay-2.2.1.dmg \
-  dist/DRay-2.2.1-SHA256SUMS.txt \
-  --title "DRay 2.2.1" \
-  --notes-file docs/releases/2.2.1.md
+gh release create v2.2.2 \
+  dist/DRay-2.2.2.zip \
+  dist/DRay-2.2.2.dmg \
+  dist/DRay-2.2.2-SHA256SUMS.txt \
+  --title "DRay 2.2.2" \
+  --notes-file docs/releases/2.2.2.md
 ```
 
 ## CI Release
@@ -55,7 +55,7 @@ Workflow:
 - `.github/workflows/release.yml`
 
 Manual inputs:
-- `app_version` (required): semantic app version without a leading `v`, example `2.2.1`
+- `app_version` (required): semantic app version without a leading `v`, example `2.2.2`
 - `build_number` (optional)
 
 The workflow runs smoke checks, builds `/Applications/DRay.app`, packages `zip` + `dmg`, and uploads both artifacts.

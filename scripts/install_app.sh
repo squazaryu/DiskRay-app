@@ -82,8 +82,8 @@ if [[ -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRayDark.icns"
 fi
 
-# Closed-app default icon. The menu bar helper keeps this bundle resource synced
-# with system appearance while DRay is closed to the menu bar.
+# Select an immutable default icon before signing. Runtime code must never
+# rewrite a signed app bundle; the running app updates its Dock icon via AppKit.
 if [[ "$ICON_THEME" == "dark" && -f "assets/DRayDark.icns" ]]; then
   cp "assets/DRayDark.icns" "${BUNDLE_ROOT}/Contents/Resources/DRay.icns"
 elif [[ "$ICON_THEME" == "light" && -f "assets/DRayLight.icns" ]]; then

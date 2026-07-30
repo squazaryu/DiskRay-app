@@ -57,12 +57,12 @@ swift run
 
 ## Build and Install to `/Applications`
 ```bash
-./scripts/install_app.sh 2.2.1 1
+./scripts/install_app.sh 2.2.2 1
 ```
 
 ## Package Release Artifacts (`zip` + `dmg`)
 ```bash
-./scripts/package_release.sh 2.2.1 1
+./scripts/package_release.sh 2.2.2 1
 ```
 Artifacts are created in `dist`.
 
@@ -78,7 +78,7 @@ Artifacts are created in `dist`.
 The script scans tracked text files for personal absolute paths and email-like strings.
 
 Optional:
-- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.2.1 1`
+- skip in packaging: `SKIP_PII_SCAN=1 ./scripts/package_release.sh 2.2.2 1`
 - allowlist file: `.pii-allowlist` (one literal token per line, `#` for comments)
 
 ## Crash Symbolication
@@ -96,4 +96,4 @@ Optional:
 - Settings model: `docs/SETTINGS_MODEL.md`
 
 ## Current Channel
-`v2.2.1 (build 1)` is the active release channel. It adds explicit opt-in controls for Network geolocation, evidence-based Deep Sweep ownership confidence, safer review-only handling for ambiguous leftovers, atomic file-index snapshots, bounded command execution, and focused Network/Remaining UI decomposition while preserving the `2.2.0` Calm Liquid Glass interface.
+`v2.2.2 (build 1)` is the active release channel. It preserves the `2.2.1` privacy, Deep Sweep, indexing, command-runner, and UI work while preventing the menu bar helper from modifying signed app resources at runtime.

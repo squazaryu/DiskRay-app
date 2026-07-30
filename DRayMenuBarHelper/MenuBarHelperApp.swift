@@ -118,7 +118,6 @@ final class MenuBarHelperAppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             workspaceActivationObserver = nil
         }
-        AppBundleIconThemeSynchronizer.shared.stop()
     }
 
     private func dismissTransientUI() {
@@ -139,7 +138,6 @@ struct DRayMenuBarHelperApp: App {
         liveMonitor.setConsumerSamplingEnabled(false)
         _model = StateObject(wrappedValue: MenuBarPopupModel(config: config))
         _monitor = StateObject(wrappedValue: liveMonitor)
-        AppBundleIconThemeSynchronizer.shared.start(appPath: config.appPath)
         liveMonitor.start()
         if let startupSection = config.startupSection {
             let bridge = DRayMainBridge(appPath: config.appPath)

@@ -54,6 +54,17 @@ else
   echo "Warning: Developer ID is not configured; keeping the ad-hoc signature."
 fi
 
+HELPER_PATH="${APP_PATH}/Contents/Helpers/DRayMenuBarHelper"
+if [[ -x "${HELPER_PATH}" ]]; then
+  echo "Verifying bundle integrity after menu bar helper startup..."
+  "${HELPER_PATH}" --app-path "${APP_PATH}" >/dev/null 2>&1 &
+  HELPER_PID=$!
+  sleep 1
+  kill "${HELPER_PID}" >/dev/null 2>&1 || true
+  wait "${HELPER_PID}" >/dev/null 2>&1 || true
+  codesign --verify --deep --strict "${APP_PATH}"
+fi
+
 if [[ -n "${NOTARY_PROFILE:-}" ]]; then
   echo "Pre-notarization app archive..."
   ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"

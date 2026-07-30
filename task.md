@@ -1,3 +1,44 @@
+# DRay Runtime Bundle Integrity Hotfix / Release 2.2.2
+
+Date: 2026-07-30
+Branch: `2.2.0-ui-refactor`
+Target release: `2.2.2 (1)`
+
+## Regression
+- [x] Reproduce strict signature failure after the menu bar helper starts.
+- [x] Identify runtime replacement of signed `Contents/Resources/DRay.icns`.
+- [x] Verify that `NSWorkspace.setIcon` is also unsuitable because it adds disallowed Finder metadata.
+
+## Plan
+- [x] Remove runtime writes to the signed app bundle.
+- [x] Preserve runtime Dock icon selection through `NSApp.applicationIconImage`.
+- [x] Keep install-time light/dark icon selection before signing.
+- [x] Add packaging smoke coverage that starts the helper and re-verifies bundle integrity.
+- [x] Run full-Xcode debug/release builds, tests, smoke checks, and PII scan.
+- [x] Package and install `2.2.2 (1)` to `/Applications`.
+- [x] Verify strict signature before and after app/helper launch.
+- [ ] Publish immutable `v2.2.2` artifacts and confirm CI.
+
+## Constraints
+- Do not rewrite or mutate a signed app bundle at runtime.
+- Do not move or replace the already published `v2.2.1` tag/assets.
+- Preserve Force Remove, App Store deletion, Remaining cleanup, Search, Network, and high-risk behavior.
+- Do not touch `codex-pets`.
+
+## Validation Evidence
+- Full-Xcode debug and release builds passed.
+- Full suite: 154 tests in 40 suites passed.
+- UI smoke: 5/5 scenarios passed.
+- PII scan passed.
+- Packaging started the embedded helper and strict signature verification passed afterward.
+- Installed runtime check: DRay and helper launched from `/Applications/DRay.app`.
+- `DRay.icns` SHA256 remained `47248610011c95c9b8550a7b7754d43a3589ffe915db7a3ea8baffbdf67e0bce` before and after launch.
+- Installed bundle: `com.squazaryu.DRay`, version `2.2.2`, build `1`.
+- ZIP SHA256: `78c1c7191cb295eb926a93ca8fcb8f38164936d1e93d8ff4363fcf9a982959a7`.
+- DMG SHA256: `ef802b939351bec8d3c9ff731f64b1aae748716d330adffff6fce9e59f873e0c`.
+
+---
+
 # DRay Issues Implementation Batch 2 / Release 2.2.1
 
 Date: 2026-07-30
