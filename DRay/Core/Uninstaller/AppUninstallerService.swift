@@ -40,9 +40,17 @@ actor AppUninstallerService: UninstallerServicing {
     )
 
     private let operations: AppUninstallerOperations?
+    private let deepSweepRootsOverride: [URL]?
+    private let receiptBundleIDsOverride: Set<String>?
 
-    init(operations: AppUninstallerOperations? = nil) {
+    init(
+        operations: AppUninstallerOperations? = nil,
+        deepSweepRoots: [URL]? = nil,
+        receiptBundleIDs: Set<String>? = nil
+    ) {
         self.operations = operations
+        self.deepSweepRootsOverride = deepSweepRoots
+        self.receiptBundleIDsOverride = receiptBundleIDs
     }
 
     func installedApps() -> [InstalledApp] {
@@ -205,7 +213,8 @@ actor AppUninstallerService: UninstallerServicing {
     }
 
     func deepSweepOrphanRemnants(installedApps: [InstalledApp]) -> [UninstallDeepSweepCandidate] {
-        let installedBundleIDs = Set(installedApps.map { normalizedBundleID($0.bundleID) })
+        let installedBundleIDs = installedOwnershipIdentityBundleIDs(for: installedApps)
+        let receiptBundleIDs = deepSweepReceiptBundleIDs()
         let roots = deepSweepRoots()
         let maxDepth = 4
         let maxMatches = 2_500
@@ -232,20 +241,26 @@ actor AppUninstallerService: UninstallerServicing {
                 let normalizedPath = URL(fileURLWithPath: url.path).standardizedFileURL.path
                 guard seenPaths.insert(normalizedPath).inserted else { continue }
 
-                let bundleIDCandidates = extractBundleIDs(from: normalizedPath)
-                guard
-                    let bundleID = bundleIDCandidates.first(where: { candidate in
-                        shouldIncludeDeepSweepBundleID(candidate, installedBundleIDs: installedBundleIDs)
-                    })
-                else { continue }
+                guard let ownership = DeepSweepOwnershipPolicy.evaluate(
+                    path: normalizedPath,
+                    candidateBundleIDs: extractBundleIDs(from: normalizedPath),
+                    installedIdentityBundleIDs: installedBundleIDs,
+                    receiptBundleIDs: receiptBundleIDs
+                ) else { continue }
+
+                let evidenceSummary = ownership.evidence
+                    .map(\.details)
+                    .joined(separator: " ")
 
                 let issue = UninstallVerifyIssue(
                     url: url,
                     sizeInBytes: directorySize(at: url),
-                    reason: "Detected by deep sweep as an orphaned artifact for a missing app bundle.",
-                    risk: deepSweepRisk(for: normalizedPath)
+                    reason: "Deep Sweep ownership: \(ownership.confidence.rawValue) confidence. \(evidenceSummary)",
+                    risk: deepSweepRisk(for: normalizedPath),
+                    ownershipConfidence: ownership.confidence,
+                    ownershipEvidence: ownership.evidence
                 )
-                grouped[bundleID, default: []].append(issue)
+                grouped[ownership.bundleID, default: []].append(issue)
                 totalMatches += 1
                 if totalMatches >= maxMatches {
                     break outerLoop
@@ -515,6 +530,9 @@ actor AppUninstallerService: UninstallerServicing {
     }
 
     private func deepSweepRoots() -> [URL] {
+        if let deepSweepRootsOverride {
+            return deepSweepRootsOverride
+        }
         let home = FileManager.default.homeDirectoryForCurrentUser
         return [
             home.appendingPathComponent("Library/Application Support"),
@@ -555,25 +573,6 @@ actor AppUninstallerService: UninstallerServicing {
         return result
     }
 
-    private func shouldIncludeDeepSweepBundleID(
-        _ bundleID: String,
-        installedBundleIDs: Set<String>
-    ) -> Bool {
-        if installedBundleIDs.contains(bundleID) {
-            return false
-        }
-        if bundleID.hasPrefix("com.apple.") {
-            return false
-        }
-        if bundleID.hasPrefix("apple.") {
-            return false
-        }
-        if bundleID.hasPrefix("group.com.apple.") {
-            return false
-        }
-        return true
-    }
-
     private func appNameFromBundleID(_ bundleID: String) -> String {
         let tail = bundleID.split(separator: ".").last.map(String.init) ?? bundleID
         let normalized = tail
@@ -604,6 +603,64 @@ actor AppUninstallerService: UninstallerServicing {
 
     private func normalizedBundleID(_ bundleID: String) -> String {
         bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func installedOwnershipIdentityBundleIDs(for apps: [InstalledApp]) -> Set<String> {
+        var identities = Set(apps.map { normalizedBundleID($0.bundleID) })
+        let nestedBundleExtensions = Set(["app", "appex", "xpc", "bundle", "plugin"])
+
+        for app in apps where FileManager.default.fileExists(atPath: app.appURL.path) {
+            guard let enumerator = FileManager.default.enumerator(
+                at: app.appURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            var inspectedEntries = 0
+            for case let url as URL in enumerator {
+                inspectedEntries += 1
+                if inspectedEntries > 2_000 {
+                    break
+                }
+                let relativePath = url.path.replacingOccurrences(of: app.appURL.path, with: "")
+                if depth(of: relativePath) > 8 {
+                    enumerator.skipDescendants()
+                    continue
+                }
+                guard nestedBundleExtensions.contains(url.pathExtension.lowercased()),
+                      let nestedBundleID = Bundle(url: url)?.bundleIdentifier else {
+                    continue
+                }
+                identities.insert(normalizedBundleID(nestedBundleID))
+            }
+        }
+        return identities
+    }
+
+    private func deepSweepReceiptBundleIDs() -> Set<String> {
+        if let receiptBundleIDsOverride {
+            return Set(receiptBundleIDsOverride.map(normalizedBundleID))
+        }
+
+        let receiptsRoot = URL(fileURLWithPath: "/var/db/receipts", isDirectory: true)
+        guard let receiptURLs = try? FileManager.default.contentsOfDirectory(
+            at: receiptsRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return Set(receiptURLs.compactMap { url in
+            let fileName = url.lastPathComponent.lowercased()
+            if fileName.hasSuffix(".plist") {
+                return String(fileName.dropLast(".plist".count))
+            }
+            if fileName.hasSuffix(".bom") {
+                return String(fileName.dropLast(".bom".count))
+            }
+            return nil
+        })
     }
 
     private func fileContainsAnyToken(_ url: URL, tokens: [String]) -> Bool {

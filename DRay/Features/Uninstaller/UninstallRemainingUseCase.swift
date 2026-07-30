@@ -140,7 +140,9 @@ struct UninstallRemainingUseCase {
                 reason: issue.reason,
                 risk: issue.risk,
                 category: issue.category,
-                remediation: issue.remediation
+                remediation: issue.remediation,
+                ownershipConfidence: issue.ownershipConfidence,
+                ownershipEvidence: issue.ownershipEvidence
             )
         }
         return uniqueByPath.values.sorted { lhs, rhs in

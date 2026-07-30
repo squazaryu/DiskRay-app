@@ -217,6 +217,25 @@ enum UninstallRiskLevel: String, Codable, Sendable {
     case high
 }
 
+enum UninstallOwnershipConfidence: String, Codable, Hashable, Sendable {
+    case low
+    case medium
+    case high
+}
+
+enum UninstallOwnershipEvidenceKind: String, Codable, Hashable, Sendable {
+    case exactPathIdentity
+    case packageReceipt
+    case identifierPattern
+    case ambiguousIdentifiers
+    case sharedContainer
+}
+
+struct UninstallOwnershipEvidence: Codable, Hashable, Sendable {
+    let kind: UninstallOwnershipEvidenceKind
+    let details: String
+}
+
 struct UninstallPreviewItem: Identifiable, Codable, Sendable {
     let id = UUID()
     let url: URL
@@ -264,6 +283,8 @@ struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
     let risk: UninstallRiskLevel
     let category: UninstallRemainingIssueCategory
     let remediation: UninstallRemainingRemediation
+    let ownershipConfidence: UninstallOwnershipConfidence?
+    let ownershipEvidence: [UninstallOwnershipEvidence]
 
     init(
         url: URL,
@@ -273,7 +294,9 @@ struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
         category: UninstallRemainingIssueCategory? = nil,
         remediation: UninstallRemainingRemediation? = nil,
         failureCategory: UninstallFailureCategory? = nil,
-        itemType: UninstallItemType? = nil
+        itemType: UninstallItemType? = nil,
+        ownershipConfidence: UninstallOwnershipConfidence? = nil,
+        ownershipEvidence: [UninstallOwnershipEvidence] = []
     ) {
         let inferred = UninstallRemainingIssueClassifier.classify(
             path: url.path,
@@ -287,6 +310,8 @@ struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
         self.risk = risk
         self.category = category ?? inferred.category
         self.remediation = remediation ?? inferred.remediation
+        self.ownershipConfidence = ownershipConfidence
+        self.ownershipEvidence = ownershipEvidence
     }
 
     var name: String {
@@ -356,6 +381,8 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
     let risk: UninstallRiskLevel
     let category: UninstallRemainingIssueCategory
     let remediation: UninstallRemainingRemediation
+    let ownershipConfidence: UninstallOwnershipConfidence?
+    let ownershipEvidence: [UninstallOwnershipEvidence]
 
     init(
         id: UUID = UUID(),
@@ -364,7 +391,9 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
         reason: String,
         risk: UninstallRiskLevel,
         category: UninstallRemainingIssueCategory? = nil,
-        remediation: UninstallRemainingRemediation? = nil
+        remediation: UninstallRemainingRemediation? = nil,
+        ownershipConfidence: UninstallOwnershipConfidence? = nil,
+        ownershipEvidence: [UninstallOwnershipEvidence] = []
     ) {
         let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         let inferred = UninstallRemainingIssueClassifier.classify(
@@ -378,6 +407,8 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
         self.risk = risk
         self.category = category ?? inferred.category
         self.remediation = remediation ?? inferred.remediation
+        self.ownershipConfidence = ownershipConfidence
+        self.ownershipEvidence = ownershipEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -403,6 +434,14 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
             UninstallRemainingRemediation.self,
             forKey: .remediation
         ) ?? inferred.remediation
+        ownershipConfidence = try container.decodeIfPresent(
+            UninstallOwnershipConfidence.self,
+            forKey: .ownershipConfidence
+        )
+        ownershipEvidence = try container.decodeIfPresent(
+            [UninstallOwnershipEvidence].self,
+            forKey: .ownershipEvidence
+        ) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -414,6 +453,8 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
         try container.encode(risk, forKey: .risk)
         try container.encode(category, forKey: .category)
         try container.encode(remediation, forKey: .remediation)
+        try container.encodeIfPresent(ownershipConfidence, forKey: .ownershipConfidence)
+        try container.encode(ownershipEvidence, forKey: .ownershipEvidence)
     }
 
     var url: URL {
@@ -424,6 +465,10 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
         url.lastPathComponent
     }
 
+    var allowsAutomaticCleanup: Bool {
+        ownershipConfidence == nil || ownershipConfidence == .high
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case path
@@ -432,6 +477,8 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
         case risk
         case category
         case remediation
+        case ownershipConfidence
+        case ownershipEvidence
     }
 }
 

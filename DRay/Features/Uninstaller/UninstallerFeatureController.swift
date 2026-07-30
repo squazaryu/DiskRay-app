@@ -259,13 +259,18 @@ final class UninstallerFeatureController: ObservableObject {
 
     @discardableResult
     func cleanRemainingRecord(_ record: UninstallRemainingRecord) -> TrashOperationResult {
-        cleanRemainingIssues(record.issues, actionName: "Uninstall Remaining Cleanup")
+        cleanRemainingIssues(
+            record.issues.filter(\.allowsAutomaticCleanup),
+            actionName: "Uninstall Remaining Cleanup"
+        )
     }
 
     @discardableResult
     func cleanAllRemainingRecords() -> TrashOperationResult {
         cleanRemainingIssues(
-            state.remainingRecords.flatMap(\.issues),
+            state.remainingRecords
+                .flatMap(\.issues)
+                .filter(\.allowsAutomaticCleanup),
             actionName: "Uninstall Remaining Cleanup"
         )
     }
@@ -363,7 +368,11 @@ final class UninstallerFeatureController: ObservableObject {
                         path: issue.path,
                         sizeInBytes: issue.sizeInBytes,
                         reason: reason,
-                        risk: issue.risk
+                        risk: issue.risk,
+                        category: issue.category,
+                        remediation: issue.remediation,
+                        ownershipConfidence: issue.ownershipConfidence,
+                        ownershipEvidence: issue.ownershipEvidence
                     )
                 }
                 return UninstallRemainingRecord(

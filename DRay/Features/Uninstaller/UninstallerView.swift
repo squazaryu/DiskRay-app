@@ -66,6 +66,17 @@ struct UninstallerView: View {
         remainingRecords.reduce(0) { $0 + $1.remainingCount }
     }
 
+    private var automaticRemainingIssueCount: Int {
+        remainingRecords
+            .flatMap(\.issues)
+            .filter(\.allowsAutomaticCleanup)
+            .count
+    }
+
+    private var manualReviewIssueCount: Int {
+        allRemainingIssueCount - automaticRemainingIssueCount
+    }
+
     private var remainingNextStepMessage: String? {
         let issues = filteredRemainingRecords.flatMap(\.issues)
         guard !issues.isEmpty else { return nil }
@@ -326,7 +337,10 @@ struct UninstallerView: View {
                     }
                     .buttonStyle(DRaySecondaryButtonStyle())
 
-                    Button("Clean All Remaining", role: .destructive) {
+                    Button(
+                        manualReviewIssueCount > 0 ? "Clean Verified Remaining" : "Clean All Remaining",
+                        role: .destructive
+                    ) {
                         let result = model.cleanAllRemainingRecords()
                         remainingActionMessage = formattedRemainingCleanupMessage(
                             result,
@@ -334,7 +348,7 @@ struct UninstallerView: View {
                         )
                     }
                     .buttonStyle(DRayDangerButtonStyle())
-                    .disabled(remainingIssueCount == 0)
+                    .disabled(automaticRemainingIssueCount == 0)
 
                     Button("Clear List", role: .destructive) {
                         model.clearRemainingRecords()
@@ -739,102 +753,31 @@ struct UninstallerView: View {
     }
 
     private func remainingRecordCard(_ record: UninstallRemainingRecord) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(record.appName)
-                        .font(.subheadline.bold())
-                    Text("Updated \(record.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                GlassPillBadge(title: "\(record.remainingCount) remaining", tint: .orange)
-                GlassPillBadge(
-                    title: ByteCountFormatter.string(fromByteCount: record.totalSizeInBytes, countStyle: .file),
-                    tint: .indigo
+        let presentations = record.issues.map { issue in
+            let classification = remainingClassification(for: issue)
+            return UninstallerRemainingIssuePresentation(
+                issue: issue,
+                categoryTitle: classification.title,
+                categoryTint: classification.tint,
+                nextStep: classification.nextStep
+            )
+        }
+
+        return UninstallerRemainingRecordCard(
+            record: record,
+            issues: presentations,
+            onCleanVerified: {
+                let result = model.cleanRemainingRecord(record)
+                remainingActionMessage = formattedRemainingCleanupMessage(
+                    result,
+                    appName: record.appName
                 )
-            }
-
-            VStack(spacing: 6) {
-                ForEach(record.issues.prefix(10)) { issue in
-                    remainingIssueRow(issue)
-                }
-                if record.issues.count > 10 {
-                    Text("+\(record.issues.count - 10) more")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-
-            HStack(spacing: 8) {
-                Button("Clean Remaining", role: .destructive) {
-                    let result = model.cleanRemainingRecord(record)
-                    remainingActionMessage = formattedRemainingCleanupMessage(
-                        result,
-                        appName: record.appName
-                    )
-                }
-                .buttonStyle(DRayDangerButtonStyle())
-                .disabled(record.issues.isEmpty)
-
-                Button("Remove Record", role: .destructive) {
+            },
+            onRemoveRecord: {
                     model.removeRemainingRecord(record)
                     remainingActionMessage = "Removed \(record.appName) from remaining list."
-                }
-                .buttonStyle(DRayDangerButtonStyle())
             }
-        }
-        .padding(10)
-        .calmGlass(.nestedCard, cornerRadius: 12)
-    }
-
-    private func remainingIssueRow(_ issue: UninstallRemainingIssueRecord) -> some View {
-        let classification = remainingClassification(for: issue)
-        return HStack(alignment: .top, spacing: 8) {
-            Text(riskTitle(issue.risk))
-                .font(.caption2.bold())
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(riskColor(issue.risk).opacity(0.14), in: Capsule())
-                .foregroundStyle(riskColor(issue.risk))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(issue.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(issue.path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Text(displayedRemainingReason(for: issue))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                Text(classification.nextStep)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(classification.tint)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(classification.title)
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(classification.tint.opacity(0.14), in: Capsule())
-                    .foregroundStyle(classification.tint)
-                Text(ByteCountFormatter.string(fromByteCount: issue.sizeInBytes, countStyle: .file))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .calmGlass(.nestedCard, cornerRadius: 10)
+        )
     }
 
     private func formattedRemainingCleanupMessage(
@@ -898,10 +841,6 @@ struct UninstallerView: View {
             tint: tint,
             nextStep: remainingRemediationMessage(issue.remediation)
         )
-    }
-
-    private func displayedRemainingReason(for issue: UninstallRemainingIssueRecord) -> String {
-        issue.reason
     }
 
     private func remainingRemediationMessage(_ remediation: UninstallRemainingRemediation) -> String {

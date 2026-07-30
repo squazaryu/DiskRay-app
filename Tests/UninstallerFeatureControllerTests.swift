@@ -156,8 +156,15 @@ struct UninstallerFeatureControllerTests {
                 UninstallVerifyIssue(
                     url: remnantURL,
                     sizeInBytes: 6,
-                    reason: "Detected by deep sweep as an orphaned artifact for a missing app bundle.",
-                    risk: .medium
+                    reason: "Deep Sweep ownership: low confidence.",
+                    risk: .medium,
+                    ownershipConfidence: .low,
+                    ownershipEvidence: [
+                        UninstallOwnershipEvidence(
+                            kind: .identifierPattern,
+                            details: "Path contains identifier com.example.orphan."
+                        )
+                    ]
                 )
             ]
         )
@@ -185,6 +192,11 @@ struct UninstallerFeatureControllerTests {
         #expect(controller.state.remainingRecords.count == 1)
         #expect(controller.state.remainingRecords[0].bundleID == "com.example.orphan")
         #expect(controller.state.remainingRecords[0].remainingCount == 1)
+        #expect(controller.state.remainingRecords[0].issues[0].ownershipConfidence == .low)
+
+        let cleanupResult = controller.cleanRemainingRecord(controller.state.remainingRecords[0])
+        #expect(cleanupResult.moved == 0)
+        #expect(FileManager.default.fileExists(atPath: remnantURL.path))
     }
 
     private func makeController(
