@@ -17,7 +17,7 @@ Target release: `2.2.2 (1)`
 - [x] Run full-Xcode debug/release builds, tests, smoke checks, and PII scan.
 - [x] Package and install `2.2.2 (1)` to `/Applications`.
 - [x] Verify strict signature before and after app/helper launch.
-- [ ] Publish immutable `v2.2.2` artifacts and confirm CI.
+- [x] Publish immutable `v2.2.2` artifacts and confirm CI.
 
 ## Constraints
 - Do not rewrite or mutate a signed app bundle at runtime.
@@ -36,6 +36,9 @@ Target release: `2.2.2 (1)`
 - Installed bundle: `com.squazaryu.DRay`, version `2.2.2`, build `1`.
 - ZIP SHA256: `78c1c7191cb295eb926a93ca8fcb8f38164936d1e93d8ff4363fcf9a982959a7`.
 - DMG SHA256: `ef802b939351bec8d3c9ff731f64b1aae748716d330adffff6fce9e59f873e0c`.
+- GitHub Release: `https://github.com/squazaryu/DiskRay-app/releases/tag/v2.2.2`.
+- Final `main` CI `30575414457`: clean, debug build, release build, and full tests passed.
+- Release tag `v2.2.2` points to `193cf2de2d7e5440777dd85cfb54224b4684e31d`; the existing `v2.2.1` release was not modified.
 
 ---
 
