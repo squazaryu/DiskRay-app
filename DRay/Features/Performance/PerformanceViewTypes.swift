@@ -45,6 +45,11 @@ enum NetworkWorkspaceSubscreen: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum NetworkPrivacyCapability {
+    case publicIP
+    case remoteEndpoints
+}
+
 struct NetworkRatePoint: Identifiable {
     let id = UUID()
     let measuredAt: Date

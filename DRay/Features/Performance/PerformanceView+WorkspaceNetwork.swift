@@ -194,12 +194,7 @@ extension PerformanceView {
                 .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
 
-                Toggle(
-                    t("Локации", "Resolve locations"),
-                    isOn: $networkGeolocationMonitor.resolveEnabled
-                )
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                networkPrivacyMenu
 
                 Button(t("Скорость", "Speed Test")) {
                     model.runNetworkSpeedTest()
@@ -236,12 +231,7 @@ extension PerformanceView {
                     .disabled(model.performance.isNetworkSpeedTestRunning)
                 }
 
-                Toggle(
-                    t("Локации", "Resolve locations"),
-                    isOn: $networkGeolocationMonitor.resolveEnabled
-                )
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                networkPrivacyMenu
 
                 if selectedNetworkHostID != nil || selectedNetworkServiceID != nil || selectedNetworkProgramID != nil {
                     Button(t("Сбросить фокус", "Clear focus")) {
@@ -254,6 +244,28 @@ extension PerformanceView {
                 }
             }
         }
+    }
+
+    private var networkPrivacyMenu: some View {
+        NetworkPrivacyMenuView(
+            publicIPEnabled: networkPrivacyBinding(for: .publicIP),
+            remoteEndpointsEnabled: networkPrivacyBinding(for: .remoteEndpoints),
+            title: t("Приватность", "Privacy"),
+            publicIPTitle: t("Определять публичный IP", "Resolve public IP"),
+            remoteEndpointsTitle: t("Геолокация удалённых IP", "Geolocate remote IPs"),
+            disclosure: t(
+                "При включении используются сторонние IP-сервисы.",
+                "Enabling these options contacts third-party IP services."
+            ),
+            clearCacheTitle: t("Очистить кэш геолокации", "Clear geolocation cache"),
+            helpText: t(
+                "Публичный IP и удалённые endpoint-ы никогда не отправляются без явного согласия.",
+                "Public IP and remote endpoints are never submitted without explicit consent."
+            ),
+            onClearCache: {
+                networkGeolocationMonitor.clearCache()
+            }
+        )
     }
 
     private var networkControlCard: some View {
@@ -566,6 +578,13 @@ extension PerformanceView {
                     if let timezone = profile.timezone, !timezone.isEmpty {
                         keyValueLine(label: t("Часовой пояс", "Timezone"), value: timezone)
                     }
+                } else if !networkGeolocationMonitor.publicProfileLookupEnabled {
+                    Text(t(
+                        "Определение публичного IP выключено в Privacy.",
+                        "Public IP lookup is disabled in Privacy."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 } else if let error = networkGeolocationMonitor.lastErrorMessage, !error.isEmpty {
                     Text(error)
                         .font(.caption)
@@ -584,7 +603,12 @@ extension PerformanceView {
                 .foregroundStyle(.secondary)
 
             if geolocatedHostRows.isEmpty {
-                Text(t("Нет геолокированных endpoint-ов.", "No geolocated endpoints yet."))
+                Text(networkGeolocationMonitor.endpointResolutionEnabled
+                    ? t("Нет геолокированных endpoint-ов.", "No geolocated endpoints yet.")
+                    : t(
+                        "Геолокация endpoint-ов выключена. Хосты остаются доступны в Overview.",
+                        "Endpoint geolocation is disabled. Hosts remain available in Overview."
+                    ))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -750,18 +774,23 @@ extension PerformanceView {
     }
 
     private var networkHostCard: some View {
-        networkListCard(
+        NetworkDiagnosticListCard(
             title: t("Сетевой хост", "Network host"),
             icon: "globe",
             selectedRowID: selectedNetworkHostID,
             rows: filteredHostTrafficRows.map {
-                NetworkListRow(
+                NetworkDiagnosticListRow(
                     id: $0.id,
                     title: $0.host,
                     subtitle: "",
                     value: formatByteCount($0.totalBytes),
                     icon: "globe"
                 )
+            },
+            emptyMessage: t("Пока нет данных для отображения.", "No data to display yet."),
+            contentPadding: layoutMetrics.cardSpacing,
+            showingSummary: { visible, total in
+                t("Показаны первые \(visible) из \(total)", "Showing top \(visible) of \(total)")
             },
             onSelect: { row in
                 selectedNetworkHostID = selectedNetworkHostID == row.id ? nil : row.id
@@ -772,18 +801,23 @@ extension PerformanceView {
     }
 
     private var networkServiceCard: some View {
-        networkListCard(
+        NetworkDiagnosticListCard(
             title: t("Сервис", "Service"),
             icon: "network",
             selectedRowID: selectedNetworkServiceID,
             rows: filteredServiceTrafficRows.map {
-                NetworkListRow(
+                NetworkDiagnosticListRow(
                     id: $0.id,
                     title: $0.label,
                     subtitle: "\($0.protocolLabel.uppercased()) · \($0.portLabel)",
                     value: formatByteCount($0.totalBytes),
                     icon: "point.3.connected.trianglepath.dotted"
                 )
+            },
+            emptyMessage: t("Пока нет данных для отображения.", "No data to display yet."),
+            contentPadding: layoutMetrics.cardSpacing,
+            showingSummary: { visible, total in
+                t("Показаны первые \(visible) из \(total)", "Showing top \(visible) of \(total)")
             },
             onSelect: { row in
                 selectedNetworkServiceID = selectedNetworkServiceID == row.id ? nil : row.id
@@ -794,18 +828,23 @@ extension PerformanceView {
     }
 
     private var networkProgramCard: some View {
-        networkListCard(
+        NetworkDiagnosticListCard(
             title: t("Программа", "Program"),
             icon: "app.badge",
             selectedRowID: selectedNetworkProgramID,
             rows: filteredProgramTrafficRows.map {
-                NetworkListRow(
+                NetworkDiagnosticListRow(
                     id: $0.id,
                     title: $0.program,
             subtitle: "\($0.connectionCount) соед. · TCP \($0.tcpConnections) / UDP \($0.udpConnections)",
                     value: formatByteCount($0.totalBytes),
                     icon: "app"
                 )
+            },
+            emptyMessage: t("Пока нет данных для отображения.", "No data to display yet."),
+            contentPadding: layoutMetrics.cardSpacing,
+            showingSummary: { visible, total in
+                t("Показаны первые \(visible) из \(total)", "Showing top \(visible) of \(total)")
             },
             onSelect: { row in
                 selectedNetworkProgramID = selectedNetworkProgramID == row.id ? nil : row.id
@@ -825,9 +864,26 @@ extension PerformanceView {
                 }
                 .buttonStyle(DRaySecondaryButtonStyle())
                 .controlSize(.small)
+                .disabled(!networkGeolocationMonitor.publicProfileLookupEnabled)
             }
 
-            if let profile = networkGeolocationMonitor.publicProfile {
+            if !networkGeolocationMonitor.publicProfileLookupEnabled {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(t("Определение публичного IP выключено", "Public IP lookup is off"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(t(
+                        "DRay не выполняет внешние IP-запросы. Включите эту возможность отдельно в Privacy, если она нужна для диагностики.",
+                        "DRay is making no external IP requests. Enable this capability separately in Privacy when needed for diagnostics."
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Button(t("Настроить Privacy", "Configure Privacy")) {
+                        setNetworkPrivacyCapability(.publicIP, enabled: true)
+                    }
+                    .buttonStyle(DRaySecondaryButtonStyle())
+                    .controlSize(.small)
+                }
+            } else if let profile = networkGeolocationMonitor.publicProfile {
                 Text(profile.ip)
                     .font(.system(size: 36, weight: .bold, design: .monospaced))
                     .minimumScaleFactor(0.5)
@@ -1475,81 +1531,6 @@ extension PerformanceView {
         .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
     }
 
-    private func networkListCard(
-        title: String,
-        icon: String,
-        selectedRowID: String?,
-        rows: [NetworkListRow],
-        onSelect: @escaping (NetworkListRow) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            performanceCardTitle(title, icon: icon, tint: .teal)
-
-            if rows.isEmpty {
-                Text(t("Пока нет данных для отображения.", "No data to display yet."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
-            } else {
-                let visibleRows = Array(rows.prefix(6))
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(visibleRows) { row in
-                        Button {
-                            onSelect(row)
-                        } label: {
-                            HStack(spacing: 10) {
-                                DRayIconBadge(icon: row.icon, tint: .blue, size: 24)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(row.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .lineLimit(1)
-                                    if !row.subtitle.isEmpty {
-                                        Text(row.subtitle)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                                Text(row.value)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 7)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(row.id == selectedRowID ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.045))
-                            )
-                            .overlay(alignment: .leading) {
-                                if row.id == selectedRowID {
-                                    Capsule()
-                                        .fill(Color.accentColor.opacity(0.68))
-                                        .frame(width: 3)
-                                        .padding(.vertical, 6)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if rows.count > visibleRows.count {
-                        Text(t("Показаны первые \(visibleRows.count) из \(rows.count)", "Showing top \(visibleRows.count) of \(rows.count)"))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 2)
-                    }
-                }
-            }
-        }
-        .padding(layoutMetrics.cardSpacing)
-        .glassSurface(cornerRadius: 16, strokeOpacity: 0.09, shadowOpacity: 0.05, padding: 0)
-    }
-
     private func networkLegendRow(title: String, value: String, tint: Color) -> some View {
         HStack(spacing: 8) {
             Circle()
@@ -1937,14 +1918,6 @@ extension PerformanceView {
         }
         return String(format: "%.0f b", clamped)
     }
-}
-
-private struct NetworkListRow: Identifiable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let value: String
-    let icon: String
 }
 
 private struct GeolocatedHostTrafficRow: Identifiable {

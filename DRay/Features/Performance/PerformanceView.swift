@@ -24,7 +24,9 @@ struct PerformanceView: View {
     @State var networkDataRepresentation: NetworkDataRepresentation = .bytes
     @State var networkHistory: [NetworkHistoryPoint] = []
     @State var networkSubscreen: NetworkWorkspaceSubscreen = .overview
-    @AppStorage("dray.network.resolveLocations") var persistedNetworkResolveLocations = true
+    @AppStorage("dray.network.lookupPublicIP") var persistedNetworkPublicIPLookup = false
+    @AppStorage("dray.network.resolveLocations") var persistedNetworkResolveLocations = false
+    @AppStorage("dray.network.geolocationConsentVersion") var networkGeolocationConsentVersion = 0
     @AppStorage("dray.network.dataRepresentation") var persistedNetworkDataRepresentation = NetworkDataRepresentation.bytes.rawValue
     @AppStorage("dray.network.portScanner.host") var persistedPortScannerHost = "127.0.0.1"
     @AppStorage("dray.network.portScanner.startPort") var persistedPortScannerStartPort = "1"
@@ -44,6 +46,7 @@ struct PerformanceView: View {
     @State var wakeOnLANBroadcastAddress = "255.255.255.255"
     @State var wakeOnLANPort = "9"
     @State var wakeOnLANStatusMessage: String?
+    @State var pendingNetworkPrivacyCapability: NetworkPrivacyCapability?
 
     init(rootModel: RootViewModel) {
         _model = StateObject(wrappedValue: PerformanceViewModel(root: rootModel))
@@ -108,6 +111,23 @@ struct PerformanceView: View {
         } message: {
             Text(model.performance.energyModeMessage ?? "")
         }
+        .confirmationDialog(
+            t("Разрешить внешнюю сетевую геолокацию?", "Allow external network geolocation?"),
+            isPresented: Binding(
+                get: { pendingNetworkPrivacyCapability != nil },
+                set: { if !$0 { pendingNetworkPrivacyCapability = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(t("Разрешить", "Allow")) {
+                confirmPendingNetworkPrivacyCapability()
+            }
+            Button(t("Отмена", "Cancel"), role: .cancel) {
+                pendingNetworkPrivacyCapability = nil
+            }
+        } message: {
+            Text(networkPrivacyConsentMessage)
+        }
         .onAppear {
             restoreNetworkWorkspacePreferences()
             monitor.start()
@@ -165,8 +185,11 @@ struct PerformanceView: View {
             networkRateHistory.removeAll()
             appendNetworkRatePoint(from: monitor.snapshot)
         }
-        .onChange(of: networkGeolocationMonitor.resolveEnabled) {
-            persistedNetworkResolveLocations = networkGeolocationMonitor.resolveEnabled
+        .onChange(of: networkGeolocationMonitor.publicProfileLookupEnabled) {
+            persistedNetworkPublicIPLookup = networkGeolocationMonitor.publicProfileLookupEnabled
+        }
+        .onChange(of: networkGeolocationMonitor.endpointResolutionEnabled) {
+            persistedNetworkResolveLocations = networkGeolocationMonitor.endpointResolutionEnabled
         }
         .onChange(of: portScannerHost) {
             persistedPortScannerHost = portScannerHost
@@ -200,7 +223,15 @@ struct PerformanceView: View {
             persistedNetworkDataRepresentation = NetworkDataRepresentation.bytes.rawValue
         }
 
-        networkGeolocationMonitor.resolveEnabled = persistedNetworkResolveLocations
+        let hasGeolocationConsent = networkGeolocationConsentVersion >= 1
+        if !hasGeolocationConsent {
+            persistedNetworkPublicIPLookup = false
+            persistedNetworkResolveLocations = false
+        }
+        networkGeolocationMonitor.publicProfileLookupEnabled =
+            hasGeolocationConsent && persistedNetworkPublicIPLookup
+        networkGeolocationMonitor.endpointResolutionEnabled =
+            hasGeolocationConsent && persistedNetworkResolveLocations
 
         let host = persistedPortScannerHost.trimmingCharacters(in: .whitespacesAndNewlines)
         portScannerHost = host.isEmpty ? "127.0.0.1" : persistedPortScannerHost
@@ -226,6 +257,75 @@ struct PerformanceView: View {
             return fallback
         }
         return trimmed
+    }
+
+    func networkPrivacyBinding(for capability: NetworkPrivacyCapability) -> Binding<Bool> {
+        Binding(
+            get: {
+                switch capability {
+                case .publicIP:
+                    return networkGeolocationMonitor.publicProfileLookupEnabled
+                case .remoteEndpoints:
+                    return networkGeolocationMonitor.endpointResolutionEnabled
+                }
+            },
+            set: { requestedValue in
+                setNetworkPrivacyCapability(capability, enabled: requestedValue)
+            }
+        )
+    }
+
+    func setNetworkPrivacyCapability(_ capability: NetworkPrivacyCapability, enabled: Bool) {
+        guard enabled else {
+            applyNetworkPrivacyCapability(capability, enabled: false)
+            return
+        }
+        guard networkGeolocationConsentVersion >= 1 else {
+            pendingNetworkPrivacyCapability = capability
+            return
+        }
+        applyNetworkPrivacyCapability(capability, enabled: true)
+    }
+
+    private func confirmPendingNetworkPrivacyCapability() {
+        guard let capability = pendingNetworkPrivacyCapability else { return }
+        networkGeolocationConsentVersion = 1
+        pendingNetworkPrivacyCapability = nil
+        applyNetworkPrivacyCapability(capability, enabled: true)
+    }
+
+    private func applyNetworkPrivacyCapability(
+        _ capability: NetworkPrivacyCapability,
+        enabled: Bool
+    ) {
+        switch capability {
+        case .publicIP:
+            networkGeolocationMonitor.publicProfileLookupEnabled = enabled
+        case .remoteEndpoints:
+            networkGeolocationMonitor.endpointResolutionEnabled = enabled
+            if enabled {
+                networkGeolocationMonitor.refreshEndpoints(
+                    hosts: networkConnectionsMonitor.snapshot.topHosts.map(\.host)
+                )
+            }
+        }
+    }
+
+    private var networkPrivacyConsentMessage: String {
+        switch pendingNetworkPrivacyCapability {
+        case .publicIP:
+            return t(
+                "DRay отправит запрос сторонним сервисам IP-диагностики, чтобы определить ваш публичный IP и примерную локацию. Запрос можно отключить, а кэш очистить в меню Privacy.",
+                "DRay will contact third-party IP diagnostic services to resolve your public IP and approximate location. You can disable this later and clear cached data from the Privacy menu."
+            )
+        case .remoteEndpoints:
+            return t(
+                "DRay отправит наблюдаемые публичные IP-адреса удалённых соединений сторонним геолокационным сервисам. Локальные и зарезервированные адреса не отправляются.",
+                "DRay will send observed public remote IP addresses to third-party geolocation services. Local and reserved addresses are never submitted."
+            )
+        case nil:
+            return ""
+        }
     }
 
     private var header: some View {

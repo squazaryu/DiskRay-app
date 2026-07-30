@@ -45,40 +45,69 @@ struct NetworkEndpointGeolocation: Identifiable, Sendable {
     }
 }
 
+protocol NetworkGeolocationResolving: Sendable {
+    func resolvePublicProfile(force: Bool) async -> NetworkPublicIPProfile?
+    func resolveEndpoint(host: String) async -> NetworkEndpointGeolocation?
+    func clearCache() async
+}
+
 @MainActor
 final class NetworkGeolocationMonitor: ObservableObject {
     @Published private(set) var publicProfile: NetworkPublicIPProfile?
     @Published private(set) var endpointsByHost: [String: NetworkEndpointGeolocation] = [:]
     @Published private(set) var unresolvedHosts: Set<String> = []
     @Published private(set) var lastErrorMessage: String?
-    @Published var resolveEnabled = true {
+    @Published var publicProfileLookupEnabled = false {
         didSet {
-            if resolveEnabled {
-                if !lastRequestedHosts.isEmpty {
-                    refreshEndpoints(hosts: Array(lastRequestedHosts))
-                }
+            guard publicProfileLookupEnabled != oldValue else { return }
+            if publicProfileLookupEnabled, isStarted {
+                refreshPublicProfile(force: false)
             } else {
-                unresolvedHosts.removeAll()
+                publicProfileTask?.cancel()
+                publicProfileTask = nil
+                publicProfile = nil
+                if !publicProfileLookupEnabled {
+                    lastErrorMessage = nil
+                }
+            }
+        }
+    }
+    @Published var endpointResolutionEnabled = false {
+        didSet {
+            guard endpointResolutionEnabled != oldValue else { return }
+            if endpointResolutionEnabled, isStarted {
+                refreshEndpoints(hosts: Array(lastRequestedHosts))
+            } else if !endpointResolutionEnabled {
                 endpointResolutionTask?.cancel()
                 endpointResolutionTask = nil
+                endpointsByHost.removeAll()
+                unresolvedHosts = lastRequestedHosts
             }
         }
     }
 
-    private let resolver: NetworkGeolocationResolver
+    private let resolver: any NetworkGeolocationResolving
     private var endpointResolutionTask: Task<Void, Never>?
     private var publicProfileTask: Task<Void, Never>?
     private var lastRequestedHosts: Set<String> = []
+    private var isStarted = false
 
-    init(resolver: NetworkGeolocationResolver = NetworkGeolocationResolver()) {
+    init(resolver: any NetworkGeolocationResolving = NetworkGeolocationResolver()) {
         self.resolver = resolver
     }
 
     func start() {
-        refreshPublicProfile(force: false)
+        isStarted = true
+        if publicProfileLookupEnabled {
+            refreshPublicProfile(force: false)
+        }
+        if endpointResolutionEnabled, !lastRequestedHosts.isEmpty {
+            refreshEndpoints(hosts: Array(lastRequestedHosts))
+        }
     }
 
     func stop() {
+        isStarted = false
         endpointResolutionTask?.cancel()
         endpointResolutionTask = nil
         publicProfileTask?.cancel()
@@ -86,6 +115,7 @@ final class NetworkGeolocationMonitor: ObservableObject {
     }
 
     func refreshPublicProfile(force: Bool = false) {
+        guard publicProfileLookupEnabled else { return }
         publicProfileTask?.cancel()
         publicProfileTask = Task { [resolver] in
             let profile = await resolver.resolvePublicProfile(force: force)
@@ -101,21 +131,27 @@ final class NetworkGeolocationMonitor: ObservableObject {
     }
 
     func refreshEndpoints(hosts: [String]) {
-        guard resolveEnabled else { return }
-
         let uniqueHosts = Set(hosts
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && $0 != "*" })
+        let requestedHostsChanged = uniqueHosts != lastRequestedHosts
+        lastRequestedHosts = uniqueHosts
 
         if uniqueHosts.isEmpty {
-            lastRequestedHosts = []
             unresolvedHosts.removeAll()
             endpointResolutionTask?.cancel()
             endpointResolutionTask = nil
             return
         }
 
-        let requestedHostsChanged = uniqueHosts != lastRequestedHosts
+        guard endpointResolutionEnabled else {
+            endpointResolutionTask?.cancel()
+            endpointResolutionTask = nil
+            endpointsByHost.removeAll()
+            unresolvedHosts = uniqueHosts
+            return
+        }
+
         if !requestedHostsChanged {
             if endpointResolutionTask != nil {
                 return
@@ -126,7 +162,6 @@ final class NetworkGeolocationMonitor: ObservableObject {
             }
         }
 
-        lastRequestedHosts = uniqueHosts
         endpointResolutionTask?.cancel()
 
         let knownUnresolved = unresolvedHosts
@@ -168,9 +203,24 @@ final class NetworkGeolocationMonitor: ObservableObject {
             endpointResolutionTask = nil
         }
     }
+
+    func clearCache() {
+        endpointResolutionTask?.cancel()
+        endpointResolutionTask = nil
+        publicProfileTask?.cancel()
+        publicProfileTask = nil
+        publicProfile = nil
+        endpointsByHost.removeAll()
+        unresolvedHosts = lastRequestedHosts
+        lastErrorMessage = nil
+
+        Task { [resolver] in
+            await resolver.clearCache()
+        }
+    }
 }
 
-actor NetworkGeolocationResolver {
+actor NetworkGeolocationResolver: NetworkGeolocationResolving {
     private struct CacheEntry<T> {
         let value: T
         let validUntil: Date
@@ -383,6 +433,15 @@ actor NetworkGeolocationResolver {
             )
         }
         return result
+    }
+
+    func clearCache() {
+        endpointCache.removeAll()
+        publicProfileCache = nil
+        endpointInFlight.values.forEach { $0.cancel() }
+        endpointInFlight.removeAll()
+        publicProfileInFlight?.cancel()
+        publicProfileInFlight = nil
     }
 
     private func resolveHostnameToIPv4(host: String) async -> String? {
