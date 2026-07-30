@@ -54,6 +54,96 @@ enum UninstallFailureCategory: String, Codable, Sendable {
     case unknown
 }
 
+enum UninstallRemainingIssueCategory: String, Codable, Sendable {
+    case launchDaemon
+    case privilegedHelper
+    case systemProtected
+    case permissionDenied
+    case preference
+    case appBundle
+    case remnant
+    case missing
+    case manualActionRequired
+    case other
+}
+
+enum UninstallRemainingRemediation: String, Codable, Sendable {
+    case unloadAndRetryWithAdministrator
+    case keepExcludedOrHandleOutsideDRay
+    case grantFullDiskAccessAndRetry
+    case reviewPreferenceAndClean
+    case retryWithAdministrator
+    case removeResolvedRecord
+    case quitOwnerAndRetry
+    case inspectAndRetry
+}
+
+struct UninstallRemainingIssueClassification: Sendable {
+    let category: UninstallRemainingIssueCategory
+    let remediation: UninstallRemainingRemediation
+}
+
+enum UninstallRemainingIssueClassifier {
+    static func classify(
+        path rawPath: String,
+        reason: String,
+        failureCategory: UninstallFailureCategory? = nil,
+        itemType: UninstallItemType? = nil
+    ) -> UninstallRemainingIssueClassification {
+        let path = URL(fileURLWithPath: rawPath).standardizedFileURL.path
+        let lowerPath = path.lowercased()
+        let lowerReason = reason.lowercased()
+
+        if failureCategory == .launchDaemon || lowerPath.contains("/library/launchdaemons/") {
+            return classification(.launchDaemon, .unloadAndRetryWithAdministrator)
+        }
+        if failureCategory == .privilegedHelper || lowerPath.contains("/library/privilegedhelpertools/") {
+            return classification(.privilegedHelper, .unloadAndRetryWithAdministrator)
+        }
+        if PathSafetyPolicy.isUserPreferenceStatePath(path) {
+            return classification(.preference, .reviewPreferenceAndClean)
+        }
+        if failureCategory == .protectedBySystem || PathSafetyPolicy.isProtected(path) {
+            return classification(.systemProtected, .keepExcludedOrHandleOutsideDRay)
+        }
+        if failureCategory == .permissionDenied
+            || lowerReason.contains("permission denied")
+            || lowerReason.contains("access denied")
+            || lowerReason.contains("not permitted")
+            || lowerReason.contains("authorization")
+        {
+            return classification(.permissionDenied, .grantFullDiskAccessAndRetry)
+        }
+        if failureCategory == .runningProcessLock
+            || lowerReason.contains("running process")
+            || lowerReason.contains("running app")
+            || lowerReason.contains("recreated")
+        {
+            return classification(.manualActionRequired, .quitOwnerAndRetry)
+        }
+        if itemType == .appBundle || lowerPath.hasSuffix(".app") {
+            return classification(.appBundle, .retryWithAdministrator)
+        }
+        if lowerReason.contains("missing") || lowerReason.contains("no longer exists") {
+            return classification(.missing, .removeResolvedRecord)
+        }
+        if failureCategory != nil && failureCategory != .unknown {
+            return classification(.manualActionRequired, .inspectAndRetry)
+        }
+        if lowerPath.contains("/library/") {
+            return classification(.remnant, .inspectAndRetry)
+        }
+        return classification(.other, .inspectAndRetry)
+    }
+
+    private static func classification(
+        _ category: UninstallRemainingIssueCategory,
+        _ remediation: UninstallRemainingRemediation
+    ) -> UninstallRemainingIssueClassification {
+        UninstallRemainingIssueClassification(category: category, remediation: remediation)
+    }
+}
+
 struct UninstallActionResult: Identifiable, Codable, Sendable {
     let id = UUID()
     let url: URL
@@ -172,6 +262,32 @@ struct UninstallVerifyIssue: Identifiable, Hashable, Sendable {
     let sizeInBytes: Int64
     let reason: String
     let risk: UninstallRiskLevel
+    let category: UninstallRemainingIssueCategory
+    let remediation: UninstallRemainingRemediation
+
+    init(
+        url: URL,
+        sizeInBytes: Int64,
+        reason: String,
+        risk: UninstallRiskLevel,
+        category: UninstallRemainingIssueCategory? = nil,
+        remediation: UninstallRemainingRemediation? = nil,
+        failureCategory: UninstallFailureCategory? = nil,
+        itemType: UninstallItemType? = nil
+    ) {
+        let inferred = UninstallRemainingIssueClassifier.classify(
+            path: url.path,
+            reason: reason,
+            failureCategory: failureCategory,
+            itemType: itemType
+        )
+        self.url = url
+        self.sizeInBytes = sizeInBytes
+        self.reason = reason
+        self.risk = risk
+        self.category = category ?? inferred.category
+        self.remediation = remediation ?? inferred.remediation
+    }
 
     var name: String {
         url.lastPathComponent
@@ -238,19 +354,66 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
     let sizeInBytes: Int64
     let reason: String
     let risk: UninstallRiskLevel
+    let category: UninstallRemainingIssueCategory
+    let remediation: UninstallRemainingRemediation
 
     init(
         id: UUID = UUID(),
         path: String,
         sizeInBytes: Int64,
         reason: String,
-        risk: UninstallRiskLevel
+        risk: UninstallRiskLevel,
+        category: UninstallRemainingIssueCategory? = nil,
+        remediation: UninstallRemainingRemediation? = nil
     ) {
+        let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let inferred = UninstallRemainingIssueClassifier.classify(
+            path: standardizedPath,
+            reason: reason
+        )
         self.id = id
-        self.path = URL(fileURLWithPath: path).standardizedFileURL.path
+        self.path = standardizedPath
         self.sizeInBytes = sizeInBytes
         self.reason = reason
         self.risk = risk
+        self.category = category ?? inferred.category
+        self.remediation = remediation ?? inferred.remediation
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedPath = try container.decode(String.self, forKey: .path)
+        let decodedReason = try container.decode(String.self, forKey: .reason)
+        let standardizedPath = URL(fileURLWithPath: decodedPath).standardizedFileURL.path
+        let inferred = UninstallRemainingIssueClassifier.classify(
+            path: standardizedPath,
+            reason: decodedReason
+        )
+
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        path = standardizedPath
+        sizeInBytes = try container.decode(Int64.self, forKey: .sizeInBytes)
+        reason = decodedReason
+        risk = try container.decode(UninstallRiskLevel.self, forKey: .risk)
+        category = try container.decodeIfPresent(
+            UninstallRemainingIssueCategory.self,
+            forKey: .category
+        ) ?? inferred.category
+        remediation = try container.decodeIfPresent(
+            UninstallRemainingRemediation.self,
+            forKey: .remediation
+        ) ?? inferred.remediation
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(path, forKey: .path)
+        try container.encode(sizeInBytes, forKey: .sizeInBytes)
+        try container.encode(reason, forKey: .reason)
+        try container.encode(risk, forKey: .risk)
+        try container.encode(category, forKey: .category)
+        try container.encode(remediation, forKey: .remediation)
     }
 
     var url: URL {
@@ -259,6 +422,16 @@ struct UninstallRemainingIssueRecord: Identifiable, Codable, Hashable, Sendable 
 
     var name: String {
         url.lastPathComponent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case path
+        case sizeInBytes
+        case reason
+        case risk
+        case category
+        case remediation
     }
 }
 

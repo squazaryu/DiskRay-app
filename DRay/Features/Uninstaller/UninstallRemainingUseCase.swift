@@ -138,7 +138,9 @@ struct UninstallRemainingUseCase {
                 path: path,
                 sizeInBytes: issue.sizeInBytes,
                 reason: issue.reason,
-                risk: issue.risk
+                risk: issue.risk,
+                category: issue.category,
+                remediation: issue.remediation
             )
         }
         return uniqueByPath.values.sorted { lhs, rhs in

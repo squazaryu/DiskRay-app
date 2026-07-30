@@ -68,7 +68,9 @@ struct UninstallPlanningUseCase {
                 url: remnant.url,
                 sizeInBytes: remnant.sizeInBytes,
                 reason: reason,
-                risk: risk
+                risk: risk,
+                failureCategory: actionByPath[path]?.failureCategory,
+                itemType: actionByPath[path]?.type
             )
         }
         var issuePaths = Set(issues.map { $0.url.standardizedFileURL.path })
@@ -88,7 +90,9 @@ struct UninstallPlanningUseCase {
                     url: URL(fileURLWithPath: path),
                     sizeInBytes: previewItem.sizeInBytes,
                     reason: reason,
-                    risk: previewItem.risk
+                    risk: previewItem.risk,
+                    failureCategory: action?.failureCategory,
+                    itemType: action?.type ?? previewItem.type
                 )
             )
             issuePaths.insert(path)
@@ -108,7 +112,9 @@ struct UninstallPlanningUseCase {
                         isProtectedPath: isProtectedPath,
                         isAppRunning: isAppRunning
                     ),
-                    risk: risk
+                    risk: risk,
+                    failureCategory: action.failureCategory,
+                    itemType: action.type
                 )
             )
             issuePaths.insert(path)

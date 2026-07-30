@@ -135,6 +135,8 @@ struct UninstallPlanningUseCaseTests {
         let reason = report.remaining.first?.reason ?? ""
 
         #expect(report.remainingCount == 1)
+        #expect(report.remaining.first?.category == .preference)
+        #expect(report.remaining.first?.remediation == .reviewPreferenceAndClean)
         #expect(reason.contains("Preference file remained"))
         #expect(!reason.contains("SIP/TCC"))
         #expect(!reason.contains("system-protected"))
@@ -241,6 +243,8 @@ struct UninstallPlanningUseCaseTests {
         )
 
         let reason = report.remaining.first?.reason ?? ""
+        #expect(report.remaining.first?.category == .launchDaemon)
+        #expect(report.remaining.first?.remediation == .unloadAndRetryWithAdministrator)
         #expect(reason.contains("LaunchDaemon failed to remove"))
         #expect(reason.contains("unload it with launchctl"))
         #expect(reason.contains("Unload launchd job and retry."))
