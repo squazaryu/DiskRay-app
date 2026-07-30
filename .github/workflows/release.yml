@@ -3,8 +3,8 @@ name: release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version tag (example: v0.0.4-alpha)"
+      app_version:
+        description: "Semantic app version without leading v (example: 2.2.1)"
         required: true
         type: string
       build_number:
@@ -39,12 +39,13 @@ jobs:
       - name: Build app bundle
         run: |
           chmod +x scripts/install_app.sh scripts/release.sh scripts/notarize.sh scripts/package_release.sh scripts/ui_smoke.sh
-          ./scripts/package_release.sh "${{ inputs.version }}" "${{ inputs.build_number || '1' }}"
+          ./scripts/package_release.sh "${{ inputs.app_version }}" "${{ inputs.build_number || '1' }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DRay-${{ inputs.version }}
+          name: DRay-${{ inputs.app_version }}
           path: |
-            dist/DRay-${{ inputs.version }}.zip
-            dist/DRay-${{ inputs.version }}.dmg
+            dist/DRay-${{ inputs.app_version }}.zip
+            dist/DRay-${{ inputs.app_version }}.dmg
+            dist/DRay-${{ inputs.app_version }}-SHA256SUMS.txt

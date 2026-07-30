@@ -8,11 +8,21 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 BUILD_NUMBER="${2:-$(date +%Y%m%d%H%M)}"
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*$ ]]; then
+  echo "Invalid app version: ${VERSION}. Use a semantic version without a leading v."
+  exit 1
+fi
+if [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+  echo "Invalid build number: ${BUILD_NUMBER}. Use a positive integer."
+  exit 1
+fi
+
 APP_NAME="DRay.app"
 APP_PATH="/Applications/${APP_NAME}"
 OUT_DIR="dist"
 ZIP_PATH="${OUT_DIR}/DRay-${VERSION}.zip"
 DMG_PATH="${OUT_DIR}/DRay-${VERSION}.dmg"
+CHECKSUM_PATH="${OUT_DIR}/DRay-${VERSION}-SHA256SUMS.txt"
 
 mkdir -p "${OUT_DIR}"
 
@@ -37,6 +47,11 @@ fi
 if [[ -n "${DEVELOPER_ID_APP:-}" ]]; then
   echo "Signing app with Developer ID..."
   codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP}" "${APP_PATH}"
+elif [[ "${REQUIRE_DISTRIBUTION_SIGNING:-0}" == "1" ]]; then
+  echo "Distribution signing is required, but DEVELOPER_ID_APP is not configured."
+  exit 1
+else
+  echo "Warning: Developer ID is not configured; keeping the ad-hoc signature."
 fi
 
 if [[ -n "${NOTARY_PROFILE:-}" ]]; then
@@ -67,9 +82,25 @@ if [[ -n "${NOTARY_PROFILE:-}" ]]; then
   echo "Notarizing DMG..."
   xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait
   xcrun stapler staple "${DMG_PATH}"
+elif [[ "${REQUIRE_NOTARIZATION:-0}" == "1" ]]; then
+  echo "Notarization is required, but NOTARY_PROFILE is not configured."
+  exit 1
 fi
+
+codesign --verify --deep --strict "${APP_PATH}"
+
+echo "Creating SHA256 manifest..."
+rm -f "${CHECKSUM_PATH}"
+(
+  cd "${OUT_DIR}"
+  shasum -a 256 \
+    "$(basename "${ZIP_PATH}")" \
+    "$(basename "${DMG_PATH}")" \
+    > "$(basename "${CHECKSUM_PATH}")"
+)
 
 echo "Artifacts:"
 echo " - ${ZIP_PATH}"
 echo " - ${DMG_PATH}"
-shasum -a 256 "${ZIP_PATH}" "${DMG_PATH}"
+echo " - ${CHECKSUM_PATH}"
+cat "${CHECKSUM_PATH}"

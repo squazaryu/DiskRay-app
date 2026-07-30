@@ -9,7 +9,7 @@
 
 Current release example:
 ```bash
-./scripts/package_release.sh 2.2.0 1
+./scripts/package_release.sh 2.2.1 1
 ```
 
 2. Optional signed + notarized release:
@@ -22,6 +22,7 @@ export NOTARY_PROFILE="dray-notary"
 Result artifacts:
 - `dist/DRay-2.0.0.zip`
 - `dist/DRay-2.0.0.dmg`
+- `dist/DRay-2.0.0-SHA256SUMS.txt`
 
 3. Tag + push:
 ```bash
@@ -40,11 +41,12 @@ gh release create v2.0.0 \
 
 For the current channel:
 ```bash
-gh release create v2.2.0 \
-  dist/DRay-2.2.0.zip \
-  dist/DRay-2.2.0.dmg \
-  --title "DRay 2.2.0" \
-  --notes-file docs/releases/2.2.0.md
+gh release create v2.2.1 \
+  dist/DRay-2.2.1.zip \
+  dist/DRay-2.2.1.dmg \
+  dist/DRay-2.2.1-SHA256SUMS.txt \
+  --title "DRay 2.2.1" \
+  --notes-file docs/releases/2.2.1.md
 ```
 
 ## CI Release
@@ -53,7 +55,7 @@ Workflow:
 - `.github/workflows/release.yml`
 
 Manual inputs:
-- `version` (required): tag value, example `v2.0.0`
+- `app_version` (required): semantic app version without a leading `v`, example `2.2.1`
 - `build_number` (optional)
 
 The workflow runs smoke checks, builds `/Applications/DRay.app`, packages `zip` + `dmg`, and uploads both artifacts.

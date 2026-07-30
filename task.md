@@ -1,3 +1,75 @@
+# DRay Issues Implementation Batch 2 / Release 2.2.1
+
+Date: 2026-07-30
+Branch: `2.2.0-ui-refactor`
+Target release: `2.2.1 (1)`
+Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, installation, and GitHub release.
+
+## Constraints
+- Preserve Force Remove, admin fallback, App Store app deletion, Remaining cleanup, Search, Network tools, and high-risk controls.
+- Network geolocation must be explicit opt-in; disabled capabilities must not make external requests.
+- Deep Sweep must not treat weak identifier matches, shared containers, or installed nested helpers as safe automatic cleanup.
+- Keep `RootViewModel` as coordinator and do not introduce duplicate state owners.
+- Do not touch `codex-pets`.
+- Release only after full-Xcode debug/release builds, tests, package verification, and installation verification pass.
+
+## Plan
+- [x] Verify branch state, latest release, and open issue scope.
+- [x] Issue #4: split public-IP and endpoint geolocation consent, default both off, and add cache clearing.
+- [x] Issue #7: add Deep Sweep evidence/confidence and keep weak/shared matches review-only.
+- [x] Issue #12: extract repeated Network and Remaining presentation without changing state ownership.
+- [x] Run focused tests after each functional change.
+- [x] Run full debug/release builds, full tests, and `git diff --check`.
+- [x] Update version/docs for `2.2.1 (1)` and prepare release notes.
+- [x] Build/package and install `/Applications/DRay.app`.
+- [x] Verify bundle identity, helper, signatures, checksums, and launch.
+- [ ] Push reviewed commits, update `main`, create `v2.2.1`, and publish the GitHub release.
+- [ ] Record CI/release evidence and update implemented GitHub issues.
+
+## Issue #4: Network Geolocation Privacy
+- Public IP profile lookup and remote endpoint geolocation have independent stored controls.
+- Both controls default to disabled and require current consent before an old stored preference can re-enable endpoint lookup.
+- Disabled capabilities do not call the resolver.
+- The Network workspace exposes both controls and a geolocation cache reset.
+- Focused tests cover disabled behavior, independent capabilities, disabling cleanup, and cache clearing.
+
+## Issue #7: Deep Sweep Ownership Confidence
+- [x] Add typed ownership confidence and evidence to runtime and persisted Remaining records.
+- [x] Exclude identities found in installed app bundles and nested helpers/plugins.
+- [x] Treat shared/group containers and ambiguous identifiers as low confidence.
+- [x] Require exact identity plus package receipt for high-confidence automatic cleanup.
+- [x] Keep low/medium-confidence candidates visible but out of record/all automatic cleanup.
+- [x] Complete focused and full test validation.
+
+## Issue #12: UI Decomposition
+- [x] Extract repeated Network list/privacy presentation into stateless feature-local components.
+- [x] Extract Remaining record/issue presentation into stateless feature-local components.
+- [x] Keep actions and observable state in existing feature controllers/views.
+- [x] Verify compact/full-size behavior through smoke and launch checks.
+
+## Release Validation
+- [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`
+- [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release`
+- [x] `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`
+- [x] `git diff --check`
+- [x] Package/install scripts pass for `2.2.1 (1)`.
+- [x] `/Applications/DRay.app` reports `CFBundleShortVersionString=2.2.1` and `CFBundleVersion=1`.
+- [ ] GitHub tag/release and CI are verified.
+
+## Batch 2 Validation Evidence
+- Focused privacy/Deep Sweep/controller suite: 14 tests passed.
+- Full suite: 154 tests in 40 suites passed.
+- UI smoke: 5/5 scenarios passed.
+- PII scan: passed after repository allowlist filtering.
+- Installed bundle: `com.squazaryu.DRay`, version `2.2.1`, build `1`.
+- Embedded helper: present, executable, and launched from `/Applications/DRay.app`.
+- Signature: ad-hoc verified with `codesign --verify --deep --strict`.
+- Distribution limitation: no Developer ID identity or notary profile is available in the local release environment.
+- ZIP SHA256: `c6dac9ec70b354592969c51240c039edade09ccad9db5fc5eca154aa6574254f`.
+- DMG SHA256: `fc889e6259e3230956d64ba02fdbbb5023c73bb7654af442a254a9e6249089a4`.
+
+---
+
 # DRay Issues Implementation Batch 1
 
 Date: 2026-07-30

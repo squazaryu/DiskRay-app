@@ -4,8 +4,21 @@ set -euo pipefail
 APP_NAME="DRay.app"
 APP_PATH="/Applications/${APP_NAME}"
 BUNDLE_ID="com.squazaryu.DRay"
-VERSION="${1:-2.0.2}"
+VERSION="${1:-}"
 BUILD_NUMBER="${2:-1}"
+
+if [[ -z "$VERSION" ]]; then
+  echo "Usage: ./scripts/install_app.sh <version> [build_number]"
+  exit 1
+fi
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*$ ]]; then
+  echo "Invalid app version: ${VERSION}. Use a semantic version without a leading v."
+  exit 1
+fi
+if [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+  echo "Invalid build number: ${BUILD_NUMBER}. Use a positive integer."
+  exit 1
+fi
 
 ICON_BASENAME="DRay"
 ICON_THEME="${DRAY_ICON_THEME:-auto}"
