@@ -23,11 +23,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Verify Xcode toolchain
         run: |
           test -x "$(xcrun --find swift)"
+          test "$(xcodebuild -version | head -1)" = "Xcode 26.5"
           xcodebuild -version
           swift --version
           xcrun --show-sdk-path

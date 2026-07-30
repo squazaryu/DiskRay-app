@@ -70,6 +70,8 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - GitHub Release: `https://github.com/squazaryu/DiskRay-app/releases/tag/v2.2.1`.
 - First `main` CI run `30572691837` failed before build because toolchain verification incorrectly expected Swift at `Developer/usr/bin/swift`.
 - CI/release workflows now select full Xcode through `/Applications/Xcode.app` and verify Swift through `xcrun --find swift`; source and published artifact hashes are unchanged.
+- Successful retry `30573033124`: full-Xcode debug/release builds and all tests passed with Xcode 26.5.
+- The workflow now asserts Xcode 26.5 explicitly and uses `actions/checkout@v5` to avoid the Node.js 20 deprecation warning.
 
 ---
 
