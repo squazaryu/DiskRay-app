@@ -23,8 +23,8 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - [x] Update version/docs for `2.2.1 (1)` and prepare release notes.
 - [x] Build/package and install `/Applications/DRay.app`.
 - [x] Verify bundle identity, helper, signatures, checksums, and launch.
-- [ ] Push reviewed commits, update `main`, create `v2.2.1`, and publish the GitHub release.
-- [ ] Record CI/release evidence and update implemented GitHub issues.
+- [x] Push reviewed commits, update `main`, create `v2.2.1`, and publish the GitHub release.
+- [x] Record CI/release evidence and update implemented GitHub issues.
 
 ## Issue #4: Network Geolocation Privacy
 - Public IP profile lookup and remote endpoint geolocation have independent stored controls.
@@ -54,7 +54,7 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - [x] `git diff --check`
 - [x] Package/install scripts pass for `2.2.1 (1)`.
 - [x] `/Applications/DRay.app` reports `CFBundleShortVersionString=2.2.1` and `CFBundleVersion=1`.
-- [ ] GitHub tag/release and CI are verified.
+- [x] GitHub tag/release and CI are verified.
 
 ## Batch 2 Validation Evidence
 - Focused privacy/Deep Sweep/controller suite: 14 tests passed.
@@ -73,6 +73,9 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - Successful retry `30573033124`: full-Xcode debug/release builds and all tests passed with Xcode 26.5.
 - Runner provisioning during the rollout exposed Xcode 26.5 and 26.6 images. The workflow accepts only the documented 26.4.1/26.5/26.6 set and prints the selected version before validation.
 - Workflows use `actions/checkout@v5` to avoid the Node.js 20 deprecation warning.
+- Final `main` CI `30573860643`: passed full-Xcode clean, debug build, release build, and full tests.
+- Closed with implementation evidence: issues #1, #4, #5, and #6.
+- Kept open with explicit follow-up scope: #2 signing/notarization, #3 process-group ownership, #7 additional ownership sources/manual override, and #12 further view decomposition/manual RU/EN visual QA.
 
 ---
 
@@ -109,7 +112,7 @@ Scope: issues #1, #3, #5, #6 and the first behavior-preserving shared UI cleanup
 
 ### Issue #1: CI and toolchain
 - Added required PR and `main` push CI with stale-run cancellation.
-- CI and release verification use the full Xcode 26.4.1 toolchain on `macos-26`.
+- CI and release verification use full Xcode with an explicit supported 26.4.1/26.5/26.6 allowlist on `macos-26`.
 - Both workflows run clean, debug build, release build, and the full test suite.
 - Removed the obsolete external `swift-testing` dependency and its resolved package file; tests now use the toolchain-provided Testing library.
 
