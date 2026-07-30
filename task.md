@@ -67,6 +67,9 @@ Scope: issues #4, #7, staged Network/Uninstaller UI decomposition for #12, insta
 - Distribution limitation: no Developer ID identity or notary profile is available in the local release environment.
 - ZIP SHA256: `c6dac9ec70b354592969c51240c039edade09ccad9db5fc5eca154aa6574254f`.
 - DMG SHA256: `fc889e6259e3230956d64ba02fdbbb5023c73bb7654af442a254a9e6249089a4`.
+- GitHub Release: `https://github.com/squazaryu/DiskRay-app/releases/tag/v2.2.1`.
+- First `main` CI run `30572691837` failed before build because toolchain verification incorrectly expected Swift at `Developer/usr/bin/swift`.
+- CI/release workflows now select full Xcode through `/Applications/Xcode.app` and verify Swift through `xcrun --find swift`; source and published artifact hashes are unchanged.
 
 ---
 

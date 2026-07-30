@@ -19,7 +19,7 @@ jobs:
     name: Build and test
     runs-on: macos-26
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
     steps:
       - name: Checkout
@@ -27,7 +27,7 @@ jobs:
 
       - name: Verify Xcode toolchain
         run: |
-          test -x "$DEVELOPER_DIR/usr/bin/swift"
+          test -x "$(xcrun --find swift)"
           xcodebuild -version
           swift --version
           xcrun --show-sdk-path
