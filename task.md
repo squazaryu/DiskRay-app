@@ -1,3 +1,86 @@
+# DRay Issues Implementation Batch 1
+
+Date: 2026-07-30
+Branch: `2.2.0-ui-refactor`
+Scope: issues #1, #3, #5, #6 and the first behavior-preserving shared UI cleanup for #12.
+
+## Constraints
+- Preserve Force Remove, admin fallback, App Store app deletion, Remaining cleanup, and high-risk controls.
+- Do not change the app version, release tag, bundle identifiers, or packaging behavior.
+- Keep `RootViewModel` as coordinator and do not introduce duplicate state owners.
+- Refactor repeated presentation only where an existing shared component is the correct owner.
+- Tests must not perform destructive, privileged, or real network operations.
+
+## Plan
+- [x] Verify clean worktree and current open issues.
+- [x] Baseline `swift build` and `swift test` with the full Xcode toolchain.
+- [x] Issue #1: add required PR/push CI, pin full Xcode, and remove obsolete external `swift-testing`.
+- [x] Issue #3: stream stdout/stderr, bound captured output, and close launch/cancel/timeout races.
+- [x] Issue #5: make SQLite snapshots atomic, root-scoped, indexed, and recoverable.
+- [x] Issue #6: persist typed Remaining category/remediation and migrate legacy records.
+- [x] UI refactor: replace repeated summary/status tiles with shared components and remove dead helpers.
+- [x] Run debug/release builds, full tests, and `git diff --check`.
+- [ ] Update GitHub issues with implementation evidence after local commits exist.
+
+## Baseline
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`: passed.
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`: passed, 128 tests.
+- Current worktree was clean at `2093ec9`.
+
+## Implemented
+
+### Issue #1: CI and toolchain
+- Added required PR and `main` push CI with stale-run cancellation.
+- CI and release verification use the full Xcode 26.4.1 toolchain on `macos-26`.
+- Both workflows run clean, debug build, release build, and the full test suite.
+- Removed the obsolete external `swift-testing` dependency and its resolved package file; tests now use the toolchain-provided Testing library.
+
+### Issue #3: command execution
+- stdout and stderr are drained concurrently while the child process is running.
+- Captured output is bounded and reports truncation instead of allowing unbounded memory growth.
+- Launch failure, normal completion, timeout, and cancellation converge on one locked completion path.
+- Cancellation before launch and during execution is covered by focused tests; timeout/cancel escalates from termination to `SIGKILL`.
+
+### Issue #5: SQLite snapshots
+- Added a root-scoped `file_index_v2` schema with a composite root/path key and indexed root/parent lookup.
+- Snapshot replacement uses `BEGIN IMMEDIATE`, checks every prepare/bind/step/commit result, and guarantees rollback before returning on failure.
+- SQL now loads only the requested root.
+- Added a controlled rebuild for `SQLITE_CORRUPT` / `SQLITE_NOTADB`; this only discards the rebuildable index cache.
+- Tests cover root-only snapshots, replacement, insert rollback, injected commit rollback, multiple roots, cache clearing, and corruption recovery.
+
+### Issue #6: Remaining classification
+- Added typed Remaining category and remediation fields while retaining the original technical reason.
+- Classification now happens in the domain layer; SwiftUI filters no longer parse localized reason text.
+- Legacy records migrate deterministically, including correction of ordinary `~/Library/Preferences/*.plist` records previously labeled SIP/TCC.
+- LaunchDaemon and PrivilegedHelper records keep separate admin guidance.
+
+### Issue #12: shared UI cleanup, first stage
+- Added shared compact `DRaySummaryMetricCard` and `DRayStatusTile` components to the existing visual foundation.
+- Replaced repeated local implementations across Clutter, Repair, Settings, Smart Care, Recovery, Space Lens, and Performance Network.
+- Removed dead summary/status helper code from Clutter, Privacy, Recovery, Search, Smart Care, and Space Lens.
+- State ownership and feature actions are unchanged. Larger Network/Uninstaller decomposition remains open under issue #12.
+
+## Tests Added
+- `SystemCommandRunnerTests`: large stdout, output bounds, timeout, cancellation during execution, cancellation before launch.
+- `SQLiteIndexStoreTests`: root-only and replacement snapshots, insert rollback, commit rollback, multiple roots, clear, corruption rebuild.
+- `UninstallRemainingIssueClassificationTests`: preference migration, daemon/helper categories, typed Codable roundtrip, permission denial, system-protected path.
+- `UninstallPlanningUseCaseTests`: typed preference and LaunchDaemon classification assertions.
+
+## Validation
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift package clean`: passed.
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`: passed.
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release`: passed.
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`: passed, 144 tests in 38 suites.
+- `git diff --check`: passed.
+
+## Remaining Risks / Next Batch
+- CI has not run on GitHub because this local branch has not been pushed.
+- `SystemCommandRunner` reliably terminates the launched process; explicit child process-group ownership would require replacing Foundation `Process` with a lower-level spawn implementation and remains a focused follow-up if shell-command descendants are introduced.
+- Issue #12 remains open for staged Network and Uninstaller presentation decomposition and manual compact/full-size RU/EN visual QA.
+- Recommended next functional batch: geolocation privacy opt-in (#4), Deep Sweep confidence model (#7), then Search streaming/backpressure (#8).
+
+---
+
 # DRay Stability / Predictability Task
 
 Date: 2026-05-20
