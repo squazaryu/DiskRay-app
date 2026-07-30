@@ -20,7 +20,7 @@ Scope: issues #1, #3, #5, #6 and the first behavior-preserving shared UI cleanup
 - [x] Issue #6: persist typed Remaining category/remediation and migrate legacy records.
 - [x] UI refactor: replace repeated summary/status tiles with shared components and remove dead helpers.
 - [x] Run debug/release builds, full tests, and `git diff --check`.
-- [ ] Update GitHub issues with implementation evidence after local commits exist.
+- [x] Update GitHub issues with implementation evidence after local commits exist.
 
 ## Baseline
 - `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`: passed.
@@ -72,6 +72,7 @@ Scope: issues #1, #3, #5, #6 and the first behavior-preserving shared UI cleanup
 - `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release`: passed.
 - `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`: passed, 144 tests in 38 suites.
 - `git diff --check`: passed.
+- Added local implementation evidence to GitHub issues #1, #3, #5, #6, and #12. Issues remain open until the branch is pushed and CI runs.
 
 ## Remaining Risks / Next Batch
 - CI has not run on GitHub because this local branch has not been pushed.
